@@ -114,3 +114,8 @@ Implementation tasks live at `.lissom/tasks/IMPL-{N}/Specs.md`. Follow the spec 
 - The index's `vectors.bin` must be read/written in **little-endian** regardless of platform.
 - Chunk metadata stores full document metadata so any single chunk hit can reconstruct a complete `DDR_Result` without re-reading the source file.
 - `BAAI/bge-small-en-v1.5` produces **normalized** vectors — cosine similarity equals dot product, but implement full cosine for correctness.
+
+## Git branching
+When implementing a task, if current branch is `main`, create a new feature branch. After a whole task is done, create a PR.
+- Main branch: `main`
+- Feature branches: `<task_id>_<short-description>`, e.g., `IMPL-2_config-loader`
