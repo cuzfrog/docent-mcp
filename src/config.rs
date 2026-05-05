@@ -15,7 +15,7 @@ pub struct Config {
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct IndexConfig {
-    #[serde(default = "default_embedding_model")]
+    #[serde(default)]
     pub embedding_model: String,
     #[serde(default = "default_persist_path")]
     pub persist_path: String,
@@ -34,10 +34,6 @@ pub struct ServerConfig {
 // ---------------------------------------------------------------------------
 // Default functions
 // ---------------------------------------------------------------------------
-
-fn default_embedding_model() -> String {
-    "BGESmallENV15Q".to_string()
-}
 
 fn default_persist_path() -> String {
     "./.docent-index".to_string()
@@ -62,7 +58,7 @@ fn default_log_level() -> String {
 impl Default for IndexConfig {
     fn default() -> Self {
         Self {
-            embedding_model: default_embedding_model(),
+            embedding_model: String::new(),
             persist_path: default_persist_path(),
             chunk_size: default_chunk_size(),
             chunk_overlap: default_chunk_overlap(),
@@ -85,7 +81,10 @@ impl Default for ServerConfig {
 impl Config {
     pub fn validate(&self) -> anyhow::Result<()> {
         if self.index.embedding_model.is_empty() {
-            anyhow::bail!("embedding_model must not be empty");
+            anyhow::bail!(
+                "embedding_model is required in config.toml. \
+                Run `docent list-models` to see available models."
+            );
         }
         if self.index.persist_path.is_empty() {
             anyhow::bail!("persist_path must not be empty");
@@ -177,7 +176,7 @@ log_level = "debug"
 # log_level omitted
 "#;
         let config: Config = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.index.embedding_model, default_embedding_model());
+        assert_eq!(config.index.embedding_model, String::new());
         assert_eq!(config.index.persist_path, default_persist_path());
         assert_eq!(config.index.chunk_size, default_chunk_size());
         assert_eq!(config.index.chunk_overlap, default_chunk_overlap());
@@ -221,6 +220,7 @@ embedding_model = "test-model"
     fn test_chunk_size_zero_validation_error() {
         let config = Config {
             index: IndexConfig {
+                embedding_model: "test-model".to_string(),
                 chunk_size: 0,
                 ..IndexConfig::default()
             },
@@ -235,6 +235,7 @@ embedding_model = "test-model"
     fn test_chunk_size_exceeds_max_validation_error() {
         let config = Config {
             index: IndexConfig {
+                embedding_model: "test-model".to_string(),
                 chunk_size: 8193,
                 ..IndexConfig::default()
             },
@@ -249,6 +250,7 @@ embedding_model = "test-model"
     fn test_chunk_overlap_equals_chunk_size_validation_error() {
         let config = Config {
             index: IndexConfig {
+                embedding_model: "test-model".to_string(),
                 chunk_size: 512,
                 chunk_overlap: 512,
                 ..IndexConfig::default()
@@ -263,17 +265,28 @@ embedding_model = "test-model"
     }
 
     // 9. Empty embedding_model → validation error
+    // Tests that when embedding_model is omitted from config.toml (serde default = empty string),
+    // validation produces a user-friendly error message suggesting `docent list-models`.
     #[test]
     fn test_empty_embedding_model_validation_error() {
         let config = Config {
             index: IndexConfig {
-                embedding_model: "".to_string(),
+                embedding_model: String::new(),
                 ..IndexConfig::default()
             },
             ..Config::default()
         };
         let err = config.validate().unwrap_err();
-        assert_eq!(err.to_string(), "embedding_model must not be empty");
+        assert!(
+            err.to_string().contains("embedding_model is required in config.toml"),
+            "Expected user-friendly error message, got: {}",
+            err
+        );
+        assert!(
+            err.to_string().contains("docent list-models"),
+            "Error message should suggest `docent list-models`, got: {}",
+            err
+        );
     }
 
     // 10. Empty persist_path → validation error
@@ -281,6 +294,7 @@ embedding_model = "test-model"
     fn test_empty_persist_path_validation_error() {
         let config = Config {
             index: IndexConfig {
+                embedding_model: "test-model".to_string(),
                 persist_path: "".to_string(),
                 ..IndexConfig::default()
             },
@@ -294,10 +308,13 @@ embedding_model = "test-model"
     #[test]
     fn test_invalid_log_level_validation_error() {
         let config = Config {
+            index: IndexConfig {
+                embedding_model: "test-model".to_string(),
+                ..IndexConfig::default()
+            },
             server: ServerConfig {
                 log_level: "verbose".to_string(),
             },
-            ..Config::default()
         };
         let err = config.validate().unwrap_err();
         assert!(err.to_string().contains("invalid log_level 'verbose'"));
@@ -308,10 +325,13 @@ embedding_model = "test-model"
     fn test_valid_log_levels() {
         for level in &["debug", "info", "warn", "error"] {
             let config = Config {
+                index: IndexConfig {
+                    embedding_model: "test-model".to_string(),
+                    ..IndexConfig::default()
+                },
                 server: ServerConfig {
                     log_level: level.to_string(),
                 },
-                ..Config::default()
             };
             assert!(
                 config.validate().is_ok(),

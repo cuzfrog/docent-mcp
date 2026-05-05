@@ -1,3 +1,3 @@
 #!/bin/bash
 
-sudo mount -t tmpfs -o size=4G,noatime tmpfs ./target
+sudo mount -t tmpfs -o size=8G,noatime tmpfs ./target
