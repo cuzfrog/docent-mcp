@@ -3,7 +3,10 @@ use std::path::PathBuf;
 
 /// Top-level CLI struct for ddr-mcp.
 #[derive(Parser)]
-#[command(name = "ddr-mcp", about = "A read-only MCP server for Design Decision Records")]
+#[command(
+    name = "ddr-mcp",
+    about = "A read-only MCP server for Design Decision Records"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -63,9 +66,7 @@ mod tests {
 
     #[test]
     fn test_index_with_config_flag() {
-        let cli = Cli::try_parse_from([
-            "ddr-mcp", "index", "./ddrs", "--config", "/etc/ddr.toml",
-        ]);
+        let cli = Cli::try_parse_from(["ddr-mcp", "index", "./ddrs", "--config", "/etc/ddr.toml"]);
         assert!(cli.is_ok());
         let cli = cli.unwrap();
         match cli.command {
@@ -94,7 +95,12 @@ mod tests {
     #[test]
     fn test_index_all_flags() {
         let cli = Cli::try_parse_from([
-            "ddr-mcp", "index", "./ddrs", "--config", "custom.toml", "--rebuild",
+            "ddr-mcp",
+            "index",
+            "./ddrs",
+            "--config",
+            "custom.toml",
+            "--rebuild",
         ]);
         assert!(cli.is_ok());
         let cli = cli.unwrap();
@@ -129,8 +135,7 @@ mod tests {
 
     #[test]
     fn test_serve_custom_config() {
-        let cli =
-            Cli::try_parse_from(["ddr-mcp", "serve", "--config", "prod.toml"]);
+        let cli = Cli::try_parse_from(["ddr-mcp", "serve", "--config", "prod.toml"]);
         assert!(cli.is_ok());
         let cli = cli.unwrap();
         match cli.command {
