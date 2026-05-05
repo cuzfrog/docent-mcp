@@ -25,12 +25,12 @@ src/
   main.rs          # entrypoint, clap dispatch
   cli.rs           # clap derive structs (index, serve subcommands)
   config.rs        # config.toml loading, defaults, validation
-  document.rs      # DDR markdown parsing (YAML front matter + body)
-  chunking.rs      # heading-aware chunking with token counting
+  document.rs      # document loading (any text; title from filename)
+  chunking.rs      # heading-aware chunking with token counting (any text)
   embedder.rs      # fastembed wrapper (ONNX, local model)
   index.rs         # on-disk index format (header.json, vectors.bin, metadata.json)
   index_cmd.rs     # index subcommand orchestration (incremental/rebuild)
-  search.rs        # vector search pipeline (cosine sim, filters, boost, dedup)
+  search.rs        # vector search pipeline (cosine sim, dedup)
   serve_cmd.rs     # serve subcommand (startup checks, server init)
   mcp.rs           # MCP tool handler (search_ddr tool definition)
 ```
@@ -44,10 +44,11 @@ src/
 | `clap` | 4.x (derive) | CLI parsing |
 | `tokio` | 1.x (full) | Async runtime |
 | `serde` / `serde_json` / `toml` | — | Serialization |
-| `serde_yaml` | — | YAML front matter parsing |
 | `sha2` | — | File hashing for incremental index |
 | `walkdir` | — | Recursive file discovery |
 | `anyhow` | — | Error propagation |
+
+Use fixed versions. Avoid `*` or `^` to prevent unintentional updates.
 
 ## Conventions
 
@@ -90,18 +91,15 @@ Default path: `./config.toml` relative to working directory.
 - Server capabilities: `{ "tools": {} }`
 - No resources, no prompts, no sampling
 
-## DDR Document Format
+## Document Format
 
-Markdown with YAML front matter (`---` delimited). Required fields: `title`, `status`. Body is chunked on H2/H3 headings.
+Source documents are **any text files**. The content is not parsed or interpreted — it is treated as opaque text, chunked, and embedded for semantic search. A display title is derived from the filename (extension stripped, hyphens/underscores replaced with spaces).
 
 ## Search Pipeline
 
 1. Embed query → cosine similarity against all vectors
-2. Filter by tags (if provided)
-3. Boost by file_hint (1.2x for matching `related_files`)
-4. Penalize superseded/deprecated (0.9x)
-5. Deduplicate by source document (keep best chunk)
-6. Return top N (default 3, max 10)
+2. Deduplicate by source document (keep best chunk)
+3. Return top N (default 3, max 10)
 
 ## Task Specs
 
