@@ -69,25 +69,10 @@ fn discover_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
 // ---------------------------------------------------------------------------
 
 fn hash_file(path: &Path) -> anyhow::Result<String> {
-    let mut file = std::fs::File::open(path)
-        .map_err(|e| anyhow::anyhow!("Failed to open file '{}': {}", path.display(), e))?;
+    let bytes = std::fs::read(path)
+        .map_err(|e| anyhow::anyhow!("Failed to read file '{}': {}", path.display(), e))?;
 
-    let mut hasher = Sha256::new();
-
-    // Try std::io::copy first (Sha256 implements Write via digest trait)
-    let result = std::io::copy(&mut file, &mut hasher);
-
-    match result {
-        Ok(_) => {}
-        Err(_) => {
-            // Fallback: read entire file into buffer
-            let bytes = std::fs::read(path)
-                .map_err(|e| anyhow::anyhow!("Failed to read file '{}': {}", path.display(), e))?;
-            hasher.update(&bytes);
-        }
-    }
-
-    let digest = hasher.finalize();
+    let digest = Sha256::digest(&bytes);
     Ok(format!("{:x}", digest))
 }
 
@@ -492,7 +477,12 @@ use crate::cli::IndexArgs;
 
 pub fn run_index(args: IndexArgs) -> anyhow::Result<()> {
     let config = Config::load(&args.config)?;
-    let input_root = args.file.canonicalize()?;
+    let canonical = args.file.canonicalize()?;
+    let input_root = if canonical.is_file() {
+        canonical.parent().unwrap_or(Path::new(".")).to_path_buf()
+    } else {
+        canonical
+    };
 
     if args.rebuild {
         run_rebuild(&config, &input_root)?;
