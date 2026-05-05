@@ -149,6 +149,7 @@ fn index_files(
                 source_path: doc.source_path.clone(),
                 source_hash: source_hash.clone(),
                 title: doc.title.clone(),
+                chunk_text: chunk.text.clone(),
                 section_heading: chunk.section_heading.clone(),
                 chunk_index: chunk.chunk_index,
             });
@@ -613,6 +614,7 @@ mod tests {
             source_path: "a.md".to_string(),
             source_hash: "hash_a".to_string(),
             title: "A".to_string(),
+            chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
         };
@@ -622,6 +624,7 @@ mod tests {
             source_path: "c.md".to_string(),
             source_hash: "hash_c".to_string(),
             title: "C".to_string(),
+            chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
         };
@@ -635,6 +638,7 @@ mod tests {
             source_path: "b.md".to_string(),
             source_hash: "hash_b_new".to_string(),
             title: "B".to_string(),
+            chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
         };
@@ -642,6 +646,7 @@ mod tests {
             source_path: "b.md".to_string(),
             source_hash: "hash_b_new".to_string(),
             title: "B".to_string(),
+            chunk_text: "chunk text".to_string(),
             section_heading: Some("Section".to_string()),
             chunk_index: 1,
         };
@@ -671,6 +676,7 @@ mod tests {
             source_path: "a.md".to_string(),
             source_hash: "hash_a".to_string(),
             title: "A".to_string(),
+            chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
         };
@@ -705,6 +711,7 @@ mod tests {
             source_path: "a.md".to_string(),
             source_hash: "hash_a".to_string(),
             title: "A".to_string(),
+            chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
         };
@@ -712,6 +719,7 @@ mod tests {
             source_path: "b.md".to_string(),
             source_hash: "hash_b".to_string(),
             title: "B".to_string(),
+            chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
         };
@@ -719,6 +727,7 @@ mod tests {
             source_path: "b.md".to_string(),
             source_hash: "hash_b".to_string(),
             title: "B".to_string(),
+            chunk_text: "chunk text".to_string(),
             section_heading: Some("Section".to_string()),
             chunk_index: 1,
         };

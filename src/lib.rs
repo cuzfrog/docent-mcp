@@ -5,3 +5,4 @@ pub mod document;
 pub mod embedder;
 pub mod index;
 pub mod index_cmd;
+pub mod search;
