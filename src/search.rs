@@ -11,6 +11,7 @@ pub struct SearchRequest {
 }
 
 /// A ranked search result for a single source document.
+#[derive(Debug)]
 pub struct SearchResult {
     pub title: String,
     pub source_path: String,
@@ -82,8 +83,17 @@ pub fn search(
         .next()
         .ok_or_else(|| anyhow::anyhow!("Embedder returned no vectors for query"))?;
 
-    // 3. Empty index → return empty
-    if vectors.is_empty() || metadata.is_empty() {
+    // 3. Validate vectors/metadata alignment
+    if vectors.len() != metadata.len() {
+        anyhow::bail!(
+            "vectors/metadata length mismatch: {} vectors vs {} metadata entries",
+            vectors.len(),
+            metadata.len()
+        );
+    }
+
+    // 4. Empty index → return empty
+    if vectors.is_empty() {
         return Ok(vec![]);
     }
 
@@ -186,20 +196,6 @@ mod tests {
         // Second should be doc_b with score 0.7
         assert_eq!(results[1].1.source_path, "doc_b.md");
         assert!((results[1].0 - 0.7).abs() < 1e-6);
-    }
-
-    // Test 5: search with empty index returns empty vec
-    #[test]
-    fn test_search_empty_index() {
-        // We can't call search() without an embedder, but we can verify
-        // the empty-index path by checking that the function would return
-        // early. Instead, test the logic indirectly: empty vectors + metadata
-        // should produce no candidates.
-        let vectors: Vec<Vec<f32>> = vec![];
-        let metadata: Vec<ChunkMetadata> = vec![];
-
-        // Verify the empty check logic: if both are empty, no candidates
-        assert!(vectors.is_empty() && metadata.is_empty());
     }
 
     // Test 6: deduplicate_by_source with single candidate
