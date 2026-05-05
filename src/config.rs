@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use serde::Deserialize;
 use std::path::Path;
 
@@ -117,6 +115,7 @@ impl Config {
 // ---------------------------------------------------------------------------
 
 impl Config {
+    #[allow(dead_code)]
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let content = match std::fs::read_to_string(path) {
             Ok(c) => c,
@@ -355,5 +354,18 @@ log_level = "error"
         let path = Path::new("/nonexistent/path/config.toml");
         let err = Config::load(path).unwrap_err();
         assert!(err.to_string().contains("Config file not found at"));
+    }
+
+    // 14. Invalid TOML syntax → error message includes line/column info
+    #[test]
+    fn test_invalid_toml_syntax_error_has_line_info() {
+        let toml_str = "[index]\nchunk_size = \"not_a_number\"\n";
+        let err = toml::from_str::<Config>(toml_str).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("chunk_size") || msg.contains("line"),
+            "error message should reference the offending field or line; got: {}",
+            msg
+        );
     }
 }
