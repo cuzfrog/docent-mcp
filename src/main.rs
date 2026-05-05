@@ -4,6 +4,7 @@ mod config;
 mod document;
 mod embedder;
 mod index;
+mod index_cmd;
 
 use clap::Parser;
 use cli::{Cli, Commands};
@@ -14,9 +15,7 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::Index(args) => {
-            // Stub — actual indexing implemented in later tasks
-            println!("index not implemented");
-            let _ = args; // suppress unused variable warning
+            index_cmd::run_index(args)?;
         }
         Commands::Serve(args) => {
             // Stub — actual serving implemented in later tasks
