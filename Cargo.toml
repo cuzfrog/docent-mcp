@@ -9,3 +9,4 @@ clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 toml = "0.8"
+yaml_serde = "0.10"
