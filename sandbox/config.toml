@@ -1,5 +1,5 @@
 [index]
-embedding_model = "BAAI/bge-small-en-v1.5"   
+embedding_model = "BGESmallENV15Q"   
 persist_path    = "../target/.ddr-index"             
 chunk_size      = 512                         
 chunk_overlap   = 64
