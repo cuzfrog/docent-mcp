@@ -172,7 +172,7 @@ mod tests {
             vectors: Arc::new(vec![]),
             metadata: Arc::new(vec![]),
             embedder: Arc::new(Mutex::new(
-                crate::embedder::Embedder::new("BAAI/bge-small-en-v1.5").unwrap(),
+                crate::embedder::Embedder::new("BGESmallENV15Q").unwrap(),
             )),
         };
         let _clone = _server.clone(); // should compile

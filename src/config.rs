@@ -36,7 +36,7 @@ pub struct ServerConfig {
 // ---------------------------------------------------------------------------
 
 fn default_embedding_model() -> String {
-    "BAAI/bge-small-en-v1.5".to_string()
+    "BGESmallENV15Q".to_string()
 }
 
 fn default_persist_path() -> String {

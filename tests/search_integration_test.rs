@@ -18,7 +18,7 @@ fn write_config(dir: &std::path::Path, persist_path: &std::path::Path) -> PathBu
     let config_path = dir.join("config.toml");
     let content = format!(
         r#"[index]
-embedding_model = "BAAI/bge-small-en-v1.5"
+embedding_model = "BGESmallENV15Q"
 persist_path = "{}"
 chunk_size = 512
 chunk_overlap = 64
@@ -146,7 +146,7 @@ loads data from the database and populates the cache for subsequent requests.
     );
 
     // Create embedder and search
-    let mut embedder = Embedder::new("BAAI/bge-small-en-v1.5").expect("Failed to create embedder");
+    let mut embedder = Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
 
     // Search for database-related content
     let results: Vec<SearchResult> = search::search(

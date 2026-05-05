@@ -16,7 +16,7 @@ fn write_config(dir: &std::path::Path, persist_path: &std::path::Path) -> PathBu
     let config_path = dir.join("config.toml");
     let content = format!(
         r#"[index]
-embedding_model = "BAAI/bge-small-en-v1.5"
+embedding_model = "BGESmallENV15Q"
 persist_path = "{}"
 chunk_size = 512
 chunk_overlap = 64
@@ -468,7 +468,7 @@ fn test_config_mismatch_advises_rebuild() {
     let config_path1 = base.join("config1.toml");
     let content1 = format!(
         r#"[index]
-embedding_model = "BAAI/bge-small-en-v1.5"
+embedding_model = "BGESmallENV15Q"
 persist_path = "{}"
 chunk_size = 512
 chunk_overlap = 64
@@ -496,7 +496,7 @@ chunk_overlap = 64
     let config_path2 = base.join("config2.toml");
     let content2 = format!(
         r#"[index]
-embedding_model = "BAAI/bge-small-en-v1.5"
+embedding_model = "BGESmallENV15Q"
 persist_path = "{}"
 chunk_size = 256
 chunk_overlap = 32

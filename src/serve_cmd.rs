@@ -109,7 +109,7 @@ mod tests {
         writeln!(
             f,
             r#"[index]
-embedding_model = "BAAI/bge-small-en-v1.5"
+embedding_model = "BGESmallENV15Q"
 persist_path = "{}"
 chunk_size = 512
 chunk_overlap = 64"#,

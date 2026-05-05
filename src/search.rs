@@ -249,7 +249,7 @@ mod tests {
     #[ignore]
     fn test_search_limit_clamping() {
         let mut embedder =
-            Embedder::new("BAAI/bge-small-en-v1.5").expect("Failed to create embedder");
+            Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
 
         // Create 5 documents with distinct content
         let vectors: Vec<Vec<f32>> = (0..5)
@@ -288,7 +288,7 @@ mod tests {
     #[ignore]
     fn test_search_results_sorted_by_score() {
         let mut embedder =
-            Embedder::new("BAAI/bge-small-en-v1.5").expect("Failed to create embedder");
+            Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
 
         let vectors: Vec<Vec<f32>> = (0..3)
             .map(|i| {
@@ -321,7 +321,7 @@ mod tests {
     #[ignore]
     fn test_search_fewer_results_than_limit() {
         let mut embedder =
-            Embedder::new("BAAI/bge-small-en-v1.5").expect("Failed to create embedder");
+            Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
 
         // Only 2 documents
         let vectors: Vec<Vec<f32>> = (0..2)

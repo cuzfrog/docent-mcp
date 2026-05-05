@@ -63,7 +63,7 @@ Use fixed versions. Avoid `*` or `^` to prevent unintentional updates.
 
 ```toml
 [index]
-embedding_model = "BAAI/bge-small-en-v1.5"
+embedding_model = "BGESmallENV15Q"
 persist_path    = "./.docent-index"
 chunk_size      = 512
 chunk_overlap   = 64
@@ -111,7 +111,7 @@ Implementation tasks live at `.lissom/tasks/IMPL-{N}/Specs.md`. Follow the spec 
 - rmcp's `#[tool_router(server_handler)]` auto-implements `ServerHandler` — don't also write a manual impl.
 - The index's `vectors.bin` must be read/written in **little-endian** regardless of platform.
 - Chunk metadata stores full document metadata so any single chunk hit can reconstruct a complete search result without re-reading the source file.
-- `BAAI/bge-small-en-v1.5` produces **normalized** vectors — cosine similarity equals dot product, but implement full cosine for correctness.
+- `BGESmallENV15Q` produces **normalized** vectors — cosine similarity equals dot product, but implement full cosine for correctness.
 
 ## Git branching
 When implementing a task, if current branch is `main`, create a new feature branch. After a whole task is done, create a PR.
