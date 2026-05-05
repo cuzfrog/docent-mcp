@@ -1,5 +1,6 @@
 mod cli;
 mod config;
+mod document;
 
 use clap::Parser;
 use cli::{Cli, Commands};
