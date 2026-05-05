@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod document;
 mod embedder;
+mod index;
 
 use clap::Parser;
 use cli::{Cli, Commands};
