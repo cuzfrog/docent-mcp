@@ -40,7 +40,7 @@ fn default_embedding_model() -> String {
 }
 
 fn default_persist_path() -> String {
-    "./.ddr-index".to_string()
+    "./.docent-index".to_string()
 }
 
 const fn default_chunk_size() -> usize {
@@ -334,7 +334,7 @@ chunk_overlap = 32
 [server]
 log_level = "error"
 "#;
-        let temp_path = std::env::temp_dir().join("ddr_test_config.toml");
+        let temp_path = std::env::temp_dir().join("docent_test_config.toml");
         std::fs::write(&temp_path, toml_str).unwrap();
 
         let config = Config::load(&temp_path).unwrap();

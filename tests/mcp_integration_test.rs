@@ -27,7 +27,7 @@ fn init() {
 
 /// Write a minimal valid config to a temp file and return the path.
 fn temp_config(persist_path: &Path) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("ddr_test_config_{}.toml", std::process::id()));
+    let path = std::env::temp_dir().join(format!("docent_test_config_{}.toml", std::process::id()));
     let mut f = std::fs::File::create(&path).unwrap();
     writeln!(
         f,
@@ -44,8 +44,8 @@ chunk_overlap = 64"#,
 
 /// Build a fake index directory with zero vectors (no model download needed).
 fn build_fake_index(dir: &Path, dims: usize) {
-    let header = ddr_mcp::index::IndexHeader {
-        schema_version: ddr_mcp::index::SCHEMA_VERSION,
+    let header = docent_mcp::index::IndexHeader {
+        schema_version: docent_mcp::index::SCHEMA_VERSION,
         embedding_model: "BAAI/bge-small-en-v1.5".into(),
         embedding_dims: dims,
         chunk_size: 512,
@@ -56,7 +56,7 @@ fn build_fake_index(dir: &Path, dims: usize) {
     };
     let vectors = vec![vec![0.0f32; dims], vec![0.1f32; dims]];
     let metadata = vec![
-        ddr_mcp::index::ChunkMetadata {
+        docent_mcp::index::ChunkMetadata {
             source_path: "docs/design/auth.md".into(),
             source_hash: "abc123".into(),
             title: "Authentication Design".into(),
@@ -64,7 +64,7 @@ fn build_fake_index(dir: &Path, dims: usize) {
             section_heading: Some("Overview".into()),
             chunk_index: 0,
         },
-        ddr_mcp::index::ChunkMetadata {
+        docent_mcp::index::ChunkMetadata {
             source_path: "docs/design/caching.md".into(),
             source_hash: "def456".into(),
             title: "Caching Strategy".into(),
@@ -73,7 +73,7 @@ fn build_fake_index(dir: &Path, dims: usize) {
             chunk_index: 0,
         },
     ];
-    ddr_mcp::index::write_index(dir, &header, &vectors, &metadata).unwrap();
+    docent_mcp::index::write_index(dir, &header, &vectors, &metadata).unwrap();
 }
 
 /// Start the server and return (Child, SocketAddr).
@@ -105,7 +105,7 @@ fn start_server(config_path: &Path) -> (Child, SocketAddr) {
             let status = child.try_wait().unwrap();
             panic!("server exited early with status: {:?}", status);
         }
-        if line.contains("ddr-mcp server listening on http://") {
+        if line.contains("docent server listening on http://") {
             break;
         }
         if start.elapsed() > Duration::from_secs(30) {
@@ -116,7 +116,7 @@ fn start_server(config_path: &Path) -> (Child, SocketAddr) {
     // Parse the address from the log line
     let addr_str = line
         .trim()
-        .strip_prefix("ddr-mcp server listening on http://")
+        .strip_prefix("docent server listening on http://")
         .expect("log line should contain address");
     let addr: SocketAddr = addr_str.parse().expect("failed to parse address");
 
@@ -194,7 +194,7 @@ fn cleanup(paths: &[PathBuf]) {
 fn test_mcp_initialize_handshake() {
     init();
 
-    let index_dir = std::env::temp_dir().join(format!("ddr_test_index_{}", std::process::id()));
+    let index_dir = std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
     let config_path = temp_config(&index_dir);
     build_fake_index(&index_dir, 4);
 
@@ -220,7 +220,7 @@ fn test_mcp_initialize_handshake() {
     let server_name = server_info
         .get("name")
         .expect("serverInfo should have name");
-    assert_eq!(server_name.as_str().unwrap(), "ddr-mcp");
+    assert_eq!(server_name.as_str().unwrap(), "docent-mcp");
 
     let capabilities = result
         .get("capabilities")
@@ -240,7 +240,7 @@ fn test_mcp_initialize_handshake() {
 fn test_mcp_tools_list() {
     init();
 
-    let index_dir = std::env::temp_dir().join(format!("ddr_test_index_{}", std::process::id()));
+    let index_dir = std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
     let config_path = temp_config(&index_dir);
     build_fake_index(&index_dir, 4);
 
@@ -303,7 +303,7 @@ fn test_mcp_tools_list() {
 fn test_search_ddr_valid_query() {
     init();
 
-    let index_dir = std::env::temp_dir().join(format!("ddr_test_index_{}", std::process::id()));
+    let index_dir = std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
     let config_path = temp_config(&index_dir);
     build_fake_index(&index_dir, 4);
 
@@ -371,7 +371,7 @@ fn test_search_ddr_valid_query() {
 fn test_search_ddr_invalid_limit() {
     init();
 
-    let index_dir = std::env::temp_dir().join(format!("ddr_test_index_{}", std::process::id()));
+    let index_dir = std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
     let config_path = temp_config(&index_dir);
     build_fake_index(&index_dir, 4);
 
@@ -414,7 +414,7 @@ fn test_search_ddr_invalid_limit() {
 fn test_search_ddr_empty_query() {
     init();
 
-    let index_dir = std::env::temp_dir().join(format!("ddr_test_index_{}", std::process::id()));
+    let index_dir = std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
     let config_path = temp_config(&index_dir);
     build_fake_index(&index_dir, 4);
 
@@ -453,7 +453,8 @@ fn test_search_ddr_empty_query() {
 fn test_server_missing_index_exits() {
     init();
 
-    let index_dir = std::env::temp_dir().join(format!("ddr_test_no_index_{}", std::process::id()));
+    let index_dir =
+        std::env::temp_dir().join(format!("docent_test_no_index_{}", std::process::id()));
     // Don't create the index directory
     let config_path = temp_config(&index_dir);
 
@@ -476,7 +477,7 @@ fn test_server_missing_index_exits() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("no index found") || stderr.contains("Run 'ddr-mcp index'"),
+        stderr.contains("no index found") || stderr.contains("Run 'docent index'"),
         "stderr should mention missing index: {}",
         stderr
     );

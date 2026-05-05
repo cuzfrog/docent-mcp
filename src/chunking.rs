@@ -92,7 +92,7 @@ impl HuggingFaceTokenCounter {
     /// Create a new instance by loading the tokenizer from the model cache.
     ///
     /// The tokenizer file is expected at:
-    /// `~/.cache/ddr-mcp/models/<model_name>/tokenizer.json`
+    /// `~/.cache/docent/models/<model_name>/tokenizer.json`
     ///
     /// # Errors
     ///
@@ -105,7 +105,7 @@ impl HuggingFaceTokenCounter {
             .ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
         let tokenizer_path = home
             .join(".cache")
-            .join("ddr-mcp")
+            .join("docent")
             .join("models")
             .join(model_name)
             .join("tokenizer.json");

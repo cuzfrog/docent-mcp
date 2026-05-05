@@ -29,7 +29,7 @@ fn default_limit() -> u8 {
 /// Shared server state accessible to all MCP tool handlers.
 #[derive(Clone)]
 #[allow(dead_code)]
-pub struct DdrMcpServer {
+pub struct DocentMcpServer {
     /// Application configuration (read-only).
     pub config: Config,
     /// Index header from the on-disk index.
@@ -45,7 +45,7 @@ pub struct DdrMcpServer {
 }
 
 #[tool_router(server_handler)]
-impl DdrMcpServer {
+impl DocentMcpServer {
     /// Search Design Decision Records by semantic similarity to the query.
     #[tool(
         description = "Search Design Decision Records by semantic similarity. Returns the most relevant DDRs with their source paths and matching content."
@@ -151,13 +151,13 @@ mod tests {
         // Validation happens in the tool handler, tested in integration tests
     }
 
-    // --- DdrMcpServer construction ---
+    // --- DocentMcpServer construction ---
 
     #[test]
     #[ignore]
     fn test_server_clone_is_cheap() {
         // Verify Clone compiles and doesn't deep-copy Arc data
-        let _server = DdrMcpServer {
+        let _server = DocentMcpServer {
             config: crate::config::Config::default(),
             index_header: crate::index::IndexHeader {
                 schema_version: crate::index::SCHEMA_VERSION,

@@ -2,7 +2,7 @@
 
 ## Project
 
-`ddr-mcp` — A read-only MCP server that lets agents find Design Decision Records explaining why code looks the way it does. Single Rust binary with two subcommands: `index` and `serve`.
+`docent-mcp` — A read-only MCP server that lets agents find Design Decision Records explaining why code looks the way it does. Single Rust binary (`docent`) with two subcommands: `index` and `serve`.
 
 ## Build & Run
 
@@ -64,7 +64,7 @@ Use fixed versions. Avoid `*` or `^` to prevent unintentional updates.
 ```toml
 [index]
 embedding_model = "BAAI/bge-small-en-v1.5"
-persist_path    = "./.ddr-index"
+persist_path    = "./.docent-index"
 chunk_size      = 512
 chunk_overlap   = 64
 
@@ -77,7 +77,7 @@ Default path: `./config.toml` relative to working directory.
 ## Index Format
 
 ```
-.ddr-index/
+.docent-index/
   header.json      # schema_version, model, dims, chunk/doc counts
   vectors.bin      # packed little-endian f32, dims * chunk_count * 4 bytes
   metadata.json    # per-chunk metadata array
@@ -110,7 +110,7 @@ Implementation tasks live at `.lissom/tasks/IMPL-{N}/Specs.md`. Follow the spec 
 - fastembed's `TextEmbedding` is **not Send** — don't hold it across await points. Wrap in `tokio::task::spawn_blocking` for async contexts.
 - rmcp's `#[tool_router(server_handler)]` auto-implements `ServerHandler` — don't also write a manual impl.
 - The index's `vectors.bin` must be read/written in **little-endian** regardless of platform.
-- Chunk metadata stores full document metadata so any single chunk hit can reconstruct a complete `DDR_Result` without re-reading the source file.
+- Chunk metadata stores full document metadata so any single chunk hit can reconstruct a complete search result without re-reading the source file.
 - `BAAI/bge-small-en-v1.5` produces **normalized** vectors — cosine similarity equals dot product, but implement full cosine for correctness.
 
 ## Git branching

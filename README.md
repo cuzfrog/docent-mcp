@@ -1,4 +1,4 @@
-# ddr-mcp
+# docent-mcp
 
 A read-only MCP server for **Design Decision Records** (DDRs).
 Agents and developers query it to understand *why* code looks the way it does.

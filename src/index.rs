@@ -211,7 +211,7 @@ mod tests {
     // Test 1: write + read round-trip
     #[test]
     fn test_write_read_roundtrip() {
-        let temp_dir = std::env::temp_dir().join("ddr_test_roundtrip");
+        let temp_dir = std::env::temp_dir().join("docent_test_roundtrip");
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = matching_header();
@@ -264,7 +264,7 @@ mod tests {
     // Test 2: vectors.bin exact byte count
     #[test]
     fn test_vectors_bin_exact_byte_count() {
-        let temp_dir = std::env::temp_dir().join("ddr_test_byte_count");
+        let temp_dir = std::env::temp_dir().join("docent_test_byte_count");
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = matching_header();
@@ -376,18 +376,18 @@ mod tests {
     // Test 8: read from nonexistent path → error
     #[test]
     fn test_read_index_nonexistent_path() {
-        let path = Path::new("/nonexistent/ddr_test_no_such_index");
+        let path = Path::new("/nonexistent/docent_test_no_such_index");
         let result = read_index(path);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("no index found at"));
-        assert!(msg.contains("/nonexistent/ddr_test_no_such_index"));
+        assert!(msg.contains("/nonexistent/docent_test_no_such_index"));
     }
 
     // Test 9: read from directory with no header.json → error
     #[test]
     fn test_read_index_empty_directory() {
-        let temp_dir = std::env::temp_dir().join("ddr_test_empty_dir");
+        let temp_dir = std::env::temp_dir().join("docent_test_empty_dir");
         let _ = std::fs::remove_dir_all(&temp_dir);
         std::fs::create_dir_all(&temp_dir).unwrap();
 
@@ -402,7 +402,7 @@ mod tests {
     // Test 10: corrupted vectors.bin (truncated)
     #[test]
     fn test_read_index_corrupted_truncated_vectors() {
-        let temp_dir = std::env::temp_dir().join("ddr_test_truncated");
+        let temp_dir = std::env::temp_dir().join("docent_test_truncated");
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = matching_header();
@@ -456,7 +456,7 @@ mod tests {
     // Test 11: corrupted vectors.bin (extra bytes)
     #[test]
     fn test_read_index_corrupted_extra_bytes() {
-        let temp_dir = std::env::temp_dir().join("ddr_test_extra_bytes");
+        let temp_dir = std::env::temp_dir().join("docent_test_extra_bytes");
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = matching_header();
@@ -507,7 +507,7 @@ mod tests {
     // Test 12: metadata count mismatch with header.chunk_count
     #[test]
     fn test_read_index_metadata_count_mismatch() {
-        let temp_dir = std::env::temp_dir().join("ddr_test_meta_mismatch");
+        let temp_dir = std::env::temp_dir().join("docent_test_meta_mismatch");
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = matching_header(); // chunk_count = 3
@@ -553,7 +553,7 @@ mod tests {
     // so we test the consistency error by having metadata count differ.
     #[test]
     fn test_read_index_vector_count_mismatch() {
-        let temp_dir = std::env::temp_dir().join("ddr_test_vec_mismatch");
+        let temp_dir = std::env::temp_dir().join("docent_test_vec_mismatch");
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         // Header says chunk_count=3, vectors.bin has 3 vectors (48 bytes),
@@ -624,7 +624,7 @@ mod tests {
     // Test 14: missing metadata.json
     #[test]
     fn test_read_index_missing_metadata() {
-        let temp_dir = std::env::temp_dir().join("ddr_test_missing_meta");
+        let temp_dir = std::env::temp_dir().join("docent_test_missing_meta");
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = matching_header();
@@ -660,7 +660,7 @@ mod tests {
     // Test 15: missing vectors.bin
     #[test]
     fn test_read_index_missing_vectors() {
-        let temp_dir = std::env::temp_dir().join("ddr_test_missing_vectors");
+        let temp_dir = std::env::temp_dir().join("docent_test_missing_vectors");
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = matching_header();
@@ -710,7 +710,7 @@ mod tests {
     // Test 16: empty index (chunk_count = 0)
     #[test]
     fn test_read_index_empty() {
-        let temp_dir = std::env::temp_dir().join("ddr_test_empty_index");
+        let temp_dir = std::env::temp_dir().join("docent_test_empty_index");
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = IndexHeader {
@@ -739,7 +739,7 @@ mod tests {
     // Test 17: header.json with invalid JSON
     #[test]
     fn test_read_index_invalid_json_header() {
-        let temp_dir = std::env::temp_dir().join("ddr_test_invalid_json");
+        let temp_dir = std::env::temp_dir().join("docent_test_invalid_json");
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         std::fs::create_dir_all(&temp_dir).unwrap();
@@ -756,7 +756,7 @@ mod tests {
     // Test 18: write_index creates parent directories
     #[test]
     fn test_write_index_creates_parent_dirs() {
-        let temp_dir = std::env::temp_dir().join("ddr_test_nested_dirs");
+        let temp_dir = std::env::temp_dir().join("docent_test_nested_dirs");
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let nested_path = temp_dir.join("nested").join("subdir").join("index");

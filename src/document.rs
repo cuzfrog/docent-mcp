@@ -75,10 +75,10 @@ mod tests {
 
     #[test]
     fn test_load_text_file() {
-        let tmp = std::env::temp_dir().join("ddr-mcp-test-load-text-file.txt");
+        let tmp = std::env::temp_dir().join("docent-test-load-text-file.txt");
         std::fs::write(&tmp, "Hello, world!").unwrap();
         let doc = load_document(tmp.to_str().unwrap()).unwrap();
-        assert_eq!(doc.title, "ddr mcp test load text file");
+        assert_eq!(doc.title, "docent test load text file");
         assert_eq!(doc.body, "Hello, world!");
         assert_eq!(doc.source_path, tmp.to_str().unwrap());
         let _ = std::fs::remove_file(&tmp);
@@ -86,10 +86,10 @@ mod tests {
 
     #[test]
     fn test_load_empty_file() {
-        let tmp = std::env::temp_dir().join("ddr-mcp-test-empty-file.md");
+        let tmp = std::env::temp_dir().join("docent-test-empty-file.md");
         std::fs::write(&tmp, "").unwrap();
         let doc = load_document(tmp.to_str().unwrap()).unwrap();
-        assert_eq!(doc.title, "ddr mcp test empty file");
+        assert_eq!(doc.title, "docent test empty file");
         assert_eq!(doc.body, "");
         let _ = std::fs::remove_file(&tmp);
     }
