@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::document::Document;
 
 // ---------------------------------------------------------------------------
@@ -121,11 +123,10 @@ impl HuggingFaceTokenCounter {
 
 impl TokenCounter for HuggingFaceTokenCounter {
     fn count_tokens(&self, text: &str) -> usize {
-        // encode(text, add_special_tokens = false)
         match self.tokenizer.encode(text, false) {
             Ok(encoding) => encoding.len(),
-            Err(_) => {
-                // Fallback: split on whitespace as a best-effort count
+            Err(e) => {
+                eprintln!("WARNING: tokenizer.encode failed: {e}. Falling back to whitespace token count.");
                 text.split_whitespace().count()
             }
         }
@@ -137,8 +138,8 @@ impl TokenCounter for HuggingFaceTokenCounter {
                 let offsets = encoding.get_offsets().to_vec();
                 (offsets.len(), offsets)
             }
-            Err(_) => {
-                // Fallback: use whitespace splitting
+            Err(e) => {
+                eprintln!("WARNING: tokenizer.encode failed: {e}. Falling back to whitespace offsets.");
                 let counter = WhitespaceTokenCounter;
                 counter.encode_with_offsets(text)
             }
@@ -165,13 +166,9 @@ fn split_into_sections(body: &str) -> Vec<(Option<String>, String)> {
 
     for line in body.lines() {
         // Detect H2 or H3: line must start with "## " or "### " (at column 0)
-        let is_heading = if line.starts_with("### ") {
-            Some(&line[4..]) // skip "### "
-        } else if line.starts_with("## ") {
-            Some(&line[3..]) // skip "## "
-        } else {
-            None
-        };
+        let is_heading = line
+            .strip_prefix("### ")
+            .or_else(|| line.strip_prefix("## "));
 
         if let Some(heading_text) = is_heading {
             // Emit the previous section if it has content
