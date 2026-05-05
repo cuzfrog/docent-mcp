@@ -1,0 +1,8 @@
+[index]
+embedding_model = "BAAI/bge-small-en-v1.5"   
+persist_path    = "../target/.ddr-index"             
+chunk_size      = 512                         
+chunk_overlap   = 64
+
+[server]
+log_level = "debug"    # debug | info | warn | error

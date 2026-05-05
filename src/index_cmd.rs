@@ -506,7 +506,7 @@ mod tests {
     // Test 1: discover_files_directory
     #[test]
     fn test_discover_files_directory() {
-        let tmp = std::env::temp_dir().join("ddr_test_discover_dir");
+        let tmp = std::env::temp_dir().join("docent_test_discover_dir");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         std::fs::create_dir_all(tmp.join("sub")).unwrap();
@@ -534,12 +534,12 @@ mod tests {
     // Test 2: discover_files_single_file
     #[test]
     fn test_discover_files_single_file() {
-        let tmp = std::env::temp_dir().join("ddr_test_single_file.md");
+        let tmp = std::env::temp_dir().join("docent_test_single_file.md");
         std::fs::write(&tmp, "single file content").unwrap();
 
         let result = discover_files(&tmp).unwrap();
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0], PathBuf::from("ddr_test_single_file.md"));
+        assert_eq!(result[0], PathBuf::from("docent_test_single_file.md"));
 
         let _ = std::fs::remove_file(&tmp);
     }
@@ -554,7 +554,7 @@ mod tests {
     // Test 4: discover_files_empty_directory
     #[test]
     fn test_discover_files_empty_directory() {
-        let tmp = std::env::temp_dir().join("ddr_test_empty_discover");
+        let tmp = std::env::temp_dir().join("docent_test_empty_discover");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
 
@@ -567,7 +567,7 @@ mod tests {
     // Test 5: hash_file_known_content
     #[test]
     fn test_hash_file_known_content() {
-        let tmp = std::env::temp_dir().join("ddr_test_hash_known");
+        let tmp = std::env::temp_dir().join("docent_test_hash_known");
         std::fs::write(&tmp, "hello world").unwrap();
 
         let hash = hash_file(&tmp).unwrap();
@@ -582,7 +582,7 @@ mod tests {
     // Test 6: hash_file_empty
     #[test]
     fn test_hash_file_empty() {
-        let tmp = std::env::temp_dir().join("ddr_test_hash_empty");
+        let tmp = std::env::temp_dir().join("docent_test_hash_empty");
         std::fs::write(&tmp, "").unwrap();
 
         let hash = hash_file(&tmp).unwrap();

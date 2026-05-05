@@ -1,11 +1,11 @@
-use ddr_mcp::cli::IndexArgs;
-use ddr_mcp::index;
-use ddr_mcp::index_cmd::run_index;
+use docent_mcp::cli::IndexArgs;
+use docent_mcp::index;
+use docent_mcp::index_cmd::run_index;
 use std::path::PathBuf;
 
 /// Helper: create a temp directory and return its path.
 fn make_temp_dir(name: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("ddr_test_{}", name));
+    let path = std::env::temp_dir().join(format!("docent_test_{}", name));
     let _ = std::fs::remove_dir_all(&path);
     std::fs::create_dir_all(&path).unwrap();
     path

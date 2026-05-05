@@ -9,7 +9,7 @@ fn test_help_exits_zero() {
         .output()
         .expect("failed to execute cargo run");
 
-    assert!(output.status.success(), "ddr-mcp --help should exit 0");
+    assert!(output.status.success(), "docent --help should exit 0");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(

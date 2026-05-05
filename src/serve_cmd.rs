@@ -10,16 +10,16 @@ use crate::cli::ServeArgs;
 use crate::config::Config;
 use crate::embedder::Embedder;
 use crate::index;
-use crate::mcp::DdrMcpServer;
+use crate::mcp::DocentMcpServer;
 
-/// Run the `ddr-mcp serve` subcommand.
+/// Run the `docent serve` subcommand.
 ///
 /// Startup sequence:
 /// 1. Load config from the path in `args`
 /// 2. Read index from `config.index.persist_path`
 /// 3. Validate index header against config
 /// 4. Create embedder (wrapped in `Arc<Mutex<_>>` for thread safety)
-/// 5. Build the `DdrMcpServer`
+/// 5. Build the `DocentMcpServer`
 /// 6. Start Streamable HTTP service on an ephemeral port
 /// 7. Print listening address to stderr
 /// 8. Accept connections until SIGINT/SIGTERM
@@ -32,7 +32,7 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
     let persist_path = PathBuf::from(&config.index.persist_path);
     let (header, vectors, metadata) = index::read_index(&persist_path).map_err(|e| {
         anyhow::anyhow!(
-            "Error: no index found at '{}'. Run 'ddr-mcp index' to build it.\nCaused by: {}",
+            "Error: no index found at '{}'. Run 'docent index' to build it.\nCaused by: {}",
             persist_path.display(),
             e
         )
@@ -40,7 +40,7 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
 
     // 3. Validate header against config
     index::validate_header(&header, &config.index).context(
-        "Index is incompatible with current config. Run 'ddr-mcp index --rebuild' to re-index.",
+        "Index is incompatible with current config. Run 'docent index --rebuild' to re-index.",
     )?;
 
     // 4. Create embedder
@@ -48,8 +48,8 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
         .context("Failed to initialize embedding model — cannot start server")?;
     let embedder = Arc::new(Mutex::new(embedder));
 
-    // 5. Build DdrMcpServer
-    let server = DdrMcpServer {
+    // 5. Build DocentMcpServer
+    let server = DocentMcpServer {
         config,
         index_header: header,
         vectors: Arc::new(vectors),
@@ -58,7 +58,7 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
     };
 
     // 6. Build Streamable HTTP service
-    let service: StreamableHttpService<DdrMcpServer, LocalSessionManager> =
+    let service: StreamableHttpService<DocentMcpServer, LocalSessionManager> =
         StreamableHttpService::new(
             {
                 let server = server.clone();
@@ -78,7 +78,7 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
     let addr = listener
         .local_addr()
         .context("Failed to get local address")?;
-    eprintln!("ddr-mcp server listening on http://{}", addr);
+    eprintln!("docent server listening on http://{}", addr);
 
     // 8. Serve with graceful shutdown on SIGINT/SIGTERM
     axum::serve(listener, router)

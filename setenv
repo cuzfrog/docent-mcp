@@ -1,0 +1,6 @@
+#!/bin/bash
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-${(%):-%x}}")" &> /dev/null && pwd)
+export PATH="$SCRIPT_DIR/target/debug:$PATH"
+
+echo "$SCRIPT_DIR/target/debug added to PATH"

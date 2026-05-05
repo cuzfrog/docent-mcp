@@ -1,10 +1,10 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-/// Top-level CLI struct for ddr-mcp.
+/// Top-level CLI struct for docent.
 #[derive(Parser)]
 #[command(
-    name = "ddr-mcp",
+    name = "docent",
     about = "A read-only MCP server for Design Decision Records"
 )]
 pub struct Cli {
@@ -51,7 +51,7 @@ mod tests {
 
     #[test]
     fn test_index_minimal_positional() {
-        let cli = Cli::try_parse_from(["ddr-mcp", "index", "./ddrs"]);
+        let cli = Cli::try_parse_from(["docent", "index", "./ddrs"]);
         assert!(cli.is_ok());
         let cli = cli.unwrap();
         match cli.command {
@@ -66,13 +66,14 @@ mod tests {
 
     #[test]
     fn test_index_with_config_flag() {
-        let cli = Cli::try_parse_from(["ddr-mcp", "index", "./ddrs", "--config", "/etc/ddr.toml"]);
+        let cli =
+            Cli::try_parse_from(["docent", "index", "./ddrs", "--config", "/etc/docent.toml"]);
         assert!(cli.is_ok());
         let cli = cli.unwrap();
         match cli.command {
             Commands::Index(args) => {
                 assert_eq!(args.file, std::path::PathBuf::from("./ddrs"));
-                assert_eq!(args.config, std::path::PathBuf::from("/etc/ddr.toml"));
+                assert_eq!(args.config, std::path::PathBuf::from("/etc/docent.toml"));
             }
             _ => panic!("expected Index command"),
         }
@@ -80,7 +81,7 @@ mod tests {
 
     #[test]
     fn test_index_with_rebuild_flag() {
-        let cli = Cli::try_parse_from(["ddr-mcp", "index", "./ddrs", "--rebuild"]);
+        let cli = Cli::try_parse_from(["docent", "index", "./ddrs", "--rebuild"]);
         assert!(cli.is_ok());
         let cli = cli.unwrap();
         match cli.command {
@@ -95,7 +96,7 @@ mod tests {
     #[test]
     fn test_index_all_flags() {
         let cli = Cli::try_parse_from([
-            "ddr-mcp",
+            "docent",
             "index",
             "./ddrs",
             "--config",
@@ -116,13 +117,13 @@ mod tests {
 
     #[test]
     fn test_index_missing_file_fails() {
-        let cli = Cli::try_parse_from(["ddr-mcp", "index"]);
+        let cli = Cli::try_parse_from(["docent", "index"]);
         assert!(cli.is_err());
     }
 
     #[test]
     fn test_serve_default_config() {
-        let cli = Cli::try_parse_from(["ddr-mcp", "serve"]);
+        let cli = Cli::try_parse_from(["docent", "serve"]);
         assert!(cli.is_ok());
         let cli = cli.unwrap();
         match cli.command {
@@ -135,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_serve_custom_config() {
-        let cli = Cli::try_parse_from(["ddr-mcp", "serve", "--config", "prod.toml"]);
+        let cli = Cli::try_parse_from(["docent", "serve", "--config", "prod.toml"]);
         assert!(cli.is_ok());
         let cli = cli.unwrap();
         match cli.command {
@@ -148,7 +149,7 @@ mod tests {
 
     #[test]
     fn test_unknown_subcommand_fails() {
-        let cli = Cli::try_parse_from(["ddr-mcp", "unknown"]);
+        let cli = Cli::try_parse_from(["docent", "unknown"]);
         assert!(cli.is_err());
     }
 }

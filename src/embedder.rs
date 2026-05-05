@@ -14,13 +14,13 @@ pub struct Embedder {
 
 /// Resolve the cache directory for a given model name.
 ///
-/// Returns `~/.cache/ddr-mcp/models/<model_name>`.
+/// Returns `~/.cache/docent/models/<model_name>`.
 fn resolve_cache_dir(model_name: &str) -> anyhow::Result<PathBuf> {
     let home =
         dirs_next::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
     Ok(home
         .join(".cache")
-        .join("ddr-mcp")
+        .join("docent")
         .join("models")
         .join(model_name))
 }
@@ -29,7 +29,7 @@ impl Embedder {
     /// Create a new embedder for the given model name.
     ///
     /// Downloads the model on first run and caches it at
-    /// `~/.cache/ddr-mcp/models/<model_name>`.
+    /// `~/.cache/docent/models/<model_name>`.
     ///
     /// # Errors
     ///
@@ -117,7 +117,7 @@ mod tests {
         // The path should end with the expected suffix
         let path_str = path.to_string_lossy();
         assert!(
-            path_str.contains(".cache/ddr-mcp/models/BAAI/bge-small-en-v1.5"),
+            path_str.contains(".cache/docent/models/BAAI/bge-small-en-v1.5"),
             "Cache path '{}' does not contain expected suffix",
             path_str
         );
