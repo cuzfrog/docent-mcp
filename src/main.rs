@@ -2,6 +2,7 @@ mod chunking;
 mod cli;
 mod config;
 mod document;
+mod embedder;
 
 use clap::Parser;
 use cli::{Cli, Commands};

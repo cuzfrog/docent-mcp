@@ -80,6 +80,15 @@ pub struct HuggingFaceTokenCounter {
 }
 
 impl HuggingFaceTokenCounter {
+    /// Create a new instance from a pre-loaded tokenizer.
+    ///
+    /// This is the preferred constructor when an [`Embedder`](crate::embedder::Embedder)
+    /// is available — the embedder already has the tokenizer loaded, so there is
+    /// no need to resolve the cache path independently.
+    pub fn from_tokenizer(tokenizer: tokenizers::Tokenizer) -> Self {
+        Self { tokenizer }
+    }
+
     /// Create a new instance by loading the tokenizer from the model cache.
     ///
     /// The tokenizer file is expected at:
@@ -108,14 +117,13 @@ impl HuggingFaceTokenCounter {
             );
         }
 
-        let tokenizer = tokenizers::Tokenizer::from_file(&tokenizer_path)
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to load tokenizer from '{}': {}",
-                    tokenizer_path.display(),
-                    e
-                )
-            })?;
+        let tokenizer = tokenizers::Tokenizer::from_file(&tokenizer_path).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to load tokenizer from '{}': {}",
+                tokenizer_path.display(),
+                e
+            )
+        })?;
 
         Ok(Self { tokenizer })
     }
@@ -139,7 +147,9 @@ impl TokenCounter for HuggingFaceTokenCounter {
                 (offsets.len(), offsets)
             }
             Err(e) => {
-                eprintln!("WARNING: tokenizer.encode failed: {e}. Falling back to whitespace offsets.");
+                eprintln!(
+                    "WARNING: tokenizer.encode failed: {e}. Falling back to whitespace offsets."
+                );
                 let counter = WhitespaceTokenCounter;
                 counter.encode_with_offsets(text)
             }
@@ -368,7 +378,10 @@ mod tests {
         let words: Vec<&str> = (0..30).map(|_| "word").collect();
         let body = words.join(" ");
         let doc = test_doc("large", &body);
-        let config = ChunkingConfig { chunk_size: 10, chunk_overlap: 2 };
+        let config = ChunkingConfig {
+            chunk_size: 10,
+            chunk_overlap: 2,
+        };
         let chunks = chunk_document(&doc, &config, &WhitespaceTokenCounter);
         // 30 tokens, step=8: windows at 0-10, 8-18, 16-26, 24-30 (partial) = 4 chunks
         assert!(chunks.len() >= 2, "Expected multiple overlapping chunks");
@@ -398,7 +411,8 @@ mod tests {
         let chunks = chunk_document(&doc, &test_config(), &WhitespaceTokenCounter);
         // Section B has no content → should be skipped
         assert_eq!(chunks.len(), 2);
-        let headings: Vec<Option<&str>> = chunks.iter()
+        let headings: Vec<Option<&str>> = chunks
+            .iter()
             .map(|c| c.section_heading.as_deref())
             .collect();
         assert_eq!(headings, vec![Some("A"), Some("C")]);
@@ -427,7 +441,10 @@ mod tests {
         let words: Vec<String> = (0..25).map(|i| format!("w{}", i)).collect();
         let body = words.join(" ");
         let doc = test_doc("overlap", &body);
-        let config = ChunkingConfig { chunk_size: 10, chunk_overlap: 3 };
+        let config = ChunkingConfig {
+            chunk_size: 10,
+            chunk_overlap: 3,
+        };
         let chunks = chunk_document(&doc, &config, &WhitespaceTokenCounter);
         assert!(chunks.len() > 1);
         // Chunk 0 should end with some tokens that Chunk 1 starts with
@@ -462,7 +479,10 @@ mod tests {
         let body = words.join(" ");
         let doc = test_doc("bigplain", &body);
         let chunks = chunk_document(&doc, &test_config(), &WhitespaceTokenCounter);
-        assert!(chunks.len() > 1, "Expected sliding window for oversized plain text");
+        assert!(
+            chunks.len() > 1,
+            "Expected sliding window for oversized plain text"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -504,7 +524,10 @@ mod tests {
         let words: Vec<&str> = (0..8).map(|_| "w").collect();
         let body = words.join(" ");
         let doc = test_doc("exact", &format!("## Exact\n{}", body));
-        let config = ChunkingConfig { chunk_size: 10, chunk_overlap: 2 };
+        let config = ChunkingConfig {
+            chunk_size: 10,
+            chunk_overlap: 2,
+        };
         let chunks = chunk_document(&doc, &config, &WhitespaceTokenCounter);
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0].token_count, 10);
@@ -536,7 +559,10 @@ mod tests {
         let words: Vec<&str> = (0..15).map(|_| "w").collect();
         let big_section = words.join(" ");
         let doc = test_doc("contig", &format!("## A\nsmall\n## B\n{}", big_section));
-        let config = ChunkingConfig { chunk_size: 10, chunk_overlap: 2 };
+        let config = ChunkingConfig {
+            chunk_size: 10,
+            chunk_overlap: 2,
+        };
         let chunks = chunk_document(&doc, &config, &WhitespaceTokenCounter);
         let indices: Vec<usize> = chunks.iter().map(|c| c.chunk_index).collect();
         let expected: Vec<usize> = (0..chunks.len()).collect();
