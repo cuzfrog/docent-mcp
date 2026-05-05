@@ -94,6 +94,10 @@ pub fn read_index(path: &Path) -> anyhow::Result<(IndexHeader, Vec<Vec<f32>>, Ve
     let header: IndexHeader = serde_json::from_slice(&header_bytes)
         .map_err(|e| anyhow::anyhow!("Failed to parse '{}': {}", header_path.display(), e))?;
 
+    if header.embedding_dims == 0 {
+        anyhow::bail!("corrupted '{}': embedding_dims is 0", header_path.display());
+    }
+
     // 3. Read vectors.bin and validate size
     let vectors_path = path.join("vectors.bin");
     let raw_bytes = std::fs::read(&vectors_path)
