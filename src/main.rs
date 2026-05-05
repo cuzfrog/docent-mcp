@@ -1,3 +1,4 @@
+mod chunking;
 mod cli;
 mod config;
 mod document;
