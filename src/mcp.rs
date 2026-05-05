@@ -35,9 +35,9 @@ pub struct DdrMcpServer {
     /// Index header from the on-disk index.
     pub index_header: IndexHeader,
     /// All chunk vectors loaded from the index.
-    pub vectors: Vec<Vec<f32>>,
+    pub vectors: Arc<Vec<Vec<f32>>>,
     /// All chunk metadata loaded from the index (1:1 with `vectors`).
-    pub metadata: Vec<ChunkMetadata>,
+    pub metadata: Arc<Vec<ChunkMetadata>>,
     /// Embedder instance, wrapped for thread-safe shared access.
     /// `Embedder` is `!Send`, so it must be locked and used inside
     /// `tokio::task::spawn_blocking`.
@@ -72,8 +72,8 @@ impl DdrMcpServer {
 
         // 2. Run search inside spawn_blocking (Embedder is !Send)
         let embedder = self.embedder.clone();
-        let vectors = self.vectors.clone();
-        let metadata = self.metadata.clone();
+        let vectors = Arc::clone(&self.vectors);
+        let metadata = Arc::clone(&self.metadata);
         let query = params.query.clone();
         let limit = params.limit as usize;
 
@@ -169,8 +169,8 @@ mod tests {
                 doc_count: 0,
                 chunk_count: 0,
             },
-            vectors: vec![],
-            metadata: vec![],
+            vectors: Arc::new(vec![]),
+            metadata: Arc::new(vec![]),
             embedder: Arc::new(Mutex::new(
                 crate::embedder::Embedder::new("BAAI/bge-small-en-v1.5").unwrap(),
             )),

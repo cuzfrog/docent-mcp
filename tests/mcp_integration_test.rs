@@ -468,13 +468,12 @@ fn test_server_missing_index_exits() {
         .spawn()
         .expect("failed to start server");
 
-    let status = child.wait().expect("failed to wait for server");
+    let output = child.wait_with_output().expect("failed to wait for server");
     assert!(
-        !status.success(),
+        !output.status.success(),
         "server should exit with non-zero status when index is missing"
     );
 
-    let output = child.wait_with_output().unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("no index found") || stderr.contains("Run 'ddr-mcp index'"),

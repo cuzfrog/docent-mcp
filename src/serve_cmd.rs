@@ -52,8 +52,8 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
     let server = DdrMcpServer {
         config,
         index_header: header,
-        vectors,
-        metadata,
+        vectors: Arc::new(vectors),
+        metadata: Arc::new(metadata),
         embedder,
     };
 
