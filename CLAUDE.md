@@ -14,7 +14,7 @@ cargo run -- serve
 ```
 
 Run a single test: `cargo test test_name`
-Run integration tests: `cargo test --test '*'`
+Run all tests (unit + integration): `cargo test --lib`
 Clippy: `cargo clippy -- -D warnings`
 Format: `cargo fmt --check`
 
@@ -33,6 +33,11 @@ src/
   search.rs        # vector search pipeline (cosine sim, dedup)
   serve_cmd.rs     # serve subcommand (startup checks, server init)
   mcp.rs           # MCP tool handler (search_ddr tool definition)
+  tests/           # integration-style tests compiled as crate unit tests
+    mod.rs
+    mcp.rs
+    index_cmd.rs
+    search.rs
 ```
 
 ## Key Dependencies
@@ -55,7 +60,7 @@ Use fixed versions. Avoid `*` or `^` to prevent unintentional updates.
 - **Error handling:** Use `anyhow::Result` internally. At binary boundaries (CLI, MCP responses), convert to user-facing messages. No `.unwrap()` on fallible operations.
 - **No panics in library code.** Reserve `panic` for unreachable states only.
 - **Logging:** Use `eprintln!` for CLI user-facing messages. The MCP server itself does not log to stdout (stdout is for MCP transport when using stdio, but we use HTTP).
-- **Tests:** Each module has unit tests in a `#[cfg(test)] mod tests` block. Integration tests go in `tests/`. Tests that require network (model download) are `#[ignore]`.
+- **Tests:** Each module has unit tests in a `#[cfg(test)] mod tests` block. Integration-style tests are under `src/tests/` (compiled as crate unit tests, avoiding separate integration-test link overhead). Tests that require network (model download) are `#[ignore]`.
 - **Naming:** Snake_case for files and functions. Types are PascalCase. Constants are UPPER_SNAKE_CASE.
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).
 
@@ -108,7 +113,7 @@ Implementation tasks live at `.lissom/tasks/IMPL-{N}/Specs.md`. Follow the spec 
 ## Common Pitfalls
 
 - fastembed's `TextEmbedding` is **not Send** — don't hold it across await points. Wrap in `tokio::task::spawn_blocking` for async contexts.
-- rmcp's `#[tool_router(server_handler)]` auto-implements `ServerHandler` — don't also write a manual impl.
+- Use `#[tool_router]` without `server_handler` + a separate `#[tool_handler]` block when you need to customize `ServerInfo` (e.g., server name).
 - The index's `vectors.bin` must be read/written in **little-endian** regardless of platform.
 - Chunk metadata stores full document metadata so any single chunk hit can reconstruct a complete search result without re-reading the source file.
 - `BGESmallENV15Q` produces **normalized** vectors — cosine similarity equals dot product, but implement full cosine for correctness.

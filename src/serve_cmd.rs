@@ -68,7 +68,7 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
             StreamableHttpServerConfig::default(),
         );
 
-    let router = axum::Router::new().nest_service("/", service);
+    let router = axum::Router::new().fallback_service(service);
 
     // 7. Bind TCP listener on ephemeral port
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")

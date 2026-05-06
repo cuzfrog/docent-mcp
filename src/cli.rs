@@ -5,7 +5,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(
     name = "docent",
-    about = "A read-only MCP server for Design Decision Records"
+    about = "MCP server for Document & Code History indexing and querying."
 )]
 pub struct Cli {
     #[command(subcommand)]

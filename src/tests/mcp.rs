@@ -8,11 +8,12 @@ use std::time::Duration;
 use reqwest::blocking::Client;
 use serde_json::Value;
 
+use crate::index;
+
 static INIT: Once = Once::new();
 
 fn init() {
     INIT.call_once(|| {
-        // Ensure the binary is built before running tests
         let status = Command::new("cargo")
             .arg("build")
             .status()
@@ -21,11 +22,6 @@ fn init() {
     });
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/// Write a minimal valid config to a temp file and return the path.
 fn temp_config(persist_path: &Path) -> PathBuf {
     let path = std::env::temp_dir().join(format!("docent_test_config_{}.toml", std::process::id()));
     let mut f = std::fs::File::create(&path).unwrap();
@@ -42,10 +38,9 @@ chunk_overlap = 64"#,
     path
 }
 
-/// Build a fake index directory with zero vectors (no model download needed).
 fn build_fake_index(dir: &Path, dims: usize) {
-    let header = docent_mcp::index::IndexHeader {
-        schema_version: docent_mcp::index::SCHEMA_VERSION,
+    let header = index::IndexHeader {
+        schema_version: index::SCHEMA_VERSION,
         embedding_model: "BGESmallENV15Q".into(),
         embedding_dims: dims,
         chunk_size: 512,
@@ -56,7 +51,7 @@ fn build_fake_index(dir: &Path, dims: usize) {
     };
     let vectors = vec![vec![0.0f32; dims], vec![0.1f32; dims]];
     let metadata = vec![
-        docent_mcp::index::ChunkMetadata {
+        index::ChunkMetadata {
             source_path: "docs/design/auth.md".into(),
             source_hash: "abc123".into(),
             title: "Authentication Design".into(),
@@ -64,7 +59,7 @@ fn build_fake_index(dir: &Path, dims: usize) {
             section_heading: Some("Overview".into()),
             chunk_index: 0,
         },
-        docent_mcp::index::ChunkMetadata {
+        index::ChunkMetadata {
             source_path: "docs/design/caching.md".into(),
             source_hash: "def456".into(),
             title: "Caching Strategy".into(),
@@ -73,10 +68,9 @@ fn build_fake_index(dir: &Path, dims: usize) {
             chunk_index: 0,
         },
     ];
-    docent_mcp::index::write_index(dir, &header, &vectors, &metadata).unwrap();
+    index::write_index(dir, &header, &vectors, &metadata).unwrap();
 }
 
-/// Start the server and return (Child, SocketAddr).
 fn start_server(config_path: &Path) -> (Child, SocketAddr) {
     let mut child = Command::new("cargo")
         .arg("run")
@@ -89,19 +83,16 @@ fn start_server(config_path: &Path) -> (Child, SocketAddr) {
         .spawn()
         .expect("failed to start server");
 
-    // Read stderr to find the listening address
     let stderr = child.stderr.take().unwrap();
     use std::io::BufRead;
     let mut reader = std::io::BufReader::new(stderr);
     let mut line = String::new();
 
-    // Wait up to 30 seconds for the server to start
     let start = std::time::Instant::now();
     loop {
         line.clear();
         let n = reader.read_line(&mut line).unwrap();
         if n == 0 {
-            // Process exited
             let status = child.try_wait().unwrap();
             panic!("server exited early with status: {:?}", status);
         }
@@ -113,7 +104,6 @@ fn start_server(config_path: &Path) -> (Child, SocketAddr) {
         }
     }
 
-    // Parse the address from the log line
     let addr_str = line
         .trim()
         .strip_prefix("docent server listening on http://")
@@ -123,7 +113,6 @@ fn start_server(config_path: &Path) -> (Child, SocketAddr) {
     (child, addr)
 }
 
-/// Send a JSON-RPC request and return the parsed response.
 fn send_mcp_request(client: &Client, addr: &SocketAddr, method: &str, params: Value) -> Value {
     let body = serde_json::json!({
         "jsonrpc": "2.0",
@@ -142,7 +131,6 @@ fn send_mcp_request(client: &Client, addr: &SocketAddr, method: &str, params: Va
 
     let text = response.text().expect("failed to read response body");
 
-    // Handle SSE format: extract the last data: line
     if text.contains("data:") {
         let data_lines: Vec<&str> = text
             .lines()
@@ -150,7 +138,6 @@ fn send_mcp_request(client: &Client, addr: &SocketAddr, method: &str, params: Va
             .map(|l| l.strip_prefix("data:").unwrap().trim())
             .collect();
         if !data_lines.is_empty() {
-            // Return the last data line (usually the actual response)
             serde_json::from_str(data_lines.last().unwrap()).unwrap_or_else(|_| {
                 panic!("failed to parse SSE data: {}", data_lines.last().unwrap())
             })
@@ -163,7 +150,6 @@ fn send_mcp_request(client: &Client, addr: &SocketAddr, method: &str, params: Va
     }
 }
 
-/// Send the MCP initialize request and return the response.
 fn send_initialize(client: &Client, addr: &SocketAddr) -> Value {
     send_mcp_request(
         client,
@@ -177,7 +163,6 @@ fn send_initialize(client: &Client, addr: &SocketAddr) -> Value {
     )
 }
 
-/// Clean up temp files.
 fn cleanup(paths: &[PathBuf]) {
     for p in paths {
         let _ = std::fs::remove_file(p);
@@ -186,15 +171,15 @@ fn cleanup(paths: &[PathBuf]) {
 }
 
 // ---------------------------------------------------------------------------
-// Tests
+// MCP initialize handshake
 // ---------------------------------------------------------------------------
 
-/// Test 1: MCP initialize handshake
 #[test]
 fn test_mcp_initialize_handshake() {
     init();
 
-    let index_dir = std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
+    let index_dir =
+        std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
     let config_path = temp_config(&index_dir);
     build_fake_index(&index_dir, 4);
 
@@ -207,7 +192,6 @@ fn test_mcp_initialize_handshake() {
 
     let response = send_initialize(&client, &addr);
 
-    // Verify response structure
     let result = response.get("result").expect("response should have result");
     let protocol_version = result
         .get("protocolVersion")
@@ -235,12 +219,16 @@ fn test_mcp_initialize_handshake() {
     cleanup(&[index_dir, config_path]);
 }
 
-/// Test 2: tools/list returns search_ddr
+// ---------------------------------------------------------------------------
+// tools/list returns search_ddr
+// ---------------------------------------------------------------------------
+
 #[test]
 fn test_mcp_tools_list() {
     init();
 
-    let index_dir = std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
+    let index_dir =
+        std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
     let config_path = temp_config(&index_dir);
     build_fake_index(&index_dir, 4);
 
@@ -251,10 +239,8 @@ fn test_mcp_tools_list() {
         .build()
         .unwrap();
 
-    // Initialize first
     send_initialize(&client, &addr);
 
-    // Request tools/list
     let response = send_mcp_request(&client, &addr, "tools/list", serde_json::json!({}));
 
     let result = response.get("result").expect("response should have result");
@@ -298,12 +284,16 @@ fn test_mcp_tools_list() {
     cleanup(&[index_dir, config_path]);
 }
 
-/// Test 3: search_ddr with valid query (structural validation)
+// ---------------------------------------------------------------------------
+// search_ddr with valid query (structural validation)
+// ---------------------------------------------------------------------------
+
 #[test]
 fn test_search_ddr_valid_query() {
     init();
 
-    let index_dir = std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
+    let index_dir =
+        std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
     let config_path = temp_config(&index_dir);
     build_fake_index(&index_dir, 4);
 
@@ -314,10 +304,8 @@ fn test_search_ddr_valid_query() {
         .build()
         .unwrap();
 
-    // Initialize first
     send_initialize(&client, &addr);
 
-    // Call search_ddr
     let response = send_mcp_request(
         &client,
         &addr,
@@ -343,7 +331,6 @@ fn test_search_ddr_valid_query() {
     let text = first.get("text").expect("content item should have text");
     let text_str = text.as_str().unwrap();
 
-    // Parse the JSON text to verify structure
     let results: Vec<Value> =
         serde_json::from_str(text_str).expect("text should be valid JSON array");
     assert!(!results.is_empty(), "should have at least 1 result");
@@ -366,12 +353,16 @@ fn test_search_ddr_valid_query() {
     cleanup(&[index_dir, config_path]);
 }
 
-/// Test 4: search_ddr with invalid limit (0)
+// ---------------------------------------------------------------------------
+// search_ddr with invalid limit (0)
+// ---------------------------------------------------------------------------
+
 #[test]
 fn test_search_ddr_invalid_limit() {
     init();
 
-    let index_dir = std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
+    let index_dir =
+        std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
     let config_path = temp_config(&index_dir);
     build_fake_index(&index_dir, 4);
 
@@ -382,10 +373,8 @@ fn test_search_ddr_invalid_limit() {
         .build()
         .unwrap();
 
-    // Initialize first
     send_initialize(&client, &addr);
 
-    // Call search_ddr with limit=0
     let response = send_mcp_request(
         &client,
         &addr,
@@ -409,12 +398,16 @@ fn test_search_ddr_invalid_limit() {
     cleanup(&[index_dir, config_path]);
 }
 
-/// Test 5: search_ddr with empty query
+// ---------------------------------------------------------------------------
+// search_ddr with empty query
+// ---------------------------------------------------------------------------
+
 #[test]
 fn test_search_ddr_empty_query() {
     init();
 
-    let index_dir = std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
+    let index_dir =
+        std::env::temp_dir().join(format!("docent_test_index_{}", std::process::id()));
     let config_path = temp_config(&index_dir);
     build_fake_index(&index_dir, 4);
 
@@ -425,10 +418,8 @@ fn test_search_ddr_empty_query() {
         .build()
         .unwrap();
 
-    // Initialize first
     send_initialize(&client, &addr);
 
-    // Call search_ddr with empty query
     let response = send_mcp_request(
         &client,
         &addr,
@@ -448,14 +439,16 @@ fn test_search_ddr_empty_query() {
     cleanup(&[index_dir, config_path]);
 }
 
-/// Test 6: server exits with error when index is missing
+// ---------------------------------------------------------------------------
+// server exits with error when index is missing
+// ---------------------------------------------------------------------------
+
 #[test]
 fn test_server_missing_index_exits() {
     init();
 
     let index_dir =
         std::env::temp_dir().join(format!("docent_test_no_index_{}", std::process::id()));
-    // Don't create the index directory
     let config_path = temp_config(&index_dir);
 
     let child = Command::new("cargo")

@@ -1,11 +1,11 @@
-use docent_mcp::cli::IndexArgs;
-use docent_mcp::embedder::Embedder;
-use docent_mcp::index;
-use docent_mcp::index_cmd::run_index;
-use docent_mcp::search::{self, SearchResult};
 use std::path::PathBuf;
 
-/// Helper: create a temp directory and return its path.
+use crate::cli::IndexArgs;
+use crate::embedder::Embedder;
+use crate::index;
+use crate::index_cmd::run_index;
+use crate::search::{self, SearchResult};
+
 fn make_temp_dir(name: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("docent_test_{}", name));
     let _ = std::fs::remove_dir_all(&path);
@@ -13,7 +13,6 @@ fn make_temp_dir(name: &str) -> PathBuf {
     path
 }
 
-/// Helper: write a config.toml with the given persist_path.
 fn write_config(dir: &std::path::Path, persist_path: &std::path::Path) -> PathBuf {
     let config_path = dir.join("config.toml");
     let content = format!(
@@ -29,17 +28,12 @@ chunk_overlap = 64
     config_path
 }
 
-/// Helper: read the index from persist_path and return (header, vectors, metadata).
 fn read_index_at(
     path: &std::path::Path,
 ) -> (index::IndexHeader, Vec<Vec<f32>>, Vec<index::ChunkMetadata>) {
     index::read_index(path).unwrap()
 }
 
-/// Integration test: search relevance ordering, deduplication, and limit enforcement.
-///
-/// This test requires downloading the embedding model. Run with:
-///   cargo test --test search_integration_test -- --ignored
 #[test]
 #[ignore]
 fn test_search_relevance_ordering() {
@@ -48,7 +42,6 @@ fn test_search_relevance_ordering() {
     let index_dir = base.join("index");
     std::fs::create_dir_all(&docs_dir).unwrap();
 
-    // Create 3 documents with clearly distinct topics
     std::fs::write(
         docs_dir.join("authentication.md"),
         r#"# Authentication Design
@@ -127,7 +120,6 @@ loads data from the database and populates the cache for subsequent requests.
 
     let config_path = write_config(&base, &index_dir);
 
-    // Build the index
     run_index(IndexArgs {
         file: docs_dir.clone(),
         config: config_path,
@@ -135,20 +127,16 @@ loads data from the database and populates the cache for subsequent requests.
     })
     .unwrap();
 
-    // Read the index
     let (_header, vectors, metadata) = read_index_at(&index_dir);
 
-    // Verify index was built with chunk_text populated
     assert!(!metadata.is_empty(), "Index should have chunks");
     assert!(
         !metadata.iter().all(|m| m.chunk_text.is_empty()),
         "Chunks should have chunk_text populated"
     );
 
-    // Create embedder and search
     let mut embedder = Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
 
-    // Search for database-related content
     let results: Vec<SearchResult> = search::search(
         "database schema design",
         &mut embedder,
@@ -158,16 +146,13 @@ loads data from the database and populates the cache for subsequent requests.
     )
     .unwrap();
 
-    // Verify results are returned
     assert!(!results.is_empty(), "Should return at least one result");
 
-    // Verify the database document appears first (highest relevance)
     assert_eq!(
         results[0].source_path, "database-design.md",
         "Database document should rank first for 'database schema design' query"
     );
 
-    // Verify deduplication: at most one result per source_path
     let mut seen_paths: std::collections::HashSet<&str> = std::collections::HashSet::new();
     for result in &results {
         assert!(
@@ -177,10 +162,8 @@ loads data from the database and populates the cache for subsequent requests.
         );
     }
 
-    // Verify limit enforcement (max 5)
     assert!(results.len() <= 5, "Should return at most 5 results");
 
-    // Verify results are sorted by score descending
     for i in 1..results.len() {
         assert!(
             results[i - 1].score >= results[i].score,
@@ -188,7 +171,6 @@ loads data from the database and populates the cache for subsequent requests.
         );
     }
 
-    // Verify matched_content is populated (from chunk_text)
     for result in &results {
         assert!(
             !result.matched_content.is_empty(),

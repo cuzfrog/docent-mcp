@@ -1,6 +1,6 @@
 # docent-mcp
 
-A read-only MCP server for **Design Decision Records** (DDRs).
+A MCP server for Document & Code History indexing and querying.
 Agents and developers query it to understand *why* code looks the way it does.
 
 ## Build
