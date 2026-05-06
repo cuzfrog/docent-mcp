@@ -158,7 +158,6 @@ mod tests {
     // --- DocentMcpServer construction ---
 
     #[test]
-    #[ignore]
     fn test_server_clone_is_cheap() {
         // Verify Clone compiles and doesn't deep-copy Arc data
         let _server = DocentMcpServer {

@@ -127,7 +127,6 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    #[ignore]
     fn test_embed_single_string_dimensions() {
         let mut embedder =
             Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
@@ -139,7 +138,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_embed_identical_inputs_produce_identical_vectors() {
         let mut embedder =
             Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
@@ -155,7 +153,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_embed_batch() {
         let mut embedder =
             Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
@@ -175,7 +172,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_invalid_model_name_error() {
         let result = Embedder::new("nonexistent/model");
         assert!(result.is_err(), "Expected error for invalid model name");

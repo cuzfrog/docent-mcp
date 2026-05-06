@@ -322,7 +322,7 @@ fn run_incremental(config: &Config, input_root: &Path) -> anyhow::Result<()> {
     let mut embedder = Embedder::new(&config.index.embedding_model)?;
 
     // Try loading existing index
-    let (old_hashes, old_chunks_by_path) = match index::read_index(&persist_path) {
+    let (old_hashes, old_chunks_by_path, index_exists) = match index::read_index(&persist_path) {
         Ok((old_header, old_vectors, old_metadata)) => {
             // Validate header against current config
             if let Err(e) = index::validate_header(&old_header, &config.index) {
@@ -357,11 +357,11 @@ fn run_incremental(config: &Config, input_root: &Path) -> anyhow::Result<()> {
                     .push((meta.clone(), old_vectors[i].clone()));
             }
 
-            (old_hashes, old_chunks_by_path)
+            (old_hashes, old_chunks_by_path, true)
         }
         Err(e) => {
             if e.to_string().contains("no index found") {
-                (HashMap::new(), HashMap::new())
+                (HashMap::new(), HashMap::new(), false)
             } else {
                 return Err(e);
             }
@@ -413,8 +413,11 @@ fn run_incremental(config: &Config, input_root: &Path) -> anyhow::Result<()> {
 
     // No-op check
     if new_files.is_empty() && changed_files.is_empty() && deleted_count == 0 {
-        eprintln!("No changes detected. Index is up to date.");
-        return Ok(());
+        if index_exists {
+            eprintln!("No changes detected. Index is up to date.");
+            return Ok(());
+        }
+        // If index doesn't exist, proceed to write empty index
     }
 
     // Index new and changed files

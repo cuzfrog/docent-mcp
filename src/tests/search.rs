@@ -35,7 +35,6 @@ fn read_index_at(
 }
 
 #[test]
-#[ignore]
 fn test_search_relevance_ordering() {
     let base = make_temp_dir("search_relevance");
     let docs_dir = base.join("docs");

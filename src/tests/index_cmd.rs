@@ -33,7 +33,6 @@ fn read_index_at(
 }
 
 #[test]
-#[ignore]
 fn test_fresh_index_on_directory() {
     let base = make_temp_dir("fresh_index");
     let docs_dir = base.join("docs");
@@ -81,7 +80,6 @@ fn test_fresh_index_on_directory() {
 }
 
 #[test]
-#[ignore]
 fn test_incremental_no_changes() {
     let base = make_temp_dir("incremental_no_changes");
     let docs_dir = base.join("docs");
@@ -125,7 +123,6 @@ fn test_incremental_no_changes() {
 }
 
 #[test]
-#[ignore]
 fn test_incremental_one_file_modified() {
     let base = make_temp_dir("incremental_modified");
     let docs_dir = base.join("docs");
@@ -200,7 +197,6 @@ fn test_incremental_one_file_modified() {
 }
 
 #[test]
-#[ignore]
 fn test_incremental_file_deleted() {
     let base = make_temp_dir("incremental_deleted");
     let docs_dir = base.join("docs");
@@ -242,7 +238,6 @@ fn test_incremental_file_deleted() {
 }
 
 #[test]
-#[ignore]
 fn test_incremental_file_added() {
     let base = make_temp_dir("incremental_added");
     let docs_dir = base.join("docs");
@@ -282,7 +277,6 @@ fn test_incremental_file_added() {
 }
 
 #[test]
-#[ignore]
 fn test_rebuild_overwrites() {
     let base = make_temp_dir("rebuild_overwrites");
     let docs_dir = base.join("docs");
@@ -328,7 +322,6 @@ fn test_rebuild_overwrites() {
 }
 
 #[test]
-#[ignore]
 fn test_empty_directory_produces_empty_index() {
     let base = make_temp_dir("empty_dir");
     let docs_dir = base.join("docs");
@@ -357,7 +350,6 @@ fn test_empty_directory_produces_empty_index() {
 }
 
 #[test]
-#[ignore]
 fn test_binary_file_skipped() {
     let base = make_temp_dir("binary_skipped");
     let docs_dir = base.join("docs");
@@ -384,7 +376,6 @@ fn test_binary_file_skipped() {
 }
 
 #[test]
-#[ignore]
 fn test_config_mismatch_advises_rebuild() {
     let base = make_temp_dir("config_mismatch");
     let docs_dir = base.join("docs");
