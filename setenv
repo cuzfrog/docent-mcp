@@ -1,14 +1,14 @@
 #!/bin/bash
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-${(%):-%x}}")" &> /dev/null && pwd)
+
+
 if [[ ":$PATH:" != *":$SCRIPT_DIR/target/debug:"* ]]; then
 	export PATH="$SCRIPT_DIR/target/debug:$PATH"
 	echo "$SCRIPT_DIR/target/debug added to PATH"
 else
 	echo "$SCRIPT_DIR/target/debug already in PATH"
 fi
-
-
 
 # Check if 'which python' returns a path inside .venv; if so, skip venv setup
 PYTHON_PATH=$(which python)
@@ -19,6 +19,11 @@ else
 	source "$SCRIPT_DIR/.venv/bin/activate"
 	echo "Python virtual environment activated."
 	echo "---"
+fi
+
+# Check if ./target is mounted as tmpfs
+if ! mount | grep -q "on $SCRIPT_DIR/target type tmpfs"; then
+	echo "[Warning] ./target is not mounted as tmpfs. Run ./mount_tmpfs.sh to mount it for best performance."
 fi
 
 export DOCENT_ADDR=127.0.0.1:7878
