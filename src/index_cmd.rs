@@ -77,6 +77,15 @@ fn hash_file(path: &Path) -> anyhow::Result<String> {
     Ok(format!("{:x}", digest))
 }
 
+fn get_file_mtime(path: &Path) -> Option<String> {
+    let meta = std::fs::metadata(path).ok()?;
+    let modified = meta.modified().ok()?;
+    let duration = modified.duration_since(std::time::UNIX_EPOCH).ok()?;
+    let secs = duration.as_secs() as i64;
+    let nanos = duration.subsec_nanos();
+    chrono::DateTime::from_timestamp(secs, nanos).map(|dt| dt.to_rfc3339())
+}
+
 // ---------------------------------------------------------------------------
 // Helper function 3: index_files
 // ---------------------------------------------------------------------------
@@ -154,6 +163,8 @@ fn index_files(
             continue;
         }
 
+        let mtime = get_file_mtime(&full_path);
+
         let mut chunks_for_file = Vec::new();
         for chunk in &chunks {
             chunks_for_file.push((
@@ -167,6 +178,7 @@ fn index_files(
                     chunk_index: chunk.chunk_index,
                     line_start: chunk.line_start,
                     line_end: chunk.line_end,
+                    modified_at: mtime.clone(),
                 },
             ));
         }
@@ -672,6 +684,7 @@ mod tests {
             chunk_index: 0,
             line_start: 0,
             line_end: 0,
+            modified_at: None,
         };
         let vec_a: Vec<f32> = vec![1.0];
 
@@ -684,6 +697,7 @@ mod tests {
             chunk_index: 0,
             line_start: 0,
             line_end: 0,
+            modified_at: None,
         };
         let vec_c: Vec<f32> = vec![3.0];
 
@@ -700,6 +714,7 @@ mod tests {
             chunk_index: 0,
             line_start: 0,
             line_end: 0,
+            modified_at: None,
         };
         let meta_b2 = ChunkMetadata {
             source_path: "b.md".to_string(),
@@ -710,6 +725,7 @@ mod tests {
             chunk_index: 1,
             line_start: 0,
             line_end: 0,
+            modified_at: None,
         };
         let fresh_metadata = vec![meta_b1.clone(), meta_b2.clone()];
         let fresh_vectors = vec![vec![2.1], vec![2.2]];
@@ -742,6 +758,7 @@ mod tests {
             chunk_index: 0,
             line_start: 0,
             line_end: 0,
+            modified_at: None,
         };
         let vec_a: Vec<f32> = vec![1.0];
 
@@ -779,6 +796,7 @@ mod tests {
             chunk_index: 0,
             line_start: 0,
             line_end: 0,
+            modified_at: None,
         };
         let meta_b1 = ChunkMetadata {
             source_path: "b.md".to_string(),
@@ -789,6 +807,7 @@ mod tests {
             chunk_index: 0,
             line_start: 0,
             line_end: 0,
+            modified_at: None,
         };
         let meta_b2 = ChunkMetadata {
             source_path: "b.md".to_string(),
@@ -799,6 +818,7 @@ mod tests {
             chunk_index: 1,
             line_start: 0,
             line_end: 0,
+            modified_at: None,
         };
 
         let fresh_metadata = vec![meta_a.clone(), meta_b1.clone(), meta_b2.clone()];

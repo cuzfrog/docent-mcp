@@ -49,7 +49,7 @@ pub struct DocentMcpServer {
 impl DocentMcpServer {
     /// Search Design Decision Records by semantic similarity to the query.
     #[tool(
-        description = "Search Design Decision Records by semantic similarity. Returns the most relevant DDRs with their source paths and matching content."
+        description = "Search Design Decision Records by semantic similarity. Returns the most relevant DDRs with their source paths, matching content, and last-modified timestamps."
     )]
     async fn search_ddr(
         &self,

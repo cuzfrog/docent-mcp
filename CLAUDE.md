@@ -10,6 +10,9 @@ See @README.md
 ### Task Planning
 Tasks reside in `.lissom/tasks/<task_id>/Specs.md`. The user may ask for a spec refinement and subsequent implementation. Use Tool `question`/`AskUserQuestion` to interview the user if you have any questions or assumptions. The implementation should be done in a feature branch named `<task_id>_<short-description>`, e.g., `IMPL-2_config-loader` (the user may have already created it). After the task is complete, create a PR.
 
+### Implementation
+- When MCP schema changes, update Web UI accordingly.
+
 ## Architecture
 
 ```
@@ -25,6 +28,7 @@ src/
   search.rs        # vector search pipeline (cosine sim, dedup)
   serve_cmd.rs     # serve subcommand (startup checks, server init)
   mcp.rs           # MCP tool handler (search_ddr tool definition)
+  ui/              # Web UI assets (HTML/CSS/JS) for human-friendly querying and manual inspection
   tests/           # integration-style tests compiled as crate unit tests
     mod.rs
     mcp.rs
