@@ -56,7 +56,10 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
     let addr = listener
         .local_addr()
         .context("Failed to get local address")?;
-    eprintln!("docent server listening on http://{}", addr);
+    eprintln!(
+        "docent server listening on http://{} (open in browser for web UI)",
+        addr
+    );
 
     // 6. Build DocentMcpServer
     let server = DocentMcpServer {
@@ -78,7 +81,21 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
             StreamableHttpServerConfig::default(),
         );
 
-    let router = axum::Router::new().fallback_service(service);
+    let router = axum::Router::new()
+        .route(
+            "/",
+            axum::routing::get(crate::ui::handle_index)
+                .post_service(service.clone()),
+        )
+        .route(
+            "/app.css",
+            axum::routing::get(crate::ui::handle_css),
+        )
+        .route(
+            "/app.js",
+            axum::routing::get(crate::ui::handle_js),
+        )
+        .fallback_service(service);
 
     // 7. Serve with graceful shutdown on SIGINT/SIGTERM
     axum::serve(listener, router)

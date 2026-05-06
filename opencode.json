@@ -5,5 +5,8 @@
       "~/.cargo/registry/src/**": "allow",
       "/tmp/**": "allow"
     }
+  },
+  "agent": {
+    "temperature": 0.1
   }
 }

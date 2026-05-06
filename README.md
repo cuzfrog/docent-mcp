@@ -7,7 +7,7 @@ Agents and developers query it to understand *why* code looks the way it does.
 1. requires rustup and cargo
 2. requires python
 
-Set up env var and python .venv:
+Set up env var and python .venv (this is only needed once per session):
 ```sh
 . ./setenv
 ```

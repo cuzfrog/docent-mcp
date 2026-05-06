@@ -15,7 +15,7 @@ pub struct Cli {
 /// Available subcommands.
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Index a file or directory of Design Decision Records.
+    /// Index a file or directory or Git history.
     Index(IndexArgs),
     /// Start the MCP server.
     Serve(ServeArgs),
