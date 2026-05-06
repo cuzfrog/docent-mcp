@@ -3,3 +3,5 @@
 .opencode/
 .claude/
 target/
+.venv/
+__pycache__

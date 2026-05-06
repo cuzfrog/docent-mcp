@@ -1,8 +1,10 @@
+# For E2E tests
 [index]
 embedding_model = "BGESmallENV15Q"   
-persist_path    = "../target/.ddr-index"             
+persist_path    = "./e2e-tests/.ddr-index"             
 chunk_size      = 512                         
 chunk_overlap   = 64
 
 [server]
 log_level = "debug"    # debug | info | warn | error
+port      = 7878

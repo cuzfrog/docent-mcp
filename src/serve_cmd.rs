@@ -48,7 +48,17 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
         .context("Failed to initialize embedding model — cannot start server")?;
     let embedder = Arc::new(Mutex::new(embedder));
 
-    // 5. Build DocentMcpServer
+    // 5. Bind TCP listener (before config is moved into the server)
+    let addr = format!("127.0.0.1:{}", config.server.port);
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
+        .context("Failed to bind TCP listener")?;
+    let addr = listener
+        .local_addr()
+        .context("Failed to get local address")?;
+    eprintln!("docent server listening on http://{}", addr);
+
+    // 6. Build DocentMcpServer
     let server = DocentMcpServer {
         config,
         index_header: header,
@@ -70,17 +80,7 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
 
     let router = axum::Router::new().fallback_service(service);
 
-    // 7. Bind TCP listener on ephemeral port
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .context("Failed to bind TCP listener")?;
-
-    let addr = listener
-        .local_addr()
-        .context("Failed to get local address")?;
-    eprintln!("docent server listening on http://{}", addr);
-
-    // 8. Serve with graceful shutdown on SIGINT/SIGTERM
+    // 7. Serve with graceful shutdown on SIGINT/SIGTERM
     axum::serve(listener, router)
         .with_graceful_shutdown(shutdown_signal())
         .await

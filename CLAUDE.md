@@ -5,18 +5,7 @@
 `docent-mcp` — A read-only MCP server that lets agents find Design Decision Records explaining why code looks the way it does. Single Rust binary (`docent`) with two subcommands: `index` and `serve`.
 
 ## Build & Run
-
-```sh
-cargo build
-cargo test
-cargo run -- index ./path/to/ddrs
-cargo run -- serve
-```
-
-Run a single test: `cargo test test_name`
-Run all tests (unit + integration): `cargo test --lib`
-Clippy: `cargo clippy -- -D warnings`
-Format: `cargo fmt --check`
+See @README.md
 
 ## Architecture
 
@@ -54,13 +43,14 @@ src/
 | `anyhow` | — | Error propagation |
 
 Use fixed versions. Avoid `*` or `^` to prevent unintentional updates.
+This applies to all dependencies, including python.
 
 ## Conventions
 
 - **Error handling:** Use `anyhow::Result` internally. At binary boundaries (CLI, MCP responses), convert to user-facing messages. No `.unwrap()` on fallible operations.
 - **No panics in library code.** Reserve `panic` for unreachable states only.
 - **Logging:** Use `eprintln!` for CLI user-facing messages. The MCP server itself does not log to stdout (stdout is for MCP transport when using stdio, but we use HTTP).
-- **Tests:** Each module has unit tests in a `#[cfg(test)] mod tests` block. Integration-style tests are under `src/tests/` (compiled as crate unit tests, avoiding separate integration-test link overhead). Tests that require network (model download) are `#[ignore]`.
+- **Tests:** Each module has unit tests in a `#[cfg(test)] mod tests` block. Integration-style tests are under `src/tests/` (compiled as crate unit tests, avoiding separate integration-test link overhead). Tests that require network (model download) are `#[ignore]`. E2E tests are in `e2e-tests/`. E2E tests assume the binary is built and available.
 - **Naming:** Snake_case for files and functions. Types are PascalCase. Constants are UPPER_SNAKE_CASE.
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).
 
@@ -75,6 +65,7 @@ chunk_overlap   = 64
 
 [server]
 log_level = "warn"
+port = 0            # 0 = ephemeral (default), set to a fixed port for testing
 ```
 
 Default path: `./config.toml` relative to working directory.
@@ -105,10 +96,6 @@ Source documents are **any text files**. The content is not parsed or interprete
 1. Embed query → cosine similarity against all vectors
 2. Deduplicate by source document (keep best chunk)
 3. Return top N (default 3, max 10)
-
-## Task Specs
-
-Implementation tasks live at `.lissom/tasks/IMPL-{N}/Specs.md`. Follow the spec for each task. Do not add features beyond what the spec requires.
 
 ## Common Pitfalls
 

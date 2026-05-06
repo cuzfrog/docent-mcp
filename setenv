@@ -4,3 +4,12 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-${(%):-%x}}")" &> /dev/null 
 export PATH="$SCRIPT_DIR/target/debug:$PATH"
 
 echo "$SCRIPT_DIR/target/debug added to PATH"
+
+
+python -m venv "$SCRIPT_DIR/.venv"
+source "$SCRIPT_DIR/.venv/bin/activate"
+echo "Python virtual environment activated."
+echo "---"
+
+export DOCENT_ADDR=127.0.0.1:7878
+echo "DOCENT_ADDR=$DOCENT_ADDR"

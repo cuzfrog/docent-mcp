@@ -3,11 +3,36 @@
 A MCP server for Document & Code History indexing and querying.
 Agents and developers query it to understand *why* code looks the way it does.
 
+## Dev setup
+1. requires rustup and cargo
+2. requires python
+
+Set up env var and python venv:
+```sh
+. ./setenv
+```
+
 ## Build
 
 ```sh
 cargo build
 ```
+
+## Test
+Unit test and integration tests:
+```sh
+cargo test
+```
+
+E2E test:
+```sh
+cargo run -- serve # will pick up ./config.toml
+pytest -v # e2e tests in the tests/ directory
+```
+
+- Run a single test: `cargo test test_name`
+- Clippy: `cargo clippy -- -D warnings`
+- Format: `cargo fmt --check`
 
 ## Run
 

@@ -29,6 +29,8 @@ pub struct IndexConfig {
 pub struct ServerConfig {
     #[serde(default = "default_log_level")]
     pub log_level: String,
+    #[serde(default = "default_port")]
+    pub port: u16,
 }
 
 // ---------------------------------------------------------------------------
@@ -51,6 +53,10 @@ fn default_log_level() -> String {
     "warn".to_string()
 }
 
+const fn default_port() -> u16 {
+    0
+}
+
 // ---------------------------------------------------------------------------
 // Default impls for serde
 // ---------------------------------------------------------------------------
@@ -70,6 +76,7 @@ impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             log_level: default_log_level(),
+            port: default_port(),
         }
     }
 }
@@ -170,6 +177,7 @@ log_level = "debug"
         assert_eq!(config.index.chunk_size, 1024);
         assert_eq!(config.index.chunk_overlap, 128);
         assert_eq!(config.server.log_level, "debug");
+        assert_eq!(config.server.port, 0);
     }
 
     // 2. Missing fields → defaults applied
@@ -348,6 +356,7 @@ embedding_model = "BGESmallENV15Q"
             },
             server: ServerConfig {
                 log_level: "verbose".to_string(),
+                ..ServerConfig::default()
             },
         };
         let err = config.validate().unwrap_err();
@@ -365,6 +374,7 @@ embedding_model = "BGESmallENV15Q"
                 },
                 server: ServerConfig {
                     log_level: level.to_string(),
+                    ..ServerConfig::default()
                 },
             };
             assert!(
