@@ -56,7 +56,10 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
     let addr = listener
         .local_addr()
         .context("Failed to get local address")?;
-    eprintln!("docent server listening on http://{}", addr);
+    eprintln!(
+        "docent server listening on http://{} (open in browser for web UI)",
+        addr
+    );
 
     // 6. Build DocentMcpServer
     let server = DocentMcpServer {

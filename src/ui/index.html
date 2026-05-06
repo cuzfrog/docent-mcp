@@ -12,43 +12,46 @@
     <p class="subtitle">Design Decision Record Search — MCP Web UI</p>
   </header>
 
-  <main>
-    <div id="connection-status" class="status-connecting">
-      Connecting to MCP server…
+  <main class="layout">
+    <div class="left-col">
+      <div id="connection-status" class="status-connecting">
+        Connecting to MCP server…
+      </div>
+
+      <form id="search-form" class="search-box">
+        <div class="input-row">
+          <input
+            type="text"
+            id="query"
+            placeholder="Ask a question about a design decision…"
+            required
+            autofocus
+            disabled
+          >
+          <select id="limit" disabled>
+            <option value="3">3 results</option>
+            <option value="5">5 results</option>
+            <option value="10">10 results</option>
+          </select>
+          <button type="submit" id="search-btn" disabled>Search</button>
+        </div>
+      </form>
+
+      <div id="results">
+        <div class="result-placeholder">
+          Enter a query above to search Design Decision Records.
+        </div>
+      </div>
     </div>
 
-    <form id="search-form" class="search-box">
-      <div class="input-row">
-        <input
-          type="text"
-          id="query"
-          placeholder="Ask a question about a design decision…"
-          required
-          autofocus
-          disabled
-        >
-        <select id="limit" disabled>
-          <option value="3">3 results</option>
-          <option value="5">5 results</option>
-          <option value="10">10 results</option>
-        </select>
-        <button type="submit" id="search-btn" disabled>Search</button>
+    <div class="right-col">
+      <div id="raw-response">
+        <div class="raw-header">
+          <span>Raw MCP Response</span>
+          <button id="copy-raw">Copy</button>
+        </div>
+        <pre id="raw-content"></pre>
       </div>
-    </form>
-
-    <div id="results">
-      <div class="result-placeholder">
-        Enter a query above to search Design Decision Records.
-      </div>
-    </div>
-
-    <div id="raw-response" class="raw-response hidden">
-      <div class="raw-header">
-        <span>Raw MCP Response</span>
-        <button id="toggle-raw">Show</button>
-        <button id="copy-raw">Copy</button>
-      </div>
-      <pre id="raw-content"></pre>
     </div>
   </main>
 

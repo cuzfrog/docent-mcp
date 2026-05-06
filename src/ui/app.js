@@ -164,9 +164,7 @@ const ui = {
     limit: document.getElementById('limit'),
     searchBtn: document.getElementById('search-btn'),
     results: document.getElementById('results'),
-    rawResponse: document.getElementById('raw-response'),
     rawContent: document.getElementById('raw-content'),
-    toggleRaw: document.getElementById('toggle-raw'),
     copyRaw: document.getElementById('copy-raw'),
   },
 
@@ -196,6 +194,7 @@ const ui = {
     this.setFormEnabled(false);
     this.elements.searchBtn.innerHTML = '<span class="spinner"></span> Searching…';
     this.clearResults();
+    this.elements.rawContent.textContent = '';
 
     try {
       const raw = await this.client.callTool('search_ddr', { query, limit });
@@ -260,10 +259,7 @@ const ui = {
   },
 
   showRaw(data) {
-    this.elements.rawResponse.classList.remove('hidden');
     this.elements.rawContent.textContent = JSON.stringify(data, null, 2);
-    this.elements.rawContent.classList.remove('visible');
-    this.elements.toggleRaw.textContent = 'Show';
   },
 
   setStatus(type, message) {
@@ -290,13 +286,6 @@ document.addEventListener('DOMContentLoaded', () => {
   ui.init();
 
   ui.elements.form.addEventListener('submit', (e) => ui.onSearch(e));
-
-  ui.elements.toggleRaw.addEventListener('click', () => {
-    const el = ui.elements.rawContent;
-    const btn = ui.elements.toggleRaw;
-    const isVisible = el.classList.toggle('visible');
-    btn.textContent = isVisible ? 'Hide' : 'Show';
-  });
 
   ui.elements.copyRaw.addEventListener('click', () => {
     const text = ui.elements.rawContent.textContent;
