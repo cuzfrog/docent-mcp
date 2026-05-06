@@ -165,6 +165,8 @@ fn index_files(
                     chunk_text: chunk.text.clone(),
                     section_heading: chunk.section_heading.clone(),
                     chunk_index: chunk.chunk_index,
+                    line_start: chunk.line_start,
+                    line_end: chunk.line_end,
                 },
             ));
         }
@@ -668,6 +670,8 @@ mod tests {
             chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
+            line_start: 0,
+            line_end: 0,
         };
         let vec_a: Vec<f32> = vec![1.0];
 
@@ -678,6 +682,8 @@ mod tests {
             chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
+            line_start: 0,
+            line_end: 0,
         };
         let vec_c: Vec<f32> = vec![3.0];
 
@@ -692,6 +698,8 @@ mod tests {
             chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
+            line_start: 0,
+            line_end: 0,
         };
         let meta_b2 = ChunkMetadata {
             source_path: "b.md".to_string(),
@@ -700,6 +708,8 @@ mod tests {
             chunk_text: "chunk text".to_string(),
             section_heading: Some("Section".to_string()),
             chunk_index: 1,
+            line_start: 0,
+            line_end: 0,
         };
         let fresh_metadata = vec![meta_b1.clone(), meta_b2.clone()];
         let fresh_vectors = vec![vec![2.1], vec![2.2]];
@@ -730,6 +740,8 @@ mod tests {
             chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
+            line_start: 0,
+            line_end: 0,
         };
         let vec_a: Vec<f32> = vec![1.0];
 
@@ -765,6 +777,8 @@ mod tests {
             chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
+            line_start: 0,
+            line_end: 0,
         };
         let meta_b1 = ChunkMetadata {
             source_path: "b.md".to_string(),
@@ -773,6 +787,8 @@ mod tests {
             chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
+            line_start: 0,
+            line_end: 0,
         };
         let meta_b2 = ChunkMetadata {
             source_path: "b.md".to_string(),
@@ -781,6 +797,8 @@ mod tests {
             chunk_text: "chunk text".to_string(),
             section_heading: Some("Section".to_string()),
             chunk_index: 1,
+            line_start: 0,
+            line_end: 0,
         };
 
         let fresh_metadata = vec![meta_a.clone(), meta_b1.clone(), meta_b2.clone()];

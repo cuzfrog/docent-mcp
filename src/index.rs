@@ -6,7 +6,7 @@ use std::path::Path;
 
 /// Current schema version. Increment when the index format changes
 /// in a backward-incompatible way.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Build-time metadata written to `header.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -31,6 +31,10 @@ pub struct ChunkMetadata {
     pub chunk_text: String, // the actual chunk text content
     pub section_heading: Option<String>,
     pub chunk_index: usize,
+    #[serde(default)]
+    pub line_start: usize,
+    #[serde(default)]
+    pub line_end: usize,
 }
 
 /// Write the index directory: `header.json`, `vectors.bin`, and `metadata.json`.
@@ -228,6 +232,8 @@ mod tests {
                 chunk_text: "Introduction text for Doc 1".to_string(),
                 section_heading: Some("Intro".to_string()),
                 chunk_index: 0,
+                line_start: 1,
+                line_end: 1,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -236,6 +242,8 @@ mod tests {
                 chunk_text: "Body text for Doc 1".to_string(),
                 section_heading: Some("Body".to_string()),
                 chunk_index: 1,
+                line_start: 1,
+                line_end: 1,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -244,6 +252,8 @@ mod tests {
                 chunk_text: "Content for Doc 2".to_string(),
                 section_heading: None,
                 chunk_index: 0,
+                line_start: 1,
+                line_end: 1,
             },
         ];
 
@@ -281,6 +291,8 @@ mod tests {
                 chunk_text: "Chunk 0 text for Doc 1".to_string(),
                 section_heading: None,
                 chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -289,6 +301,8 @@ mod tests {
                 chunk_text: "Chunk 1 text for Doc 1".to_string(),
                 section_heading: None,
                 chunk_index: 1,
+                line_start: 0,
+                line_end: 0,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -297,6 +311,8 @@ mod tests {
                 chunk_text: "Chunk 0 text for Doc 2".to_string(),
                 section_heading: None,
                 chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
             },
         ];
 
@@ -414,6 +430,8 @@ mod tests {
                 chunk_text: "Chunk 0 text".to_string(),
                 section_heading: None,
                 chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -422,6 +440,8 @@ mod tests {
                 chunk_text: "Chunk 1 text".to_string(),
                 section_heading: None,
                 chunk_index: 1,
+                line_start: 0,
+                line_end: 0,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -430,6 +450,8 @@ mod tests {
                 chunk_text: "Chunk 0 text for doc2".to_string(),
                 section_heading: None,
                 chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
             },
         ];
 
@@ -468,6 +490,8 @@ mod tests {
                 chunk_text: "Extra bytes chunk 0".to_string(),
                 section_heading: None,
                 chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -476,6 +500,8 @@ mod tests {
                 chunk_text: "Extra bytes chunk 1".to_string(),
                 section_heading: None,
                 chunk_index: 1,
+                line_start: 0,
+                line_end: 0,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -484,6 +510,8 @@ mod tests {
                 chunk_text: "Extra bytes doc2 chunk 0".to_string(),
                 section_heading: None,
                 chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
             },
         ];
 
@@ -525,6 +553,8 @@ mod tests {
                 chunk_text: "Mismatch chunk 0".to_string(),
                 section_heading: None,
                 chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -533,6 +563,8 @@ mod tests {
                 chunk_text: "Mismatch chunk 1".to_string(),
                 section_heading: None,
                 chunk_index: 1,
+                line_start: 0,
+                line_end: 0,
             },
         ];
 
@@ -579,6 +611,8 @@ mod tests {
                 chunk_text: "Vec mismatch chunk 0".to_string(),
                 section_heading: None,
                 chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -587,6 +621,8 @@ mod tests {
                 chunk_text: "Vec mismatch chunk 1".to_string(),
                 section_heading: None,
                 chunk_index: 1,
+                line_start: 0,
+                line_end: 0,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -595,6 +631,8 @@ mod tests {
                 chunk_text: "Vec mismatch doc2 chunk 0".to_string(),
                 section_heading: None,
                 chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -603,6 +641,8 @@ mod tests {
                 chunk_text: "Vec mismatch doc2 chunk 1".to_string(),
                 section_heading: None,
                 chunk_index: 1,
+                line_start: 0,
+                line_end: 0,
             },
         ];
 
@@ -672,6 +712,8 @@ mod tests {
                 chunk_text: "Missing vectors chunk 0".to_string(),
                 section_heading: None,
                 chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -680,6 +722,8 @@ mod tests {
                 chunk_text: "Missing vectors chunk 1".to_string(),
                 section_heading: None,
                 chunk_index: 1,
+                line_start: 0,
+                line_end: 0,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -688,6 +732,8 @@ mod tests {
                 chunk_text: "Missing vectors doc2 chunk 0".to_string(),
                 section_heading: None,
                 chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
             },
         ];
 
@@ -779,6 +825,8 @@ mod tests {
             chunk_text: "Parent dirs chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
         }];
 
         write_index(&nested_path, &header, &vectors, &metadata).unwrap();
