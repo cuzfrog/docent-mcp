@@ -458,7 +458,7 @@ fn test_server_missing_index_exits() {
     // Don't create the index directory
     let config_path = temp_config(&index_dir);
 
-    let mut child = Command::new("cargo")
+    let child = Command::new("cargo")
         .arg("run")
         .arg("--")
         .arg("serve")
