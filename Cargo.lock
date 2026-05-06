@@ -640,6 +640,7 @@ dependencies = [
  "clap",
  "dirs-next",
  "fastembed",
+ "indicatif",
  "reqwest",
  "rmcp",
  "schemars",
