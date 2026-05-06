@@ -218,6 +218,20 @@ header .subtitle {
   font-style: italic;
 }
 
+.result-card .result-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid #f0f0f0;
+}
+
+.result-card .result-modified {
+  font-size: 0.7rem;
+  color: #aaa;
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+
 .result-card .copy-link-btn,
 .result-card .copy-content-btn {
   font-size: 0.7rem;
@@ -361,6 +375,67 @@ header .subtitle {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* Tool info foldable section */
+#tool-info {
+  margin-bottom: 1rem;
+}
+
+.tool-details {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 0.6rem 1rem;
+  background: #fafafa;
+  font-size: 0.85rem;
+}
+
+.tool-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #555;
+  user-select: none;
+}
+
+.tool-entry {
+  margin-top: 0.5rem;
+}
+
+.tool-name {
+  font-weight: 700;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  color: #1a1a2e;
+  font-size: 0.9rem;
+}
+
+.tool-desc {
+  color: #666;
+  margin: 0.25rem 0 0.5rem;
+  line-height: 1.4;
+}
+
+.schema-details {
+  margin: 0.4rem 0;
+  font-size: 0.8rem;
+}
+
+.schema-details summary {
+  font-weight: 500;
+  color: #777;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tool-schema {
+  background: #f0f0f5;
+  border: 1px solid #e0e0e5;
+  border-radius: 4px;
+  padding: 0.5rem 0.7rem;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  overflow-x: auto;
+  color: #333;
 }
 
 @media (max-width: 1024px) {

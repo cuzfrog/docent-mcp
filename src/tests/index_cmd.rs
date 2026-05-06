@@ -64,7 +64,7 @@ fn test_fresh_index_on_directory() {
 
     let (header, _vectors, metadata) = read_index_at(&index_dir);
 
-    assert_eq!(header.schema_version, 2);
+    assert_eq!(header.schema_version, 3);
     assert!(header.chunk_count > 0);
     assert_eq!(header.doc_count, 3);
 

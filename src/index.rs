@@ -6,7 +6,7 @@ use std::path::Path;
 
 /// Current schema version. Increment when the index format changes
 /// in a backward-incompatible way.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// Build-time metadata written to `header.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -35,6 +35,10 @@ pub struct ChunkMetadata {
     pub line_start: usize,
     #[serde(default)]
     pub line_end: usize,
+    /// ISO 8601 UTC timestamp of the source file's last modification time.
+    /// `None` if the mtime is unavailable (e.g., virtual filesystem).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modified_at: Option<String>,
 }
 
 /// Write the index directory: `header.json`, `vectors.bin`, and `metadata.json`.
@@ -234,6 +238,7 @@ mod tests {
                 chunk_index: 0,
                 line_start: 1,
                 line_end: 1,
+                modified_at: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -244,6 +249,7 @@ mod tests {
                 chunk_index: 1,
                 line_start: 1,
                 line_end: 1,
+                modified_at: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -254,6 +260,7 @@ mod tests {
                 chunk_index: 0,
                 line_start: 1,
                 line_end: 1,
+                modified_at: None,
             },
         ];
 
@@ -293,6 +300,7 @@ mod tests {
                 chunk_index: 0,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -303,6 +311,7 @@ mod tests {
                 chunk_index: 1,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -313,6 +322,7 @@ mod tests {
                 chunk_index: 0,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
         ];
 
@@ -432,6 +442,7 @@ mod tests {
                 chunk_index: 0,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -442,6 +453,7 @@ mod tests {
                 chunk_index: 1,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -452,6 +464,7 @@ mod tests {
                 chunk_index: 0,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
         ];
 
@@ -492,6 +505,7 @@ mod tests {
                 chunk_index: 0,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -502,6 +516,7 @@ mod tests {
                 chunk_index: 1,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -512,6 +527,7 @@ mod tests {
                 chunk_index: 0,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
         ];
 
@@ -555,6 +571,7 @@ mod tests {
                 chunk_index: 0,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -565,6 +582,7 @@ mod tests {
                 chunk_index: 1,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
         ];
 
@@ -613,6 +631,7 @@ mod tests {
                 chunk_index: 0,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -623,6 +642,7 @@ mod tests {
                 chunk_index: 1,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -633,6 +653,7 @@ mod tests {
                 chunk_index: 0,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -643,6 +664,7 @@ mod tests {
                 chunk_index: 1,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
         ];
 
@@ -714,6 +736,7 @@ mod tests {
                 chunk_index: 0,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -724,6 +747,7 @@ mod tests {
                 chunk_index: 1,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -734,6 +758,7 @@ mod tests {
                 chunk_index: 0,
                 line_start: 0,
                 line_end: 0,
+                modified_at: None,
             },
         ];
 
@@ -825,8 +850,9 @@ mod tests {
             chunk_text: "Parent dirs chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
-                line_start: 0,
-                line_end: 0,
+            line_start: 0,
+            line_end: 0,
+            modified_at: None,
         }];
 
         write_index(&nested_path, &header, &vectors, &metadata).unwrap();

@@ -43,6 +43,16 @@ class McpClient {
     await this._post(body);
   }
 
+  async listTools() {
+    const body = {
+      jsonrpc: '2.0',
+      id: ++this.requestId,
+      method: 'tools/list',
+    };
+    const { data } = await this._post(body);
+    return data;
+  }
+
   async callTool(name, args) {
     const body = {
       jsonrpc: '2.0',
@@ -156,6 +166,7 @@ class McpClient {
 
 const ui = {
   client: new McpClient(),
+  tools: null,
 
   elements: {
     status: document.getElementById('connection-status'),
@@ -178,6 +189,7 @@ const ui = {
       this.setStatus('connected', `Connected — protocol version: ${this.client.protocolVersion}  |  session: ${this.client.sessionId}`);
       this.setFormEnabled(true);
       this.elements.query.focus();
+      await this.fetchTools();
     } catch (err) {
       this.setStatus('error', `Connection failed: ${err.message}`);
       this.showError(`Failed to initialize MCP session: ${err.message}`);
@@ -257,8 +269,63 @@ const ui = {
           <div class="result-content">${this.esc(r.matched_content)}</div>
           <button class="copy-content-btn">Copy content</button>
         </div>
+        <div class="result-footer">
+          <span class="result-modified">Last modified at: ${r.modified_at ? this.formatTime(r.modified_at) : 'N/A'}</span>
+        </div>
       </div>
     `).join('');
+  },
+
+  async fetchTools() {
+    try {
+      const res = await this.client.listTools();
+      this.tools = res.result?.tools || [];
+    } catch {
+      this.tools = [];
+    }
+    this.renderToolInfo();
+  },
+
+  renderToolInfo() {
+    const el = document.getElementById('tool-info');
+    if (!this.tools || this.tools.length === 0) {
+      el.innerHTML = '';
+      return;
+    }
+    const responseSchema = {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          source_path: { type: 'string' },
+          matched_content: { type: 'string' },
+          score: { type: 'number' },
+          line_start: { type: 'number' },
+          line_end: { type: 'number' },
+          section_heading: { type: ['string', 'null'] },
+          modified_at: { type: ['string', 'null'] },
+        },
+      },
+    };
+    el.innerHTML = `
+      <details class="tool-details">
+        <summary>🔧 Tools</summary>
+        ${this.tools.map(t => `
+          <div class="tool-entry">
+            <div class="tool-name">${this.esc(t.name)}</div>
+            <div class="tool-desc">${this.esc(t.description || '')}</div>
+            <details class="schema-details" open>
+              <summary>Input Schema</summary>
+              <pre class="tool-schema">${this.esc(JSON.stringify(t.inputSchema, null, 2))}</pre>
+            </details>
+            <details class="schema-details" open>
+              <summary>Response</summary>
+              <pre class="tool-schema">${this.esc(JSON.stringify(responseSchema, null, 2))}</pre>
+            </details>
+          </div>
+        `).join('')}
+      </details>`;
   },
 
   initCopyButtons() {
@@ -301,6 +368,13 @@ const ui = {
     this.elements.query.disabled = !enabled;
     this.elements.limit.disabled = !enabled;
     this.elements.searchBtn.disabled = !enabled;
+  },
+
+  formatTime(isoString) {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   },
 
   esc(str) {
