@@ -8,6 +8,7 @@ mod index_cmd;
 mod mcp;
 mod search;
 mod serve_cmd;
+mod ui;
 
 use clap::Parser;
 use cli::{Cli, Commands};
