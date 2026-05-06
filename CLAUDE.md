@@ -4,8 +4,11 @@
 
 `docent-mcp` — A read-only MCP server that lets agents find Design Decision Records explaining why code looks the way it does. Single Rust binary (`docent`) with two subcommands: `index` and `serve`.
 
-## Build & Run
+## Build & Run & Dev Setup
 See @README.md
+
+### Plan & Implementation
+Tasks reside in `.lissom/tasks/<task_id>/Specs.md`. The user may ask for a spec refinement and subsequent implementation. The implementation should be done in a feature branch named `<task_id>_<short-description>`, e.g., `IMPL-2_config-loader`. After the task is complete, create a PR.
 
 ## Architecture
 
