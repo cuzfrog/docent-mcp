@@ -36,6 +36,10 @@ pub struct IndexArgs {
     /// Wipe existing index and re-embed everything from scratch.
     #[arg(long)]
     pub rebuild: bool,
+
+    /// Show individual file paths as they are indexed.
+    #[arg(long)]
+    pub verbose: bool,
 }
 
 /// Arguments for the `serve` subcommand.
@@ -112,6 +116,19 @@ mod tests {
                 assert_eq!(args.file, std::path::PathBuf::from("./ddrs"));
                 assert_eq!(args.config, std::path::PathBuf::from("custom.toml"));
                 assert!(args.rebuild);
+            }
+            _ => panic!("expected Index command"),
+        }
+    }
+
+    #[test]
+    fn test_index_with_verbose_flag() {
+        let cli = Cli::try_parse_from(["docent", "index", "./ddrs", "--verbose"]);
+        assert!(cli.is_ok());
+        let cli = cli.unwrap();
+        match cli.command {
+            Commands::Index(args) => {
+                assert!(args.verbose);
             }
             _ => panic!("expected Index command"),
         }

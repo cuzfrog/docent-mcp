@@ -123,6 +123,7 @@ loads data from the database and populates the cache for subsequent requests.
         file: docs_dir.clone(),
         config: config_path,
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 

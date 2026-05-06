@@ -3,6 +3,7 @@ use crate::config::{Config, IndexConfig};
 use crate::document;
 use crate::embedder::Embedder;
 use crate::index::{self, ChunkMetadata, IndexHeader, SCHEMA_VERSION};
+use indicatif::{ProgressBar, ProgressStyle};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -86,16 +87,22 @@ fn index_files(
     embedder: &mut Embedder,
     counter: &dyn TokenCounter,
     input_root: &Path,
+    verbose: bool,
 ) -> anyhow::Result<(Vec<Vec<f32>>, Vec<ChunkMetadata>)> {
     let chunking_config = ChunkingConfig {
         chunk_size: config.chunk_size,
         chunk_overlap: config.chunk_overlap,
     };
 
-    let mut all_texts: Vec<String> = Vec::new();
-    let mut all_metadata: Vec<ChunkMetadata> = Vec::new();
+    // Phase 1: collect chunks per file with progress bar
+    let mut file_chunks: Vec<(String, Vec<(String, ChunkMetadata)>)> = Vec::new();
 
-    for file in files {
+    let pb1 = ProgressBar::new(files.len() as u64);
+    pb1.set_style(ProgressStyle::with_template(
+        "  Indexing files: {pos}/{len} {wide_bar}"
+    ).unwrap());
+
+    for file in files.iter() {
         let full_path = input_root.join(file);
         let relative_path = file.to_string_lossy().to_string();
 
@@ -107,6 +114,7 @@ fn index_files(
                     "WARNING: skipping binary/unreadable file '{}': {}",
                     relative_path, e
                 );
+                pb1.inc(1);
                 continue;
             }
         };
@@ -119,6 +127,7 @@ fn index_files(
                     "WARNING: skipping binary/unreadable file '{}'",
                     relative_path
                 );
+                pb1.inc(1);
                 continue;
             }
         };
@@ -129,6 +138,7 @@ fn index_files(
             Ok(d) => d,
             Err(e) => {
                 eprintln!("WARNING: failed to read '{}': {}", relative_path, e);
+                pb1.inc(1);
                 continue;
             }
         };
@@ -140,32 +150,70 @@ fn index_files(
         let chunks = chunking::chunk_document(&doc, &chunking_config, counter);
 
         if chunks.is_empty() {
+            pb1.inc(1);
             continue;
         }
 
+        let mut chunks_for_file = Vec::new();
         for chunk in &chunks {
-            all_texts.push(chunk.text.clone());
-            all_metadata.push(ChunkMetadata {
-                source_path: doc.source_path.clone(),
-                source_hash: source_hash.clone(),
-                title: doc.title.clone(),
-                chunk_text: chunk.text.clone(),
-                section_heading: chunk.section_heading.clone(),
-                chunk_index: chunk.chunk_index,
-            });
+            chunks_for_file.push((
+                chunk.text.clone(),
+                ChunkMetadata {
+                    source_path: doc.source_path.clone(),
+                    source_hash: source_hash.clone(),
+                    title: doc.title.clone(),
+                    chunk_text: chunk.text.clone(),
+                    section_heading: chunk.section_heading.clone(),
+                    chunk_index: chunk.chunk_index,
+                },
+            ));
         }
+        file_chunks.push((relative_path, chunks_for_file));
+        pb1.inc(1);
     }
 
-    if all_texts.is_empty() {
+    pb1.finish_and_clear();
+
+    if file_chunks.is_empty() {
         return Ok((vec![], vec![]));
     }
 
-    let text_refs: Vec<&str> = all_texts.iter().map(|s| s.as_str()).collect();
-    let vectors = embedder
-        .embed(&text_refs)
-        .map_err(|e| anyhow::anyhow!("Embedding operation failed: {}", e))?;
+    // Phase 2: embed each file's chunks with progress
+    let total = file_chunks.len();
+    let mut all_vectors: Vec<Vec<f32>> = Vec::new();
+    let mut all_metadata: Vec<ChunkMetadata> = Vec::new();
 
-    Ok((vectors, all_metadata))
+    let pb = ProgressBar::new(total as u64);
+    pb.set_style(ProgressStyle::with_template(if verbose {
+        "  {msg}   {pos}/{len}"
+    } else {
+        "  Embedding files: {pos}/{len} {wide_bar}"
+    }).unwrap());
+
+    for (idx, (relative_path, chunks)) in file_chunks.iter().enumerate() {
+        if verbose {
+            pb.set_message(relative_path.to_string());
+            pb.set_position(idx as u64);
+        } else {
+            pb.set_position(idx as u64);
+        }
+
+        let text_refs: Vec<&str> = chunks.iter().map(|(text, _)| text.as_str()).collect();
+        let vectors = embedder
+            .embed(&text_refs)
+            .map_err(|e| anyhow::anyhow!("Embedding operation failed: {}", e))?;
+
+        for (vec, (_, meta)) in vectors.into_iter().zip(chunks.iter()) {
+            all_vectors.push(vec);
+            all_metadata.push(meta.clone());
+        }
+
+        pb.set_position((idx + 1) as u64);
+    }
+
+    pb.finish_and_clear();
+
+    Ok((all_vectors, all_metadata))
 }
 
 // ---------------------------------------------------------------------------
@@ -232,7 +280,7 @@ fn merge_incremental(
 // Orchestration function 1: run_rebuild
 // ---------------------------------------------------------------------------
 
-fn run_rebuild(config: &Config, input_root: &Path) -> anyhow::Result<()> {
+fn run_rebuild(config: &Config, input_root: &Path, verbose: bool) -> anyhow::Result<()> {
     let persist_path = PathBuf::from(&config.index.persist_path);
 
     // Check for existing index
@@ -278,8 +326,8 @@ fn run_rebuild(config: &Config, input_root: &Path) -> anyhow::Result<()> {
         &mut embedder,
         &counter,
         input_root,
+        verbose,
     )?;
-    eprintln!("Embedding: {} chunks", metadata.len());
 
     // Build header
     let doc_count = metadata
@@ -315,7 +363,7 @@ fn run_rebuild(config: &Config, input_root: &Path) -> anyhow::Result<()> {
 // Orchestration function 2: run_incremental
 // ---------------------------------------------------------------------------
 
-fn run_incremental(config: &Config, input_root: &Path) -> anyhow::Result<()> {
+fn run_incremental(config: &Config, input_root: &Path, verbose: bool) -> anyhow::Result<()> {
     let persist_path = PathBuf::from(&config.index.persist_path);
 
     // Initialize embedder (needed early for dims validation)
@@ -432,8 +480,8 @@ fn run_incremental(config: &Config, input_root: &Path) -> anyhow::Result<()> {
         &mut embedder,
         &counter,
         input_root,
+        verbose,
     )?;
-    eprintln!("Embedding: {} chunks", fresh_metadata.len());
 
     // Merge
     let (vectors, metadata) = merge_incremental(
@@ -489,9 +537,9 @@ pub fn run_index(args: IndexArgs) -> anyhow::Result<()> {
     };
 
     if args.rebuild {
-        run_rebuild(&config, &input_root)?;
+        run_rebuild(&config, &input_root, args.verbose)?;
     } else {
-        run_incremental(&config, &input_root)?;
+        run_incremental(&config, &input_root, args.verbose)?;
     }
 
     Ok(())

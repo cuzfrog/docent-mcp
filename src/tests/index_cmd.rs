@@ -58,6 +58,7 @@ fn test_fresh_index_on_directory() {
         file: docs_dir.clone(),
         config: config_path,
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 
@@ -95,6 +96,7 @@ fn test_incremental_no_changes() {
         file: docs_dir.clone(),
         config: config_path.clone(),
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 
@@ -109,6 +111,7 @@ fn test_incremental_no_changes() {
         file: docs_dir.clone(),
         config: config_path,
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 
@@ -138,6 +141,7 @@ fn test_incremental_one_file_modified() {
         file: docs_dir.clone(),
         config: config_path.clone(),
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 
@@ -167,6 +171,7 @@ fn test_incremental_one_file_modified() {
         file: docs_dir.clone(),
         config: config_path,
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 
@@ -213,6 +218,7 @@ fn test_incremental_file_deleted() {
         file: docs_dir.clone(),
         config: config_path.clone(),
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 
@@ -223,6 +229,7 @@ fn test_incremental_file_deleted() {
         file: docs_dir.clone(),
         config: config_path,
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 
@@ -252,6 +259,7 @@ fn test_incremental_file_added() {
         file: docs_dir.clone(),
         config: config_path.clone(),
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 
@@ -262,6 +270,7 @@ fn test_incremental_file_added() {
         file: docs_dir.clone(),
         config: config_path,
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 
@@ -291,6 +300,7 @@ fn test_rebuild_overwrites() {
         file: docs_dir.clone(),
         config: config_path.clone(),
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 
@@ -302,6 +312,7 @@ fn test_rebuild_overwrites() {
         file: docs_dir.clone(),
         config: config_path,
         rebuild: true,
+        verbose: false,
     })
     .unwrap();
 
@@ -334,6 +345,7 @@ fn test_empty_directory_produces_empty_index() {
         file: docs_dir.clone(),
         config: config_path,
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 
@@ -365,6 +377,7 @@ fn test_binary_file_skipped() {
         file: docs_dir.clone(),
         config: config_path,
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 
@@ -400,6 +413,7 @@ chunk_overlap = 64
         file: docs_dir.clone(),
         config: config_path1.clone(),
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 
@@ -427,6 +441,7 @@ chunk_overlap = 32
         file: docs_dir.clone(),
         config: config_path2,
         rebuild: false,
+        verbose: false,
     })
     .unwrap();
 
