@@ -19,6 +19,9 @@ pub struct SearchResult {
     pub source_path: String,
     pub matched_content: String,
     pub score: f32,
+    pub line_start: usize,
+    pub line_end: usize,
+    pub section_heading: Option<String>,
 }
 
 /// Compute cosine similarity between two `f32` vectors.
@@ -120,6 +123,9 @@ pub fn search(
             source_path: meta.source_path.clone(),
             matched_content: meta.chunk_text.clone(),
             score,
+            line_start: meta.line_start,
+            line_end: meta.line_end,
+            section_heading: meta.section_heading.clone(),
         })
         .collect();
 
@@ -143,6 +149,8 @@ mod tests {
             chunk_text: chunk_text.to_string(),
             section_heading: None,
             chunk_index,
+            line_start: 0,
+            line_end: 0,
         }
     }
 

@@ -171,10 +171,11 @@ const ui = {
   async init() {
     this.setFormEnabled(false);
     this.setStatus('connecting', 'Connecting to MCP server…');
+    this.initCopyButtons();
 
     try {
       await this.client.initialize();
-      this.setStatus('connected', `Connected — ${this.client.protocolVersion}`);
+      this.setStatus('connected', `Connected — protocol version: ${this.client.protocolVersion}  |  session: ${this.client.sessionId}`);
       this.setFormEnabled(true);
       this.elements.query.focus();
     } catch (err) {
@@ -243,11 +244,39 @@ const ui = {
     this.elements.results.innerHTML = results.map(r => `
       <div class="result-card">
         <div class="result-title">${this.esc(r.title)}</div>
-        <div class="result-source">${this.esc(r.source_path)}</div>
-        <div class="result-score">${(r.score * 100).toFixed(1)}% match</div>
-        <div class="result-content">${this.esc(r.matched_content)}</div>
+        <div class="result-source-line">
+          <span class="result-source">${this.esc(r.source_path)}</span>
+          ${r.line_start ? `<span class="result-lines">L${r.line_start}${r.line_end !== r.line_start ? '-L' + r.line_end : ''}</span>` : ''}
+          ${r.line_start ? `<button class="copy-link-btn" data-link="${this.esc(r.source_path)}#L${r.line_start}${r.line_end !== r.line_start ? '-L' + r.line_end : ''}">Copy link</button>` : ''}
+        </div>
+        <div class="result-meta">
+          <span class="result-score">${(r.score * 100).toFixed(1)}% match</span>
+          ${r.section_heading ? `<span class="result-section">${this.esc(r.section_heading)}</span>` : ''}
+        </div>
+        <div class="result-content-wrapper">
+          <div class="result-content">${this.esc(r.matched_content)}</div>
+          <button class="copy-content-btn">Copy content</button>
+        </div>
       </div>
     `).join('');
+  },
+
+  initCopyButtons() {
+    this.elements.results.addEventListener('click', (e) => {
+      if (e.target.classList.contains('copy-link-btn')) {
+        navigator.clipboard.writeText(e.target.dataset.link).catch(() => {});
+        const txt = e.target.textContent;
+        e.target.textContent = 'Copied!';
+        setTimeout(() => { e.target.textContent = txt; }, 1500);
+      } else if (e.target.classList.contains('copy-content-btn')) {
+        const wrapper = e.target.closest('.result-content-wrapper');
+        const content = wrapper.querySelector('.result-content').textContent;
+        navigator.clipboard.writeText(content).catch(() => {});
+        const txt = e.target.textContent;
+        e.target.textContent = 'Copied!';
+        setTimeout(() => { e.target.textContent = txt; }, 1500);
+      }
+    });
   },
 
   showError(message) {

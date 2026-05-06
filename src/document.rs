@@ -24,6 +24,36 @@ fn title_from_path(path: &Path) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// extract_title_from_body — highest-level markdown heading in body
+// ---------------------------------------------------------------------------
+
+fn extract_title_from_body(body: &str) -> Option<String> {
+    let mut best: Option<(u8, &str)> = None;
+
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some(text) = trimmed.strip_prefix("### ") {
+            if !text.is_empty() && best.map_or(true, |(lvl, _)| 3 < lvl) {
+                best = Some((3, text));
+            }
+        } else if let Some(text) = trimmed.strip_prefix("## ") {
+            if !text.is_empty() && best.map_or(true, |(lvl, _)| 2 < lvl) {
+                best = Some((2, text));
+            }
+        } else if let Some(text) = trimmed.strip_prefix("# ") {
+            if !text.is_empty() && best.map_or(true, |(lvl, _)| 1 < lvl) {
+                best = Some((1, text));
+            }
+        }
+    }
+
+    best.map(|(_, text)| text.to_string())
+}
+
+// ---------------------------------------------------------------------------
 // load_document — read a text file from disk
 // ---------------------------------------------------------------------------
 
@@ -32,7 +62,8 @@ pub fn load_document(source_path: &str) -> anyhow::Result<Document> {
     let body = std::fs::read_to_string(path)
         .map_err(|e| anyhow::anyhow!("Failed to read '{}': {}", source_path, e))?;
 
-    let title = title_from_path(path);
+    let title = extract_title_from_body(&body)
+        .unwrap_or_else(|| title_from_path(path));
 
     Ok(Document {
         title,
@@ -92,6 +123,69 @@ mod tests {
         assert_eq!(doc.title, "docent test empty file");
         assert_eq!(doc.body, "");
         let _ = std::fs::remove_file(&tmp);
+    }
+
+    // -----------------------------------------------------------------------
+    // extract_title_from_body tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_extract_title_h1() {
+        let body = "# My Document\n\nSome content here.";
+        assert_eq!(extract_title_from_body(body).as_deref(), Some("My Document"));
+    }
+
+    #[test]
+    fn test_extract_title_h2() {
+        let body = "## Overview\n\nContent here.";
+        assert_eq!(extract_title_from_body(body).as_deref(), Some("Overview"));
+    }
+
+    #[test]
+    fn test_extract_title_h3() {
+        let body = "### Details\n\nContent here.";
+        assert_eq!(extract_title_from_body(body).as_deref(), Some("Details"));
+    }
+
+    #[test]
+    fn test_extract_title_h1_over_h2() {
+        let body = "# Title\n\n## Subtitle\n\nContent.";
+        assert_eq!(extract_title_from_body(body).as_deref(), Some("Title"));
+    }
+
+    #[test]
+    fn test_extract_title_first_h1() {
+        let body = "# First\n\nContent.\n\n# Second\n\nMore.";
+        assert_eq!(extract_title_from_body(body).as_deref(), Some("First"));
+    }
+
+    #[test]
+    fn test_extract_title_no_heading() {
+        let body = "Just some plain text.\nNo headings here.";
+        assert_eq!(extract_title_from_body(body), None);
+    }
+
+    #[test]
+    fn test_extract_title_empty_body() {
+        assert_eq!(extract_title_from_body(""), None);
+    }
+
+    #[test]
+    fn test_extract_title_h1_after_h3() {
+        let body = "### Sub\ncontent\n\n# Main Title\nmore";
+        assert_eq!(extract_title_from_body(body).as_deref(), Some("Main Title"));
+    }
+
+    #[test]
+    fn test_extract_title_leading_whitespace() {
+        let body = "  # Indented Title\n\ncontent";
+        assert_eq!(extract_title_from_body(body).as_deref(), Some("Indented Title"));
+    }
+
+    #[test]
+    fn test_extract_title_empty_heading_skipped() {
+        let body = "# \n\n## Real Heading\ncontent";
+        assert_eq!(extract_title_from_body(body).as_deref(), Some("Real Heading"));
     }
 
     #[test]

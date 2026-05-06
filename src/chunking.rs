@@ -12,6 +12,8 @@ pub struct Chunk {
     pub token_count: usize,
     pub section_heading: Option<String>,
     pub chunk_index: usize,
+    pub line_start: usize,
+    pub line_end: usize,
 }
 
 // ---------------------------------------------------------------------------
@@ -161,61 +163,78 @@ impl TokenCounter for HuggingFaceTokenCounter {
 // split_into_sections — split body on H2/H3 heading boundaries
 // ---------------------------------------------------------------------------
 
+/// Build a sorted `Vec` of byte positions of `\n` characters in `text`.
+fn build_newline_positions(text: &str) -> Vec<usize> {
+    text.match_indices('\n').map(|(i, _)| i).collect()
+}
+
+/// Convert a byte offset (in `text`) to a 1-indexed line number using a
+/// pre-computed newline-position lookup.
+fn byte_offset_to_line(byte_offset: usize, newlines: &[usize]) -> usize {
+    // binary_search returns Ok(index) if exact match, Err(index) if insertion point.
+    // Line number = number of newlines before/at this offset + 1.
+    newlines.binary_search(&byte_offset).unwrap_or_else(|i| i) + 1
+}
+
 /// Split `body` into sections on H2 (`## `) and H3 (`### `) heading boundaries.
 ///
-/// Returns a `Vec` of `(Option<String>, String)` tuples:
+/// Returns a `Vec` of `(Option<String>, String, usize)` tuples:
 /// - `Option<String>` — the heading text (without the `## ` / `### ` prefix),
 ///   or `None` for content before the first heading.
-/// - `String` — the section body text (including the heading line for headed sections).
+/// - `String` — the section body text (trimmed, including the heading line).
+/// - `usize` — byte offset of the section's first character in `body`.
 ///
 /// Empty sections (body trimmed to zero length) are excluded.
-fn split_into_sections(body: &str) -> Vec<(Option<String>, String)> {
-    let mut sections: Vec<(Option<String>, String)> = Vec::new();
+fn split_into_sections(body: &str) -> Vec<(Option<String>, String, usize)> {
+    let mut sections = Vec::new();
     let mut current_heading: Option<String> = None;
     let mut current_body = String::new();
+    let mut current_body_start: usize = 0;
+    let mut byte_cursor: usize = 0;
 
     for line in body.lines() {
-        // Detect H2 or H3: line must start with "## " or "### " (at column 0)
+        let line_len = line.len();
         let is_heading = line
             .strip_prefix("### ")
-            .or_else(|| line.strip_prefix("## "));
+            .or_else(|| line.strip_prefix("## "))
+            .or_else(|| line.strip_prefix("# "));
 
         if let Some(heading_text) = is_heading {
-            // Emit the previous section if it has content
             let trimmed = current_body.trim().to_string();
             if !trimmed.is_empty() {
-                // For headed sections, skip if body is just the heading line (no actual content)
                 let skip = if let Some(ref h) = current_heading {
                     trimmed == format!("## {}", h) || trimmed == format!("### {}", h)
                 } else {
                     false
                 };
                 if !skip {
-                    sections.push((current_heading.take(), trimmed));
+                    let leading_ws = current_body.len() - current_body.trim_start().len();
+                    sections.push((current_heading.take(), trimmed, current_body_start + leading_ws));
                 }
             }
-            // Start new section
             current_heading = Some(heading_text.to_string());
             current_body = line.to_string();
+            current_body_start = byte_cursor;
         } else {
             if !current_body.is_empty() {
                 current_body.push('\n');
             }
             current_body.push_str(line);
         }
+
+        byte_cursor += line_len + 1;
     }
 
-    // Emit the final section
     let trimmed = current_body.trim().to_string();
     if !trimmed.is_empty() {
-        // For headed sections, skip if body is just the heading line (no actual content)
         let skip = if let Some(ref h) = current_heading {
             trimmed == format!("## {}", h) || trimmed == format!("### {}", h)
         } else {
             false
         };
         if !skip {
-            sections.push((current_heading.take(), trimmed));
+            let leading_ws = current_body.len() - current_body.trim_start().len();
+            sections.push((current_heading.take(), trimmed, current_body_start + leading_ws));
         }
     }
 
@@ -232,22 +251,39 @@ fn chunk_section(
     config: &ChunkingConfig,
     counter: &dyn TokenCounter,
     start_index: usize,
+    section_byte_offset: usize,
+    body_newlines: &[usize],
 ) -> Vec<Chunk> {
     let mut chunks = Vec::new();
     let token_count = counter.count_tokens(section_text);
 
+    let abs_offset = |byte_off: usize| -> usize {
+        section_byte_offset + byte_off
+    };
+
+    let compute_lines = |byte_start: usize, byte_end: usize| -> (usize, usize) {
+        let ls = byte_offset_to_line(abs_offset(byte_start), body_newlines);
+        let le = byte_offset_to_line(abs_offset(byte_end), body_newlines);
+        (ls, le)
+    };
+
     if token_count <= config.chunk_size {
-        // Section fits in one chunk
+        let (line_start, line_end) = if token_count == 0 {
+            (0, 0)
+        } else {
+            compute_lines(0, section_text.len())
+        };
         chunks.push(Chunk {
             text: section_text.to_string(),
             token_count,
             section_heading: section_heading.map(|s| s.to_string()),
             chunk_index: start_index,
+            line_start,
+            line_end,
         });
         return chunks;
     }
 
-    // Section is too large — apply sliding window
     let (total_tokens, offsets) = counter.encode_with_offsets(section_text);
     let step = config.chunk_size.saturating_sub(config.chunk_overlap);
     let mut chunk_idx = start_index;
@@ -258,33 +294,38 @@ fn chunk_section(
         let char_start = offsets[window_start].0;
         let char_end = offsets[window_end - 1].1;
         let chunk_text = &section_text[char_start..char_end];
+        let (line_start, line_end) = compute_lines(char_start, char_end);
 
         chunks.push(Chunk {
             text: chunk_text.to_string(),
             token_count: config.chunk_size,
             section_heading: section_heading.map(|s| s.to_string()),
             chunk_index: chunk_idx,
+            line_start,
+            line_end,
         });
 
         chunk_idx += 1;
         window_start += step;
         if step == 0 {
-            break; // prevent infinite loop if chunk_size == overlap
+            break;
         }
     }
 
-    // Emit final partial window if there are remaining tokens
     if window_start < total_tokens {
         let char_start = offsets[window_start].0;
         let char_end = offsets[total_tokens - 1].1;
         let chunk_text = &section_text[char_start..char_end];
         let remaining_tokens = total_tokens - window_start;
+        let (line_start, line_end) = compute_lines(char_start, char_end);
 
         chunks.push(Chunk {
             text: chunk_text.to_string(),
             token_count: remaining_tokens,
             section_heading: section_heading.map(|s| s.to_string()),
             chunk_index: chunk_idx,
+            line_start,
+            line_end,
         });
     }
 
@@ -305,18 +346,21 @@ pub fn chunk_document(
     config: &ChunkingConfig,
     counter: &dyn TokenCounter,
 ) -> Vec<Chunk> {
+    let body_newlines = build_newline_positions(&doc.body);
     let mut chunks = Vec::new();
     let mut next_index: usize = 0;
 
     let sections = split_into_sections(&doc.body);
 
-    for (heading, section_text) in sections {
+    for (heading, section_text, section_byte_offset) in sections {
         let section_chunks = chunk_section(
             &section_text,
             heading.as_deref(),
             config,
             counter,
             next_index,
+            section_byte_offset,
+            &body_newlines,
         );
         chunks.extend(section_chunks);
         next_index = chunks.len();
@@ -498,6 +542,19 @@ mod tests {
         let doc2 = test_doc("whitespace", "   \n  \n  ");
         let chunks2 = chunk_document(&doc2, &test_config(), &WhitespaceTokenCounter);
         assert_eq!(chunks2.len(), 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // Additional: H1 headings → section boundary
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_h1_section_boundary() {
+        let doc = test_doc("h1", "# One\nbody\n# Two\nmore");
+        let chunks = chunk_document(&doc, &test_config(), &WhitespaceTokenCounter);
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].section_heading.as_deref(), Some("One"));
+        assert_eq!(chunks[1].section_heading.as_deref(), Some("Two"));
     }
 
     // -----------------------------------------------------------------------
