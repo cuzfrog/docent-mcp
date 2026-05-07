@@ -6,7 +6,7 @@ use std::path::Path;
 
 /// Current schema version. Increment when the index format changes
 /// in a backward-incompatible way.
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 
 /// Build-time metadata written to `header.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -39,6 +39,14 @@ pub struct ChunkMetadata {
     /// `None` if the mtime is unavailable (e.g., virtual filesystem).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub modified_at: Option<String>,
+
+    /// Kind of source document: "file" or "git".
+    pub kind: String,
+
+    /// Whether this chunk is from a fresh/updated commit. Present only for git
+    /// documents (`kind == "git"`); `None` (absent from JSON) for file documents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_fresh: Option<bool>,
 }
 
 /// Write the index directory: `header.json`, `vectors.bin`, and `metadata.json`.
@@ -155,6 +163,26 @@ pub fn read_index(path: &Path) -> anyhow::Result<(IndexHeader, Vec<Vec<f32>>, Ve
     Ok((header, vectors, metadata))
 }
 
+/// Write index into the given subdirectory (e.g. "file" or "git").
+/// The `subdir` is a relative directory name like "file" or "git".
+pub fn write_index_to(
+    persist_path: &Path,
+    subdir: &str,
+    header: &IndexHeader,
+    vectors: &[Vec<f32>],
+    metadata: &[ChunkMetadata],
+) -> anyhow::Result<()> {
+    write_index(&persist_path.join(subdir), header, vectors, metadata)
+}
+
+/// Read index from a subdirectory. Returns the header, vectors, metadata.
+pub fn read_subdir(
+    persist_path: &Path,
+    subdir: &str,
+) -> anyhow::Result<(IndexHeader, Vec<Vec<f32>>, Vec<ChunkMetadata>)> {
+    read_index(&persist_path.join(subdir))
+}
+
 /// Validate that an existing `IndexHeader` is compatible with the current
 /// `IndexConfig`.  Returns `Ok(())` if all fields match; otherwise returns an
 /// error with a descriptive message instructing the user to run `--rebuild`.
@@ -200,6 +228,7 @@ mod tests {
             persist_path: "/tmp/test-index".to_string(),
             chunk_size: 256,
             chunk_overlap: 32,
+            max_size_mb: 512,
         }
     }
 
@@ -239,6 +268,8 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -250,6 +281,8 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -261,6 +294,8 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
         ];
 
@@ -301,6 +336,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -312,6 +349,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -323,6 +362,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
         ];
 
@@ -443,6 +484,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -454,6 +497,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -465,6 +510,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
         ];
 
@@ -506,6 +553,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -517,6 +566,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -528,6 +579,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
         ];
 
@@ -572,6 +625,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -583,6 +638,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
         ];
 
@@ -632,6 +689,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -643,6 +702,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -654,6 +715,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -665,6 +728,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
         ];
 
@@ -737,6 +802,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -748,6 +815,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -759,6 +828,8 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
+                kind: "file".to_string(),
+                is_fresh: None,
             },
         ];
 
@@ -853,6 +924,8 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
+            kind: "file".to_string(),
+            is_fresh: None,
         }];
 
         write_index(&nested_path, &header, &vectors, &metadata).unwrap();
@@ -861,6 +934,117 @@ mod tests {
         assert!(nested_path.join("header.json").exists());
         assert!(nested_path.join("vectors.bin").exists());
         assert!(nested_path.join("metadata.json").exists());
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    // Test 19: ChunkMetadata file serialization — kind="file", is_fresh=None → is_fresh absent from JSON
+    #[test]
+    fn test_chunkmetadata_file_serialization() {
+        let meta = ChunkMetadata {
+            source_path: "doc.md".to_string(),
+            source_hash: "abc".to_string(),
+            title: "Doc".to_string(),
+            chunk_text: "content".to_string(),
+            section_heading: None,
+            chunk_index: 0,
+            line_start: 1,
+            line_end: 5,
+            modified_at: None,
+            kind: "file".to_string(),
+            is_fresh: None,
+        };
+
+        let json = serde_json::to_string(&meta).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["kind"], "file");
+        // is_fresh must NOT be present when None
+        assert!(!parsed.as_object().unwrap().contains_key("is_fresh"));
+    }
+
+    // Test 20: ChunkMetadata git serialization — kind="git", is_fresh=Some(true) → is_fresh present in JSON
+    #[test]
+    fn test_chunkmetadata_git_serialization() {
+        let meta = ChunkMetadata {
+            source_path: "doc.md".to_string(),
+            source_hash: "abc".to_string(),
+            title: "Doc".to_string(),
+            chunk_text: "content".to_string(),
+            section_heading: None,
+            chunk_index: 0,
+            line_start: 1,
+            line_end: 5,
+            modified_at: None,
+            kind: "git".to_string(),
+            is_fresh: Some(true),
+        };
+
+        let json = serde_json::to_string(&meta).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["kind"], "git");
+        assert_eq!(parsed["is_fresh"], true);
+    }
+
+    // Test 21: ChunkMetadata round-trip deserialization — is_fresh absent defaults to None
+    #[test]
+    fn test_chunkmetadata_deserialize_is_fresh_defaults_to_none() {
+        let json = r#"{
+            "source_path": "doc.md",
+            "source_hash": "abc",
+            "title": "Doc",
+            "chunk_text": "content",
+            "section_heading": null,
+            "chunk_index": 0,
+            "line_start": 0,
+            "line_end": 0,
+            "kind": "file"
+        }"#;
+
+        let meta: ChunkMetadata = serde_json::from_str(json).unwrap();
+        assert_eq!(meta.kind, "file");
+        assert_eq!(meta.is_fresh, None);
+    }
+
+    // Test 22: write_index_to and read_subdir helpers round-trip
+    #[test]
+    fn test_write_index_to_and_read_subdir_roundtrip() {
+        let temp_dir = std::env::temp_dir().join("docent_test_subdir_roundtrip");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+
+        let header = IndexHeader {
+            schema_version: SCHEMA_VERSION,
+            embedding_model: "test-model".to_string(),
+            embedding_dims: 4,
+            chunk_size: 256,
+            chunk_overlap: 32,
+            built_at: "2026-01-01T00:00:00Z".to_string(),
+            doc_count: 1,
+            chunk_count: 1,
+        };
+        let vectors = vec![vec![1.0, 2.0, 3.0, 4.0]];
+        let metadata = vec![ChunkMetadata {
+            source_path: "doc.md".to_string(),
+            source_hash: "abc".to_string(),
+            title: "Doc".to_string(),
+            chunk_text: "content".to_string(),
+            section_heading: None,
+            chunk_index: 0,
+            line_start: 0,
+            line_end: 0,
+            modified_at: None,
+            kind: "file".to_string(),
+            is_fresh: None,
+        }];
+
+        write_index_to(&temp_dir, "file", &header, &vectors, &metadata).unwrap();
+        assert!(temp_dir.join("file").join("header.json").exists());
+
+        let (read_header, read_vectors, read_metadata) = read_subdir(&temp_dir, "file").unwrap();
+        assert_eq!(read_header, header);
+        assert_eq!(read_vectors, vectors);
+        assert_eq!(read_metadata, metadata);
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

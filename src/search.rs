@@ -154,6 +154,8 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
+            kind: "file".to_string(),
+            is_fresh: None,
         }
     }
 

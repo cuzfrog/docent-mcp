@@ -153,7 +153,9 @@ fn index_files(
         };
 
         // Override source_path to relative path
-        doc.source_path = relative_path.clone();
+        if let document::Document::File(ref mut file_doc) = doc {
+            file_doc.source_path = relative_path.clone();
+        }
 
         // Chunk the document
         let chunks = chunking::chunk_document(&doc, &chunking_config, counter);
@@ -170,15 +172,17 @@ fn index_files(
             chunks_for_file.push((
                 chunk.text.clone(),
                 ChunkMetadata {
-                    source_path: doc.source_path.clone(),
+                    source_path: doc.source_id().to_string(),
                     source_hash: source_hash.clone(),
-                    title: doc.title.clone(),
+                    title: doc.title().to_string(),
                     chunk_text: chunk.text.clone(),
                     section_heading: chunk.section_heading.clone(),
                     chunk_index: chunk.chunk_index,
                     line_start: chunk.line_start,
                     line_end: chunk.line_end,
                     modified_at: mtime.clone(),
+                    kind: doc.kind().to_string(),
+                    is_fresh: None,
                 },
             ));
         }
@@ -685,6 +689,8 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
+            kind: "file".to_string(),
+            is_fresh: None,
         };
         let vec_a: Vec<f32> = vec![1.0];
 
@@ -698,6 +704,8 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
+            kind: "file".to_string(),
+            is_fresh: None,
         };
         let vec_c: Vec<f32> = vec![3.0];
 
@@ -715,6 +723,8 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
+            kind: "file".to_string(),
+            is_fresh: None,
         };
         let meta_b2 = ChunkMetadata {
             source_path: "b.md".to_string(),
@@ -726,6 +736,8 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
+            kind: "file".to_string(),
+            is_fresh: None,
         };
         let fresh_metadata = vec![meta_b1.clone(), meta_b2.clone()];
         let fresh_vectors = vec![vec![2.1], vec![2.2]];
@@ -759,6 +771,8 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
+            kind: "file".to_string(),
+            is_fresh: None,
         };
         let vec_a: Vec<f32> = vec![1.0];
 
@@ -797,6 +811,8 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
+            kind: "file".to_string(),
+            is_fresh: None,
         };
         let meta_b1 = ChunkMetadata {
             source_path: "b.md".to_string(),
@@ -808,6 +824,8 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
+            kind: "file".to_string(),
+            is_fresh: None,
         };
         let meta_b2 = ChunkMetadata {
             source_path: "b.md".to_string(),
@@ -819,6 +837,8 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
+            kind: "file".to_string(),
+            is_fresh: None,
         };
 
         let fresh_metadata = vec![meta_a.clone(), meta_b1.clone(), meta_b2.clone()];

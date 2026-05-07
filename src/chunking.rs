@@ -346,11 +346,12 @@ pub fn chunk_document(
     config: &ChunkingConfig,
     counter: &dyn TokenCounter,
 ) -> Vec<Chunk> {
-    let body_newlines = build_newline_positions(&doc.body);
+    let body = doc.body();
+    let body_newlines = build_newline_positions(body);
     let mut chunks = Vec::new();
     let mut next_index: usize = 0;
 
-    let sections = split_into_sections(&doc.body);
+    let sections = split_into_sections(body);
 
     for (heading, section_text, section_byte_offset) in sections {
         let section_chunks = chunk_section(
@@ -379,11 +380,11 @@ mod tests {
 
     /// Helper: create a Document from a title and body.
     fn test_doc(title: &str, body: &str) -> Document {
-        Document {
+        Document::File(crate::document::FileDocument {
             title: title.to_string(),
             body: body.to_string(),
             source_path: format!("{}.md", title),
-        }
+        })
     }
 
     /// Default config: chunk_size=10, chunk_overlap=2 (small for test brevity).

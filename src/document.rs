@@ -3,10 +3,55 @@
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Document {
+pub enum Document {
+    File(FileDocument),
+    Git(GitDocument),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FileDocument {
     pub title: String,
     pub body: String,
     pub source_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GitDocument {
+    pub commit_hash: String,
+    pub title: String,
+    pub file_path: String,
+    pub diff: String,
+    pub author_date: String,
+}
+
+impl Document {
+    pub fn title(&self) -> &str {
+        match self {
+            Document::File(d) => &d.title,
+            Document::Git(d) => &d.title,
+        }
+    }
+
+    pub fn body(&self) -> &str {
+        match self {
+            Document::File(d) => &d.body,
+            Document::Git(d) => &d.diff,
+        }
+    }
+
+    pub fn source_id(&self) -> &str {
+        match self {
+            Document::File(d) => &d.source_path,
+            Document::Git(d) => &d.file_path,
+        }
+    }
+
+    pub fn kind(&self) -> &str {
+        match self {
+            Document::File(_) => "file",
+            Document::Git(_) => "git",
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -65,11 +110,11 @@ pub fn load_document(source_path: &str) -> anyhow::Result<Document> {
     let title = extract_title_from_body(&body)
         .unwrap_or_else(|| title_from_path(path));
 
-    Ok(Document {
+    Ok(Document::File(FileDocument {
         title,
         body,
         source_path: source_path.to_string(),
-    })
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -109,9 +154,10 @@ mod tests {
         let tmp = std::env::temp_dir().join("docent-test-load-text-file.txt");
         std::fs::write(&tmp, "Hello, world!").unwrap();
         let doc = load_document(tmp.to_str().unwrap()).unwrap();
-        assert_eq!(doc.title, "docent test load text file");
-        assert_eq!(doc.body, "Hello, world!");
-        assert_eq!(doc.source_path, tmp.to_str().unwrap());
+        assert_eq!(doc.title(), "docent test load text file");
+        assert_eq!(doc.body(), "Hello, world!");
+        assert_eq!(doc.source_id(), tmp.to_str().unwrap());
+        assert_eq!(doc.kind(), "file");
         let _ = std::fs::remove_file(&tmp);
     }
 
@@ -120,8 +166,8 @@ mod tests {
         let tmp = std::env::temp_dir().join("docent-test-empty-file.md");
         std::fs::write(&tmp, "").unwrap();
         let doc = load_document(tmp.to_str().unwrap()).unwrap();
-        assert_eq!(doc.title, "docent test empty file");
-        assert_eq!(doc.body, "");
+        assert_eq!(doc.title(), "docent test empty file");
+        assert_eq!(doc.body(), "");
         let _ = std::fs::remove_file(&tmp);
     }
 
@@ -193,5 +239,47 @@ mod tests {
         let result = load_document("/nonexistent/path/file.txt");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Failed to read"));
+    }
+
+    #[test]
+    fn test_document_kind() {
+        let file_doc = Document::File(FileDocument {
+            title: "test".to_string(),
+            body: "body".to_string(),
+            source_path: "path".to_string(),
+        });
+        assert_eq!(file_doc.kind(), "file");
+
+        let git_doc = Document::Git(GitDocument {
+            commit_hash: "abc123".to_string(),
+            title: "fix: bug".to_string(),
+            file_path: "src/main.rs".to_string(),
+            diff: "-old\n+new".to_string(),
+            author_date: "2024-01-01".to_string(),
+        });
+        assert_eq!(git_doc.kind(), "git");
+    }
+
+    #[test]
+    fn test_document_accessors() {
+        let file_doc = Document::File(FileDocument {
+            title: "My Doc".to_string(),
+            body: "Content here".to_string(),
+            source_path: "/path/to/doc.md".to_string(),
+        });
+        assert_eq!(file_doc.title(), "My Doc");
+        assert_eq!(file_doc.body(), "Content here");
+        assert_eq!(file_doc.source_id(), "/path/to/doc.md");
+
+        let git_doc = Document::Git(GitDocument {
+            commit_hash: "def456".to_string(),
+            title: "Add feature".to_string(),
+            file_path: "src/lib.rs".to_string(),
+            diff: "+new code".to_string(),
+            author_date: "2024-06-15T10:00:00Z".to_string(),
+        });
+        assert_eq!(git_doc.title(), "Add feature");
+        assert_eq!(git_doc.body(), "+new code");
+        assert_eq!(git_doc.source_id(), "src/lib.rs");
     }
 }

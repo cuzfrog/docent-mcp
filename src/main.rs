@@ -24,6 +24,9 @@ async fn main() -> anyhow::Result<()> {
         Commands::Serve(args) => {
             serve_cmd::run_serve(args).await?;
         }
+        Commands::IndexGit(_args) => {
+            eprintln!("Git indexing not yet implemented.");
+        }
         Commands::ListModels => {
             for model in fastembed::TextEmbedding::list_supported_models() {
                 println!("{} (dim: {})", model.model, model.dim);
