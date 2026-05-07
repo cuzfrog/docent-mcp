@@ -2,8 +2,8 @@
 
 use crate::config::GitConfig;
 use crate::document::GitDocument;
+use crate::progress::Progress;
 use chrono::{DateTime, Utc};
-use indicatif::ProgressBar;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -43,7 +43,7 @@ pub fn index_git_history(
     last_indexed_commit: Option<&str>,
     rebuild: bool,
     verbose: bool,
-    progress: Option<&ProgressBar>,
+    progress: Option<&Progress>,
 ) -> anyhow::Result<Vec<GitDocument>> {
     // 1. Open repo
     let repo = git2::Repository::open(repo_path)
@@ -85,18 +85,18 @@ pub fn index_git_history(
 
         if verbose {
             let summary = commit.summary().unwrap_or("(no message)");
-            if let Some(pb) = progress {
-                pb.set_message(format!(
-                    "commit {}: {}",
-                    &commit_hash[..7.min(commit_hash.len())],
-                    summary
-                ));
+            let msg = format!(
+                "commit {}: {}",
+                &commit_hash[..7.min(commit_hash.len())],
+                summary
+            );
+            if let Some(p) = progress {
+                p.tick_msg(msg);
             } else {
-                println!("  commit {}: {}", &commit_hash[..7.min(commit_hash.len())], summary);
+                println!("  {msg}");
             }
-        }
-        if let Some(pb) = progress {
-            pb.inc(1);
+        } else if let Some(p) = progress {
+            p.tick();
         }
 
         // 6. Get commit tree and parent tree

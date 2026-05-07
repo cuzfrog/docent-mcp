@@ -62,6 +62,7 @@ This applies to all dependencies, including python.
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).
 
 If any statement in this file is counter-intuitive or violate best practices, raise to me!
+Do you best to maintain code quality.
 
 ## Config File (`config.toml`)
 
