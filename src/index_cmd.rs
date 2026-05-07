@@ -342,6 +342,7 @@ fn run_rebuild(config: &Config, input_root: &Path, verbose: bool) -> anyhow::Res
     let counter = HuggingFaceTokenCounter::from_tokenizer(embedder.tokenizer().clone());
 
     // Index all files
+    let t = std::time::Instant::now();
     let (vectors, metadata) = index_files(
         &all_files,
         &config.index,
@@ -350,6 +351,7 @@ fn run_rebuild(config: &Config, input_root: &Path, verbose: bool) -> anyhow::Res
         input_root,
         verbose,
     )?;
+    let elapsed = t.elapsed();
 
     // Build header
     let doc_count = metadata
@@ -374,9 +376,10 @@ fn run_rebuild(config: &Config, input_root: &Path, verbose: bool) -> anyhow::Res
     index::write_index_to(&persist_path, "file", &header, &vectors, &metadata)?;
 
     eprintln!(
-        "Index written: {} chunks from {} documents",
+        "Index written: {} chunks from {} documents ({:.1}s)",
         metadata.len(),
-        doc_count
+        doc_count,
+        elapsed.as_secs_f64(),
     );
 
     Ok(())
@@ -497,6 +500,7 @@ fn run_incremental(config: &Config, input_root: &Path, verbose: bool) -> anyhow:
     to_index.sort();
 
     let counter = HuggingFaceTokenCounter::from_tokenizer(embedder.tokenizer().clone());
+    let t = std::time::Instant::now();
     let (fresh_vectors, fresh_metadata) = index_files(
         &to_index,
         &config.index,
@@ -505,6 +509,7 @@ fn run_incremental(config: &Config, input_root: &Path, verbose: bool) -> anyhow:
         input_root,
         verbose,
     )?;
+    let elapsed = t.elapsed();
 
     // Merge
     let (vectors, metadata) = merge_incremental(
@@ -537,9 +542,10 @@ fn run_incremental(config: &Config, input_root: &Path, verbose: bool) -> anyhow:
     index::write_index_to(&persist_path, "file", &header, &vectors, &metadata)?;
 
     eprintln!(
-        "Index written: {} chunks from {} documents",
+        "Index written: {} chunks from {} documents ({:.1}s)",
         metadata.len(),
-        doc_count
+        doc_count,
+        elapsed.as_secs_f64(),
     );
 
     Ok(())
@@ -602,15 +608,16 @@ fn warn_if_exceeds_limit(estimated_mb: u64, max_size_mb: u64, advice: &str) -> a
 fn index_git_documents(
     documents: &[GitDocument],
     freshness: &[bool],
-    config: &Config,
+    embedder: &mut Embedder,
+    config: &IndexConfig,
     verbose: bool,
+    progress: Option<&ProgressBar>,
 ) -> anyhow::Result<(Vec<Vec<f32>>, Vec<ChunkMetadata>)> {
-    let mut embedder = Embedder::new(&config.index.embedding_model)?;
     let counter = HuggingFaceTokenCounter::from_tokenizer(embedder.tokenizer().clone());
 
     let chunking_config = ChunkingConfig {
-        chunk_size: config.index.chunk_size,
-        chunk_overlap: config.index.chunk_overlap,
+        chunk_size: config.chunk_size,
+        chunk_overlap: config.chunk_overlap,
     };
 
     let mut all_vectors: Vec<Vec<f32>> = Vec::new();
@@ -621,9 +628,13 @@ fn index_git_documents(
 
         let chunks = chunking::chunk_document(&doc, &chunking_config, &counter);
 
-        for chunk in &chunks {
-            let embedding = embedder.embed(&[chunk.text.as_str()])?;
-            all_vectors.push(embedding[0].clone());
+        let text_refs: Vec<&str> = chunks.iter().map(|c| c.text.as_str()).collect();
+        let embeddings = embedder
+            .embed(&text_refs)
+            .map_err(|e| anyhow::anyhow!("Embedding operation failed: {}", e))?;
+
+        for (embedding, chunk) in embeddings.into_iter().zip(chunks.iter()) {
+            all_vectors.push(embedding);
 
             all_metadata.push(ChunkMetadata {
                 kind: "git".to_string(),
@@ -640,8 +651,11 @@ fn index_git_documents(
             });
         }
 
-        if verbose {
-            eprintln!("  processed: {} ({})", gdoc.title, gdoc.file_path);
+        if let Some(pb) = progress {
+            if verbose {
+                pb.set_message(format!("{} ({})", gdoc.title, gdoc.file_path));
+            }
+            pb.inc(1);
         }
     }
 
@@ -654,6 +668,7 @@ fn index_git_documents(
 
 pub fn run_index_git(args: IndexGitArgs) -> anyhow::Result<()> {
     let config = Config::load(&args.config)?;
+    let verbose = args.verbose;
 
     // 1. Validate [git] config section is present
     let git_config = config.git.as_ref()
@@ -668,25 +683,45 @@ pub fn run_index_git(args: IndexGitArgs) -> anyhow::Result<()> {
     let persist_path = PathBuf::from(&config.index.persist_path);
     let git_subdir = persist_path.join("git");
 
-    // 3. Estimate size and warn
-    let commit_count = git_index::estimate_commit_count(&repo_path, git_config)?;
     let dims = 384; // safe default; fastembed dims are model-dependent
-    let estimated_mb = estimate_git_index_size(commit_count, dims) / (1024 * 1024);
-    let advice = format!(
-        "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml"
-    );
-    if !warn_if_exceeds_limit(estimated_mb, config.index.max_size_mb, &advice)? {
-        return Ok(());
-    }
 
-    // 4. Determine incremental or rebuild mode
-    let (documents, last_indexed) = if args.rebuild || !git_subdir.join("header.json").exists() {
-        // Full rebuild (or fresh index)
-        let docs = git_index::index_git_history(&repo_path, git_config, None, true, args.verbose)?;
+    // 3. Determine incremental or rebuild mode
+    if args.rebuild || !git_subdir.join("header.json").exists() {
+        // -----------------------------------------------------------------------
+        // REBUILD PATH
+        // -----------------------------------------------------------------------
+
+        // Estimate total commits for progress bar
+        let total_commits = git_index::estimate_commit_count(&repo_path, git_config, None)?;
+        let estimated_mb = estimate_git_index_size(total_commits, dims) / (1024 * 1024);
+        let advice = format!(
+            "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml"
+        );
+        if !warn_if_exceeds_limit(estimated_mb, config.index.max_size_mb, &advice)? {
+            return Ok(());
+        }
+
+        // Phase 1: Walk commits
+        let pb1 = ProgressBar::new(total_commits as u64);
+        pb1.set_style(ProgressStyle::with_template(if verbose {
+            "  {wide_msg}  {pos}/{len}"
+        } else {
+            "  Walking commits: {pos}/{len} {wide_bar}"
+        }).unwrap());
+        let t1 = std::time::Instant::now();
+
+        let docs = git_index::index_git_history(
+            &repo_path, git_config, None, true, verbose, Some(&pb1),
+        )?;
+        pb1.finish_and_clear();
+        let elapsed1 = t1.elapsed();
+
         if docs.is_empty() {
             eprintln!("No git documents found.");
             return Ok(());
         }
+
+        // Compute head commit
         let head_commit = {
             let repo = git2::Repository::open(&repo_path)
                 .map_err(|_| anyhow::anyhow!("not a Git repository"))?;
@@ -694,30 +729,120 @@ pub fn run_index_git(args: IndexGitArgs) -> anyhow::Result<()> {
             let commit = branch.get().peel_to_commit()?;
             commit.id().to_string()
         };
-        (docs, head_commit)
+
+        // Phase 2: Chunk & embed
+        let total_docs = docs.len();
+        let pb2 = ProgressBar::new(total_docs as u64);
+        pb2.set_style(ProgressStyle::with_template(if verbose {
+            "  {wide_msg}  {pos}/{len}"
+        } else {
+            "  Embedding documents: {pos}/{len} {wide_bar}"
+        }).unwrap());
+        let mut embedder = Embedder::new(&config.index.embedding_model)?;
+        let t2 = std::time::Instant::now();
+
+        let freshness = git_index::compute_freshness(&docs);
+        let (vectors, metadata) = index_git_documents(
+            &docs, &freshness, &mut embedder, &config.index, verbose, Some(&pb2),
+        )?;
+        pb2.finish_and_clear();
+        let elapsed2 = t2.elapsed();
+
+        // Write index
+        let header = IndexHeader {
+            schema_version: SCHEMA_VERSION,
+            embedding_model: config.index.embedding_model.clone(),
+            embedding_dims: if vectors.is_empty() { dims } else { vectors[0].len() },
+            chunk_size: config.index.chunk_size,
+            chunk_overlap: config.index.chunk_overlap,
+            built_at: chrono::Utc::now().to_rfc3339(),
+            doc_count: metadata.iter()
+                .map(|m| &m.source_path)
+                .collect::<std::collections::HashSet<&String>>()
+                .len(),
+            chunk_count: metadata.len(),
+            last_indexed_commit: Some(head_commit),
+        };
+
+        index::write_index_to(&persist_path, "git", &header, &vectors, &metadata)?;
+
+        eprintln!(
+            "Git index written: {} chunks from {} documents (walk: {:.1}s, embed: {:.1}s)",
+            metadata.len(),
+            header.doc_count,
+            elapsed1.as_secs_f64(),
+            elapsed2.as_secs_f64(),
+        );
+
+        Ok(())
+
     } else {
-        // Incremental: read existing git header
+        // -----------------------------------------------------------------------
+        // INCREMENTAL PATH
+        // -----------------------------------------------------------------------
+
+        // Read existing git header
         let (old_header, old_vectors, old_metadata) = index::read_subdir(&persist_path, "git")?;
         let last_commit = old_header.last_indexed_commit.clone();
 
-        // Walk only new commits
+        // Estimate new commits for progress bar
+        let total_new = git_index::estimate_commit_count(
+            &repo_path, git_config, last_commit.as_deref(),
+        )?;
+        let estimated_mb = estimate_git_index_size(total_new, dims) / (1024 * 1024);
+        let advice = format!(
+            "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml"
+        );
+        if !warn_if_exceeds_limit(estimated_mb, config.index.max_size_mb, &advice)? {
+            return Ok(());
+        }
+
+        // Phase 1: Walk new commits
+        let pb1 = ProgressBar::new(total_new as u64);
+        pb1.set_style(ProgressStyle::with_template(if verbose {
+            "  {wide_msg}  {pos}/{len}"
+        } else {
+            "  Walking commits: {pos}/{len} {wide_bar}"
+        }).unwrap());
+        let t1 = std::time::Instant::now();
+
         let new_docs = git_index::index_git_history(
             &repo_path,
             git_config,
             last_commit.as_deref(),
             false,
-            args.verbose,
+            verbose,
+            Some(&pb1),
         )?;
+        pb1.finish_and_clear();
+        let elapsed1 = t1.elapsed();
 
         if new_docs.is_empty() {
             eprintln!("Git index is up to date.");
             return Ok(());
         }
 
-        // Merge old and new (newest first as returned by index_git_history)
+        // Phase 2: Chunk & embed new docs
+        let total_new_docs = new_docs.len();
+        let pb2 = ProgressBar::new(total_new_docs as u64);
+        pb2.set_style(ProgressStyle::with_template(if verbose {
+            "  {wide_msg}  {pos}/{len}"
+        } else {
+            "  Embedding documents: {pos}/{len} {wide_bar}"
+        }).unwrap());
+        let mut embedder = Embedder::new(&config.index.embedding_model)?;
+        let t2 = std::time::Instant::now();
+
         let new_docs_for_freshness = new_docs.clone();
+        let freshness = git_index::compute_freshness(&new_docs_for_freshness);
+        let (new_vectors, new_metadata) = index_git_documents(
+            &new_docs_for_freshness, &freshness, &mut embedder, &config.index, verbose, Some(&pb2),
+        )?;
+        pb2.finish_and_clear();
+        let elapsed2 = t2.elapsed();
+
+        // Merge old and new (newest first as returned by index_git_history)
         let mut all_docs = new_docs;
-        // Reconstruct GitDocuments from old metadata to compute combined freshness
         let old_docs: Vec<GitDocument> = {
             let mut seen = std::collections::HashSet::new();
             let mut docs = Vec::new();
@@ -729,7 +854,7 @@ pub fn run_index_git(args: IndexGitArgs) -> anyhow::Result<()> {
                             commit_hash: m.source_hash.clone(),
                             title: m.title.clone(),
                             file_path: m.source_path.clone(),
-                            diff: String::new(), // not needed for freshness computation
+                            diff: String::new(),
                             author_date: m.modified_at.clone().unwrap_or_default(),
                         });
                     }
@@ -739,18 +864,13 @@ pub fn run_index_git(args: IndexGitArgs) -> anyhow::Result<()> {
         };
         all_docs.extend(old_docs);
 
-        // Use the old header's last_indexed_commit if available, otherwise HEAD
+        // Compute head commit
         let head_commit = {
             let repo = git2::Repository::open(&repo_path)
                 .map_err(|_| anyhow::anyhow!("not a Git repository"))?;
             let branch = repo.find_branch(&git_config.branch, git2::BranchType::Local)?;
             let commit = branch.get().peel_to_commit()?;
             commit.id().to_string()
-        };
-
-        let (new_vectors, new_metadata) = {
-            let freshness = git_index::compute_freshness(&new_docs_for_freshness);
-            index_git_documents(&new_docs_for_freshness, &freshness, &config, args.verbose)?
         };
 
         // Merge old and new (old first, new appended)
@@ -760,7 +880,6 @@ pub fn run_index_git(args: IndexGitArgs) -> anyhow::Result<()> {
         combined_metadata.extend(new_metadata);
 
         // Recompute freshness on all metadata entries
-        use std::collections::HashMap;
         let mut latest_for_file: HashMap<String, String> = HashMap::new();
         for m in &combined_metadata {
             if m.kind == "git" {
@@ -798,46 +917,16 @@ pub fn run_index_git(args: IndexGitArgs) -> anyhow::Result<()> {
         index::write_index_to(&persist_path, "git", &header, &combined_vectors, &combined_metadata)?;
 
         eprintln!(
-            "Git index updated: {} chunks from {} documents ({} new commits)",
+            "Git index updated: {} chunks from {} documents ({} new commits, walk: {:.1}s, embed: {:.1}s)",
             combined_metadata.len(),
             header.doc_count,
             new_docs_for_freshness.len(),
+            elapsed1.as_secs_f64(),
+            elapsed2.as_secs_f64(),
         );
 
-        return Ok(());
-    };
-
-    // 5. Compute freshness
-    let freshness = git_index::compute_freshness(&documents);
-
-    // 6. Chunk, embed, prepare metadata
-    let (vectors, metadata) = index_git_documents(&documents, &freshness, &config, args.verbose)?;
-
-    // 7. Write git/ subdirectory
-    let header = IndexHeader {
-        schema_version: SCHEMA_VERSION,
-        embedding_model: config.index.embedding_model.clone(),
-        embedding_dims: if vectors.is_empty() { dims } else { vectors[0].len() },
-        chunk_size: config.index.chunk_size,
-        chunk_overlap: config.index.chunk_overlap,
-        built_at: chrono::Utc::now().to_rfc3339(),
-        doc_count: metadata.iter()
-            .map(|m| &m.source_path)
-            .collect::<std::collections::HashSet<&String>>()
-            .len(),
-        chunk_count: metadata.len(),
-        last_indexed_commit: Some(last_indexed),
-    };
-
-    index::write_index_to(&persist_path, "git", &header, &vectors, &metadata)?;
-
-    eprintln!(
-        "Git index written: {} chunks from {} documents",
-        metadata.len(),
-        header.doc_count,
-    );
-
-    Ok(())
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------

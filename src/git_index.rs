@@ -3,6 +3,7 @@
 use crate::config::GitConfig;
 use crate::document::GitDocument;
 use chrono::{DateTime, Utc};
+use indicatif::ProgressBar;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -42,6 +43,7 @@ pub fn index_git_history(
     last_indexed_commit: Option<&str>,
     rebuild: bool,
     verbose: bool,
+    progress: Option<&ProgressBar>,
 ) -> anyhow::Result<Vec<GitDocument>> {
     // 1. Open repo
     let repo = git2::Repository::open(repo_path)
@@ -84,6 +86,9 @@ pub fn index_git_history(
         if verbose {
             let summary = commit.summary().unwrap_or("(no message)");
             eprintln!("  commit {}: {}", &commit_hash[..7.min(commit_hash.len())], summary);
+        }
+        if let Some(pb) = progress {
+            pb.inc(1);
         }
 
         // 6. Get commit tree and parent tree
@@ -182,7 +187,11 @@ pub fn compute_freshness(documents: &[GitDocument]) -> Vec<bool> {
 ///
 /// Returns the number of commits reachable from the configured branch, up to
 /// the configured `depth_limit` (or all commits if `depth_limit == -1`).
-pub fn estimate_commit_count(repo_path: &Path, git_config: &GitConfig) -> anyhow::Result<usize> {
+pub fn estimate_commit_count(
+    repo_path: &Path,
+    git_config: &GitConfig,
+    stop_commit: Option<&str>,
+) -> anyhow::Result<usize> {
     let repo = git2::Repository::open(repo_path)
         .map_err(|_| anyhow::anyhow!("not a Git repository"))?;
 
@@ -197,7 +206,12 @@ pub fn estimate_commit_count(repo_path: &Path, git_config: &GitConfig) -> anyhow
 
     let mut count = 0;
     for result in revwalk {
-        let _ = result?;
+        let oid = result?;
+        if let Some(stop) = stop_commit {
+            if oid.to_string() == stop {
+                break;
+            }
+        }
         count += 1;
         if git_config.depth_limit >= 0 && count >= git_config.depth_limit as usize {
             break;
@@ -304,7 +318,7 @@ mod tests {
             file_patterns: vec!["*.md".to_string()],
         };
 
-        let docs = index_git_history(tmp.path(), &git_config, None, true, false)
+        let docs = index_git_history(tmp.path(), &git_config, None, true, false, None)
             .expect("index_git_history should succeed");
 
         // We expect 1 document: the "add doc" commit touching doc.md
@@ -343,7 +357,7 @@ mod tests {
             file_patterns: vec!["*.md".to_string()],
         };
 
-        let docs = index_git_history(tmp.path(), &git_config, None, true, false)
+        let docs = index_git_history(tmp.path(), &git_config, None, true, false, None)
             .expect("index_git_history");
 
         assert_eq!(docs.len(), 1);
@@ -371,7 +385,7 @@ mod tests {
             file_patterns: vec!["*.rs".to_string()],
         };
 
-        let docs = index_git_history(tmp.path(), &git_config, None, true, false)
+        let docs = index_git_history(tmp.path(), &git_config, None, true, false, None)
             .expect("index_git_history");
 
         // We have 2 commits, both touching main.rs -> 2 documents
@@ -401,7 +415,7 @@ mod tests {
             file_patterns: vec!["*".to_string()],
         };
 
-        let result = index_git_history(tmp.path(), &git_config, None, true, false);
+        let result = index_git_history(tmp.path(), &git_config, None, true, false, None);
         assert!(result.is_err(), "should return an error for non-repo");
 
         let err = result.unwrap_err();
@@ -465,7 +479,7 @@ mod tests {
             file_patterns: vec!["*".to_string()],
         };
 
-        let count = estimate_commit_count(tmp.path(), &git_config)
+        let count = estimate_commit_count(tmp.path(), &git_config, None)
             .expect("estimate_commit_count");
         // 1 initial commit + 5 file commits = 6
         assert_eq!(count, 6);
@@ -487,7 +501,7 @@ mod tests {
             file_patterns: vec!["*".to_string()],
         };
 
-        let count = estimate_commit_count(tmp.path(), &git_config)
+        let count = estimate_commit_count(tmp.path(), &git_config, None)
             .expect("estimate_commit_count");
         assert_eq!(count, 3);
     }
@@ -536,7 +550,7 @@ mod tests {
             branch: "main".to_string(),
             file_patterns: vec!["*".to_string()],
         };
-        let result = estimate_commit_count(tmp.path(), &git_config);
+        let result = estimate_commit_count(tmp.path(), &git_config, None);
         assert!(result.is_err());
         assert!(
             result.unwrap_err().to_string().contains("not a Git repository")
