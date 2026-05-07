@@ -11,6 +11,9 @@ pub struct Config {
     pub index: IndexConfig,
     #[serde(default)]
     pub server: ServerConfig,
+    #[serde(default)]
+    pub search: SearchConfig,
+    pub git: Option<GitConfig>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -23,6 +26,8 @@ pub struct IndexConfig {
     pub chunk_size: usize,
     #[serde(default = "default_chunk_overlap")]
     pub chunk_overlap: usize,
+    #[serde(default = "default_max_size_mb")]
+    pub max_size_mb: u64,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -31,6 +36,20 @@ pub struct ServerConfig {
     pub log_level: String,
     #[serde(default = "default_port")]
     pub port: u16,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+pub struct SearchConfig {
+    #[serde(default = "default_same_src_score_decay")]
+    pub same_src_score_decay: f32,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+pub struct GitConfig {
+    pub depth_limit: i64,
+    #[serde(default = "default_git_branch")]
+    pub branch: String,
+    pub file_patterns: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -57,6 +76,18 @@ const fn default_port() -> u16 {
     0
 }
 
+const fn default_max_size_mb() -> u64 {
+    512
+}
+
+fn default_same_src_score_decay() -> f32 {
+    0.9
+}
+
+fn default_git_branch() -> String {
+    "main".to_string()
+}
+
 // ---------------------------------------------------------------------------
 // Default impls for serde
 // ---------------------------------------------------------------------------
@@ -68,6 +99,7 @@ impl Default for IndexConfig {
             persist_path: default_persist_path(),
             chunk_size: default_chunk_size(),
             chunk_overlap: default_chunk_overlap(),
+            max_size_mb: default_max_size_mb(),
         }
     }
 }
@@ -77,6 +109,14 @@ impl Default for ServerConfig {
         Self {
             log_level: default_log_level(),
             port: default_port(),
+        }
+    }
+}
+
+impl Default for SearchConfig {
+    fn default() -> Self {
+        Self {
+            same_src_score_decay: default_same_src_score_decay(),
         }
     }
 }
@@ -122,6 +162,26 @@ impl Config {
                 "invalid log_level '{}': must be one of debug, info, warn, error",
                 other
             ),
+        }
+        if self.search.same_src_score_decay < 0.0 || self.search.same_src_score_decay > 1.0 {
+            anyhow::bail!(
+                "same_src_score_decay must be in range 0.0..=1.0, got {}",
+                self.search.same_src_score_decay
+            );
+        }
+        if let Some(git) = &self.git {
+            if git.depth_limit < -1 {
+                anyhow::bail!(
+                    "git depth_limit must be >= -1, got {}",
+                    git.depth_limit
+                );
+            }
+            if git.branch.is_empty() {
+                anyhow::bail!("git branch must not be empty");
+            }
+            if git.file_patterns.is_empty() {
+                anyhow::bail!("git file_patterns must not be empty");
+            }
         }
         Ok(())
     }
@@ -170,6 +230,9 @@ chunk_overlap = 128
 
 [server]
 log_level = "debug"
+
+[search]
+same_src_score_decay = 0.85
 "#;
         let config: Config = toml::from_str(toml_str).unwrap();
         assert_eq!(config.index.embedding_model, "BAAI/bge-large-en");
@@ -178,6 +241,7 @@ log_level = "debug"
         assert_eq!(config.index.chunk_overlap, 128);
         assert_eq!(config.server.log_level, "debug");
         assert_eq!(config.server.port, 0);
+        assert_eq!(config.search.same_src_score_decay, 0.85);
     }
 
     // 2. Missing fields → defaults applied
@@ -199,7 +263,10 @@ log_level = "debug"
         assert_eq!(config.index.persist_path, default_persist_path());
         assert_eq!(config.index.chunk_size, default_chunk_size());
         assert_eq!(config.index.chunk_overlap, default_chunk_overlap());
+        assert_eq!(config.index.max_size_mb, default_max_size_mb());
         assert_eq!(config.server.log_level, default_log_level());
+        assert_eq!(config.search.same_src_score_decay, default_same_src_score_decay());
+        assert!(config.git.is_none());
     }
 
     // 3. Missing [index] section entirely → all IndexConfig defaults
@@ -358,6 +425,7 @@ embedding_model = "BGESmallENV15Q"
                 log_level: "verbose".to_string(),
                 ..ServerConfig::default()
             },
+            ..Config::default()
         };
         let err = config.validate().unwrap_err();
         assert!(err.to_string().contains("invalid log_level 'verbose'"));
@@ -376,6 +444,7 @@ embedding_model = "BGESmallENV15Q"
                     log_level: level.to_string(),
                     ..ServerConfig::default()
                 },
+                ..Config::default()
             };
             assert!(
                 config.validate().is_ok(),
@@ -397,6 +466,9 @@ chunk_overlap = 32
 
 [server]
 log_level = "error"
+
+[search]
+same_src_score_decay = 0.95
 "#;
         let temp_path = std::env::temp_dir().join("docent_test_config.toml");
         std::fs::write(&temp_path, toml_str).unwrap();
@@ -407,6 +479,7 @@ log_level = "error"
         assert_eq!(config.index.chunk_size, 256);
         assert_eq!(config.index.chunk_overlap, 32);
         assert_eq!(config.server.log_level, "error");
+        assert_eq!(config.search.same_src_score_decay, 0.95);
 
         // Cleanup
         let _ = std::fs::remove_file(&temp_path);
@@ -431,5 +504,169 @@ log_level = "error"
             "error message should reference the offending field or line; got: {}",
             msg
         );
+    }
+
+    // 15. SearchConfig deserializes defaults
+    #[test]
+    fn test_search_config_defaults() {
+        let toml_str = r#"
+[index]
+embedding_model = "BGESmallENV15Q"
+
+[search]
+"#;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert!((config.search.same_src_score_decay - 0.9).abs() < f32::EPSILON);
+    }
+
+    // 16. GitConfig deserializes from TOML section
+    #[test]
+    fn test_git_config_deserialize() {
+        let toml_str = r#"
+[index]
+embedding_model = "BGESmallENV15Q"
+
+[git]
+depth_limit = 50
+branch = "develop"
+file_patterns = ["*.rs", "*.md"]
+"#;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        let git = config.git.expect("git config should be present");
+        assert_eq!(git.depth_limit, 50);
+        assert_eq!(git.branch, "develop");
+        assert_eq!(git.file_patterns, vec!["*.rs".to_string(), "*.md".to_string()]);
+    }
+
+    // 17. max_size_mb defaults to 512
+    #[test]
+    fn test_max_size_mb_defaults_to_512() {
+        let toml_str = r#"
+[index]
+embedding_model = "BGESmallENV15Q"
+"#;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.index.max_size_mb, 512);
+    }
+
+    // 18. Validation rejects same_src_score_decay > 1.0
+    #[test]
+    fn test_same_src_score_decay_exceeds_max_validation_error() {
+        let config = Config {
+            index: IndexConfig {
+                embedding_model: "BGESmallENV15Q".to_string(),
+                ..IndexConfig::default()
+            },
+            search: SearchConfig {
+                same_src_score_decay: 1.5,
+            },
+            ..Config::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("same_src_score_decay must be in range 0.0..=1.0"));
+    }
+
+    // 19. Validation rejects depth_limit < -1
+    #[test]
+    fn test_git_depth_limit_below_min_validation_error() {
+        let config = Config {
+            index: IndexConfig {
+                embedding_model: "BGESmallENV15Q".to_string(),
+                ..IndexConfig::default()
+            },
+            git: Some(GitConfig {
+                depth_limit: -2,
+                branch: "main".to_string(),
+                file_patterns: vec!["*.rs".to_string()],
+            }),
+            ..Config::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("git depth_limit must be >= -1"));
+    }
+
+    // 20. Validation rejects empty git branch
+    #[test]
+    fn test_git_empty_branch_validation_error() {
+        let config = Config {
+            index: IndexConfig {
+                embedding_model: "BGESmallENV15Q".to_string(),
+                ..IndexConfig::default()
+            },
+            git: Some(GitConfig {
+                depth_limit: 10,
+                branch: "".to_string(),
+                file_patterns: vec!["*.rs".to_string()],
+            }),
+            ..Config::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("git branch must not be empty"));
+    }
+
+    // 21. Validation rejects empty git file_patterns
+    #[test]
+    fn test_git_empty_file_patterns_validation_error() {
+        let config = Config {
+            index: IndexConfig {
+                embedding_model: "BGESmallENV15Q".to_string(),
+                ..IndexConfig::default()
+            },
+            git: Some(GitConfig {
+                depth_limit: 10,
+                branch: "main".to_string(),
+                file_patterns: vec![],
+            }),
+            ..Config::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("git file_patterns must not be empty"));
+    }
+
+    // 22. Valid git config with depth_limit = -1 passes validation
+    #[test]
+    fn test_git_depth_limit_negative_one_valid() {
+        let config = Config {
+            index: IndexConfig {
+                embedding_model: "BGESmallENV15Q".to_string(),
+                ..IndexConfig::default()
+            },
+            git: Some(GitConfig {
+                depth_limit: -1,
+                branch: "main".to_string(),
+                file_patterns: vec!["*.rs".to_string()],
+            }),
+            ..Config::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    // 23. Template config.toml parses with all new fields populated
+    #[test]
+    fn test_template_config_toml_parses_with_all_fields() {
+        let template_path = Path::new("src/templates/config.toml");
+        let content = std::fs::read_to_string(template_path)
+            .expect("template config.toml should exist");
+        let config: Config = toml::from_str(&content).expect("template config.toml should parse");
+
+        // Index fields
+        assert_eq!(config.index.embedding_model, "BGESmallENV15Q");
+        assert_eq!(config.index.persist_path, "./.docent-index");
+        assert_eq!(config.index.chunk_size, 512);
+        assert_eq!(config.index.chunk_overlap, 64);
+        assert_eq!(config.index.max_size_mb, 512);
+
+        // Git fields
+        let git = config.git.expect("git section should be present");
+        assert_eq!(git.depth_limit, 1000);
+        assert_eq!(git.branch, "main");
+        assert_eq!(git.file_patterns, vec!["*.*".to_string()]);
+
+        // Search fields
+        assert!((config.search.same_src_score_decay - 0.9).abs() < f32::EPSILON);
+
+        // Server fields
+        assert_eq!(config.server.log_level, "debug");
+        assert_eq!(config.server.port, 7878);
     }
 }
