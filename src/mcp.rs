@@ -77,10 +77,20 @@ impl DocentMcpServer {
         let metadata = Arc::clone(&self.metadata);
         let query = params.query.clone();
         let limit = params.limit as usize;
+        let same_src_score_decay = self.config.search.same_src_score_decay;
+        let index_time = self.index_header.built_at.clone();
 
         let results = tokio::task::spawn_blocking(move || {
             let mut emb = embedder.lock().unwrap();
-            search::search(&query, &mut emb, &vectors, &metadata, limit)
+            search::search(
+                &query,
+                &mut emb,
+                &vectors,
+                &metadata,
+                limit,
+                same_src_score_decay,
+                &index_time,
+            )
         })
         .await
         .map_err(|e| {

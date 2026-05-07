@@ -15,14 +15,18 @@ pub struct SearchRequest {
 /// A ranked search result for a single source document.
 #[derive(Debug, Serialize)]
 pub struct SearchResult {
+    pub kind: String,
     pub title: String,
     pub source_path: String,
+    pub source_hash: String,
     pub matched_content: String,
     pub score: f32,
     pub line_start: usize,
     pub line_end: usize,
     pub section_heading: Option<String>,
     pub modified_at: Option<String>,
+    pub is_fresh: bool,
+    pub index_time: String,
 }
 
 /// Compute cosine similarity between two `f32` vectors.
@@ -40,27 +44,43 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     dot / (norm_a * norm_b)
 }
 
-/// Group candidates by `source_path` and keep only the entry with the highest
-/// score per document.  Returns results sorted by score descending.
-fn deduplicate_by_source<'a>(
-    candidates: &'a [(f32, &'a ChunkMetadata)],
+/// Group candidates by `source_path + ":" + source_hash`, apply score decay
+/// multiplier to subsequent chunks in the same group, re-sort, and return
+/// all (decayed_score, meta) pairs.
+///
+/// Decay formula:
+///   - 1st chunk from group: score × 1.0
+///   - 2nd chunk from group: score × same_src_score_decay
+///   - Nth chunk from group: score × same_src_score_decay^(N-1)
+fn apply_score_decay<'a>(
+    candidates: Vec<(f32, &'a ChunkMetadata)>,
+    same_src_score_decay: f32,
 ) -> Vec<(f32, &'a ChunkMetadata)> {
-    let mut best: std::collections::HashMap<&str, (f32, &'a ChunkMetadata)> =
+    // 1. Group by source_path + ":" + source_hash
+    let mut groups: std::collections::HashMap<String, Vec<(f32, &'a ChunkMetadata)>> =
         std::collections::HashMap::new();
-    for &(score, meta) in candidates {
-        let entry = best
-            .entry(meta.source_path.as_str())
-            .or_insert((score, meta));
-        if score > entry.0 {
-            *entry = (score, meta);
+    for (score, meta) in candidates {
+        let key = format!("{}:{}", meta.source_path, meta.source_hash);
+        groups.entry(key).or_default().push((score, meta));
+    }
+
+    let mut results = Vec::new();
+    for (_key, mut group) in groups {
+        // 2. Within each group, sort by score descending
+        group.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        // 3. Apply decay multiplier based on position in group
+        for (i, (score, meta)) in group.into_iter().enumerate() {
+            let decayed = score * same_src_score_decay.powi(i as i32);
+            results.push((decayed, meta));
         }
     }
-    let mut results: Vec<(f32, &'a ChunkMetadata)> = best.into_values().collect();
+
+    // 4. Sort all results by decayed score descending
     results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
     results
 }
 
-/// Run the full search pipeline: embed → score → deduplicate → sort → truncate.
+/// Run the full search pipeline: embed → score → decay → sort → truncate.
 ///
 /// # Arguments
 /// * `query` — The search query string.
@@ -68,6 +88,9 @@ fn deduplicate_by_source<'a>(
 /// * `vectors` — All chunk vectors from the index.
 /// * `metadata` — All chunk metadata from the index (must be 1:1 with `vectors`).
 /// * `limit` — Maximum number of results to return. Clamped to [1, 10]; default 3.
+/// * `same_src_score_decay` — Decay multiplier for subsequent chunks from the
+///   same source+hash group (0.0 = dedup hard, 1.0 = no decay).
+/// * `index_time` — ISO 8601 timestamp from the index header's `built_at` field.
 ///
 /// # Returns
 /// A `Vec<SearchResult>` sorted by relevance (highest score first), or an empty
@@ -78,6 +101,8 @@ pub fn search(
     vectors: &[Vec<f32>],
     metadata: &[ChunkMetadata],
     limit: usize,
+    same_src_score_decay: f32,
+    index_time: &str,
 ) -> anyhow::Result<Vec<SearchResult>> {
     // 1. Clamp limit to [1, 10]; default 3 when limit == 0
     let limit = if limit == 0 { 3 } else { limit.clamp(1, 10) };
@@ -110,8 +135,8 @@ pub fn search(
         .map(|(vec, meta)| (cosine_similarity(&query_vector, vec), meta))
         .collect();
 
-    // 5. Deduplicate by source_path
-    let deduped = deduplicate_by_source(&candidates);
+    // 5. Apply score decay dedup
+    let deduped = apply_score_decay(candidates, same_src_score_decay);
 
     // 6. Truncate to top `limit`
     let top: Vec<(f32, &ChunkMetadata)> = deduped.into_iter().take(limit).collect();
@@ -120,14 +145,18 @@ pub fn search(
     let results: Vec<SearchResult> = top
         .into_iter()
         .map(|(score, meta)| SearchResult {
+            kind: meta.kind.clone(),
             title: meta.title.clone(),
             source_path: meta.source_path.clone(),
+            source_hash: meta.source_hash.clone(),
             matched_content: meta.chunk_text.clone(),
             score,
             line_start: meta.line_start,
             line_end: meta.line_end,
             section_heading: meta.section_heading.clone(),
             modified_at: meta.modified_at.clone(),
+            is_fresh: meta.is_fresh.unwrap_or(false),
+            index_time: index_time.to_string(),
         })
         .collect();
 
@@ -192,36 +221,63 @@ mod tests {
         assert_eq!(sim3, 0.0);
     }
 
-    // Test 4: deduplicate_by_source keeps best score per document
+    // Test 4: apply_score_decay with decay=1.0 — no dedup, all chunks keep original scores
     #[test]
-    fn test_deduplicate_by_source_keeps_best() {
-        let meta_a1 = make_meta("doc_a.md", "Doc A", "chunk 0", 0);
-        let meta_a2 = make_meta("doc_a.md", "Doc A", "chunk 1", 1);
+    fn test_score_decay_no_dedup() {
+        let meta_a1 = make_meta("doc.md", "Doc", "chunk 0", 0);
+        let meta_a2 = make_meta("doc.md", "Doc", "chunk 1", 1);
         let meta_b = make_meta("doc_b.md", "Doc B", "chunk 0", 0);
 
         let candidates = vec![(0.5f32, &meta_a1), (0.9f32, &meta_a2), (0.7f32, &meta_b)];
 
-        let results = deduplicate_by_source(&candidates);
-        assert_eq!(results.len(), 2);
+        let results = apply_score_decay(candidates, 1.0);
+        assert_eq!(results.len(), 3);
 
-        // First should be doc_a with score 0.9
-        assert_eq!(results[0].1.source_path, "doc_a.md");
+        // Scores unchanged
         assert!((results[0].0 - 0.9).abs() < 1e-6);
-
-        // Second should be doc_b with score 0.7
-        assert_eq!(results[1].1.source_path, "doc_b.md");
         assert!((results[1].0 - 0.7).abs() < 1e-6);
+        assert!((results[2].0 - 0.5).abs() < 1e-6);
     }
 
-    // Test 6: deduplicate_by_source with single candidate
+    // Test 5: apply_score_decay with decay=0.0 — 2nd+ chunks in same group get score 0
     #[test]
-    fn test_deduplicate_by_source_single() {
-        let meta = make_meta("doc.md", "Doc", "single chunk", 0);
-        let candidates = vec![(0.5f32, &meta)];
-        let results = deduplicate_by_source(&candidates);
-        assert_eq!(results.len(), 1);
+    fn test_score_decay_hard_dedup() {
+        let meta_a1 = make_meta("doc.md", "Doc", "chunk 0", 0);
+        let meta_a2 = make_meta("doc.md", "Doc", "chunk 1", 1);
+        let meta_b = make_meta("doc_b.md", "Doc B", "chunk 0", 0);
+
+        let candidates = vec![(0.5f32, &meta_a1), (0.9f32, &meta_a2), (0.7f32, &meta_b)];
+
+        let results = apply_score_decay(candidates, 0.0);
+        // All 3 candidates returned, but 2nd chunk from doc.md has score 0
+        assert_eq!(results.len(), 3);
         assert_eq!(results[0].1.source_path, "doc.md");
-        assert!((results[0].0 - 0.5).abs() < 1e-6);
+        assert!((results[0].0 - 0.9).abs() < 1e-6);
+        assert_eq!(results[1].1.source_path, "doc_b.md");
+        assert!((results[1].0 - 0.7).abs() < 1e-6);
+        // 2nd chunk from doc.md → score 0.0
+        assert_eq!(results[2].1.source_path, "doc.md");
+        assert!((results[2].0 - 0.0).abs() < 1e-6);
+    }
+
+    // Test 6: apply_score_decay with decay=0.9 — 2nd chunk gets 0.9× score
+    #[test]
+    fn test_score_decay_soft() {
+        let meta_a1 = make_meta("doc.md", "Doc", "chunk 0", 0);
+        let meta_a2 = make_meta("doc.md", "Doc", "chunk 1", 1);
+
+        let candidates = vec![(0.5f32, &meta_a1), (0.9f32, &meta_a2)];
+
+        let results = apply_score_decay(candidates, 0.9);
+        assert_eq!(results.len(), 2);
+
+        // Best chunk stays at 0.9
+        assert_eq!(results[0].1.source_path, "doc.md");
+        assert!((results[0].0 - 0.9).abs() < 1e-6);
+
+        // 2nd chunk gets 0.5 × 0.9 = 0.45
+        assert_eq!(results[1].1.source_path, "doc.md");
+        assert!((results[1].0 - 0.45).abs() < 1e-6);
     }
 
     // Test 7: cosine similarity with negative values
@@ -242,19 +298,49 @@ mod tests {
         assert!((sim - 1.0).abs() < 1e-6);
     }
 
-    // Test 9: deduplicate_by_source with all same source
+    // Test 9: verify SearchResult fields including new fields
     #[test]
-    fn test_deduplicate_by_source_all_same() {
-        let meta1 = make_meta("doc.md", "Doc", "chunk 0", 0);
-        let meta2 = make_meta("doc.md", "Doc", "chunk 1", 1);
-        let meta3 = make_meta("doc.md", "Doc", "chunk 2", 2);
+    fn test_search_result_fields() {
+        let meta = ChunkMetadata {
+            source_path: "doc.md".to_string(),
+            source_hash: "abc123".to_string(),
+            title: "Doc".to_string(),
+            chunk_text: "Content".to_string(),
+            section_heading: Some("Intro".to_string()),
+            chunk_index: 0,
+            line_start: 1,
+            line_end: 5,
+            modified_at: Some("2026-01-01T00:00:00Z".to_string()),
+            kind: "file".to_string(),
+            is_fresh: None,
+        };
 
-        let candidates = vec![(0.3f32, &meta1), (0.8f32, &meta2), (0.5f32, &meta3)];
+        let result = SearchResult {
+            kind: meta.kind.clone(),
+            title: meta.title.clone(),
+            source_path: meta.source_path.clone(),
+            source_hash: meta.source_hash.clone(),
+            matched_content: meta.chunk_text.clone(),
+            score: 0.95,
+            line_start: meta.line_start,
+            line_end: meta.line_end,
+            section_heading: meta.section_heading.clone(),
+            modified_at: meta.modified_at.clone(),
+            is_fresh: meta.is_fresh.unwrap_or(false),
+            index_time: "2026-05-06T12:00:00Z".to_string(),
+        };
 
-        let results = deduplicate_by_source(&candidates);
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].1.source_path, "doc.md");
-        assert!((results[0].0 - 0.8).abs() < 1e-6);
+        assert_eq!(result.kind, "file");
+        assert_eq!(result.source_hash, "abc123");
+        assert!(!result.is_fresh); // None → false
+        assert_eq!(result.index_time, "2026-05-06T12:00:00Z");
+
+        // Verify JSON serialization includes all new fields
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("\"kind\":\"file\""));
+        assert!(json.contains("\"source_hash\":\"abc123\""));
+        assert!(json.contains("\"is_fresh\":false"));
+        assert!(json.contains("\"index_time\":\"2026-05-06T12:00:00Z\""));
     }
 
     // Test 10: search with real embedder — limit clamping (requires model download)
@@ -282,16 +368,18 @@ mod tests {
             })
             .collect();
 
+        let index_time = "2026-01-01T00:00:00Z";
+
         // limit=0 → should default to 3
-        let results = search("test query", &mut embedder, &vectors, &metadata, 0).unwrap();
+        let results = search("test query", &mut embedder, &vectors, &metadata, 0, 0.9, index_time).unwrap();
         assert_eq!(results.len(), 3);
 
         // limit=20 → should clamp to 10, but only 5 docs available
-        let results = search("test query", &mut embedder, &vectors, &metadata, 20).unwrap();
+        let results = search("test query", &mut embedder, &vectors, &metadata, 20, 0.9, index_time).unwrap();
         assert_eq!(results.len(), 5);
 
         // limit=2 → should return exactly 2
-        let results = search("test query", &mut embedder, &vectors, &metadata, 2).unwrap();
+        let results = search("test query", &mut embedder, &vectors, &metadata, 2, 0.9, index_time).unwrap();
         assert_eq!(results.len(), 2);
     }
 
@@ -319,7 +407,7 @@ mod tests {
             })
             .collect();
 
-        let results = search("Document number 0", &mut embedder, &vectors, &metadata, 10).unwrap();
+        let results = search("Document number 0", &mut embedder, &vectors, &metadata, 10, 0.9, "2026-01-01T00:00:00Z").unwrap();
 
         // Results should be in descending score order
         for i in 1..results.len() {
@@ -353,7 +441,7 @@ mod tests {
             .collect();
 
         // Request 5 results but only 2 available
-        let results = search("test", &mut embedder, &vectors, &metadata, 5).unwrap();
+        let results = search("test", &mut embedder, &vectors, &metadata, 5, 0.9, "2026-01-01T00:00:00Z").unwrap();
         assert_eq!(results.len(), 2);
     }
 }

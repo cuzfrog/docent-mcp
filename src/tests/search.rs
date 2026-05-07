@@ -137,12 +137,15 @@ loads data from the database and populates the cache for subsequent requests.
 
     let mut embedder = Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
 
+    let index_time = _header.built_at.clone();
     let results: Vec<SearchResult> = search::search(
         "database schema design",
         &mut embedder,
         &vectors,
         &metadata,
         5,
+        0.9,
+        &index_time,
     )
     .unwrap();
 
@@ -152,15 +155,6 @@ loads data from the database and populates the cache for subsequent requests.
         results[0].source_path, "database-design.md",
         "Database document should rank first for 'database schema design' query"
     );
-
-    let mut seen_paths: std::collections::HashSet<&str> = std::collections::HashSet::new();
-    for result in &results {
-        assert!(
-            seen_paths.insert(result.source_path.as_str()),
-            "Duplicate source_path found: {}",
-            result.source_path
-        );
-    }
 
     assert!(results.len() <= 5, "Should return at most 5 results");
 
@@ -177,6 +171,10 @@ loads data from the database and populates the cache for subsequent requests.
             "matched_content should be populated for {}",
             result.source_path
         );
+        // Verify new fields are populated
+        assert!(!result.kind.is_empty(), "kind should be populated");
+        assert!(!result.source_hash.is_empty(), "source_hash should be populated");
+        assert!(!result.index_time.is_empty(), "index_time should be populated");
     }
 
     let _ = std::fs::remove_dir_all(&base);
