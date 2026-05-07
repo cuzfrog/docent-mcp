@@ -4,6 +4,15 @@ embedding_model = "BGESmallENV15Q"
 persist_path    = "./e2e-tests/.ddr-index"             
 chunk_size      = 512                         
 chunk_overlap   = 64
+max_size_mb     = 512 # issue warning if total index size exceeds this limit
+
+[git]
+depth_limit   = 1000    # -1 = no limit (all history)
+branch        = "main"
+file_patterns = ["*.*"]
+
+[search]
+same_src_score_decay = 0.9  # score multiplier for subsequent chunks from same source
 
 [server]
 log_level = "debug"    # debug | info | warn | error
