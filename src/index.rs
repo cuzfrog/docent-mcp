@@ -19,6 +19,10 @@ pub struct IndexHeader {
     pub built_at: String, // ISO 8601 UTC timestamp
     pub doc_count: usize,
     pub chunk_count: usize,
+    /// For git indexes: the most recent commit that was indexed.
+    /// `None` for file indexes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_indexed_commit: Option<String>,
 }
 
 /// Per-chunk source provenance written to `metadata.json`.
@@ -242,6 +246,7 @@ mod tests {
             built_at: "2026-01-01T00:00:00Z".to_string(),
             doc_count: 2,
             chunk_count: 3,
+            last_indexed_commit: None,
         }
     }
 
@@ -674,6 +679,7 @@ mod tests {
             built_at: "2026-01-01T00:00:00Z".to_string(),
             doc_count: 2,
             chunk_count: 3,
+            last_indexed_commit: None,
         };
         // Write 3 vectors worth of bytes (48 bytes)
         let vectors_bytes: Vec<u8> = (0..48).map(|i| i as u8).collect();
@@ -864,6 +870,7 @@ mod tests {
             built_at: "2026-01-01T00:00:00Z".to_string(),
             doc_count: 0,
             chunk_count: 0,
+            last_indexed_commit: None,
         };
         let vectors: Vec<Vec<f32>> = vec![];
         let metadata: Vec<ChunkMetadata> = vec![];
@@ -912,6 +919,7 @@ mod tests {
             built_at: "2026-01-01T00:00:00Z".to_string(),
             doc_count: 1,
             chunk_count: 1,
+            last_indexed_commit: None,
         };
         let vectors = vec![vec![1.0, 2.0, 3.0, 4.0]];
         let metadata = vec![ChunkMetadata {
@@ -1022,6 +1030,7 @@ mod tests {
             built_at: "2026-01-01T00:00:00Z".to_string(),
             doc_count: 1,
             chunk_count: 1,
+            last_indexed_commit: None,
         };
         let vectors = vec![vec![1.0, 2.0, 3.0, 4.0]];
         let metadata = vec![ChunkMetadata {

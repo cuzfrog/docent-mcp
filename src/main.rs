@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod document;
 mod embedder;
+mod git_index;
 mod index;
 mod index_cmd;
 mod mcp;
@@ -24,8 +25,8 @@ async fn main() -> anyhow::Result<()> {
         Commands::Serve(args) => {
             serve_cmd::run_serve(args).await?;
         }
-        Commands::IndexGit(_args) => {
-            eprintln!("Git indexing not yet implemented.");
+        Commands::IndexGit(args) => {
+            index_cmd::run_index_git(args)?;
         }
         Commands::ListModels => {
             for model in fastembed::TextEmbedding::list_supported_models() {

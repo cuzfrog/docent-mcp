@@ -29,7 +29,7 @@ chunk_overlap = 64
 fn read_index_at(
     path: &std::path::Path,
 ) -> (index::IndexHeader, Vec<Vec<f32>>, Vec<index::ChunkMetadata>) {
-    index::read_index(path).unwrap()
+    index::read_subdir(path, "file").unwrap()
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn test_fresh_index_on_directory() {
     paths.dedup();
     assert_eq!(paths, vec!["a.md", "b.txt", "sub/c.md"]);
 
-    let vectors_meta = std::fs::metadata(index_dir.join("vectors.bin")).unwrap();
+    let vectors_meta = std::fs::metadata(index_dir.join("file").join("vectors.bin")).unwrap();
     let expected_bytes = header.chunk_count * header.embedding_dims * 4;
     assert_eq!(vectors_meta.len(), expected_bytes as u64);
 
@@ -100,7 +100,7 @@ fn test_incremental_no_changes() {
     })
     .unwrap();
 
-    let mtime1 = std::fs::metadata(index_dir.join("header.json"))
+    let mtime1 = std::fs::metadata(index_dir.join("file").join("header.json"))
         .unwrap()
         .modified()
         .unwrap();
@@ -115,7 +115,7 @@ fn test_incremental_no_changes() {
     })
     .unwrap();
 
-    let mtime2 = std::fs::metadata(index_dir.join("header.json"))
+    let mtime2 = std::fs::metadata(index_dir.join("file").join("header.json"))
         .unwrap()
         .modified()
         .unwrap();
@@ -355,7 +355,7 @@ fn test_empty_directory_produces_empty_index() {
     assert_eq!(header.doc_count, 0);
     assert!(metadata.is_empty());
 
-    let vectors_meta = std::fs::metadata(index_dir.join("vectors.bin")).unwrap();
+    let vectors_meta = std::fs::metadata(index_dir.join("file").join("vectors.bin")).unwrap();
     assert_eq!(vectors_meta.len(), 0);
 
     let _ = std::fs::remove_dir_all(&base);
@@ -418,7 +418,7 @@ chunk_overlap = 64
     .unwrap();
 
     let (header1, _, _) = read_index_at(&index_dir);
-    let mtime1 = std::fs::metadata(index_dir.join("header.json"))
+    let mtime1 = std::fs::metadata(index_dir.join("file").join("header.json"))
         .unwrap()
         .modified()
         .unwrap();
@@ -445,7 +445,7 @@ chunk_overlap = 32
     })
     .unwrap();
 
-    let mtime2 = std::fs::metadata(index_dir.join("header.json"))
+    let mtime2 = std::fs::metadata(index_dir.join("file").join("header.json"))
         .unwrap()
         .modified()
         .unwrap();

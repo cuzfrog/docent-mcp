@@ -171,6 +171,7 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
             built_at: String::new(),
             doc_count: 0,
             chunk_count: 0,
+            last_indexed_commit: None,
         }),
         vectors: Arc::new(all_vectors),
         metadata: Arc::new(all_metadata),

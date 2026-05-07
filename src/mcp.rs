@@ -184,6 +184,7 @@ mod tests {
                 built_at: "2026-01-01T00:00:00Z".into(),
                 doc_count: 0,
                 chunk_count: 0,
+                last_indexed_commit: None,
             },
             vectors: Arc::new(vec![]),
             metadata: Arc::new(vec![]),
