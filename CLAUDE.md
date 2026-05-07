@@ -56,10 +56,12 @@ This applies to all dependencies, including python.
 
 - **Error handling:** Use `anyhow::Result` internally. At binary boundaries (CLI, MCP responses), convert to user-facing messages. No `.unwrap()` on fallible operations.
 - **No panics in library code.** Reserve `panic` for unreachable states only.
-- **Logging:** Use `eprintln!` for CLI user-facing messages. The MCP server itself does not log to stdout (stdout is for MCP transport when using stdio, but we use HTTP).
+- **Logging:** Do not use `eprintln!` for CLI user-facing messages, except for error. The MCP server uses HTTP.
 - **Tests:** Each module has unit tests in a `#[cfg(test)] mod tests` block. Integration-style tests are under `src/tests/` (compiled as crate unit tests, avoiding separate integration-test link overhead). Tests that require network (model download) are `#[ignore]`. E2E tests are in `e2e-tests/`. E2E tests assume the binary is built and available.
 - **Naming:** Snake_case for files and functions. Types are PascalCase. Constants are UPPER_SNAKE_CASE.
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).
+
+If any statement in this file is counter-intuitive or violate best practices, raise to me!
 
 ## Config File (`config.toml`)
 

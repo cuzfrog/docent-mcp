@@ -154,7 +154,7 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
     let addr = listener
         .local_addr()
         .context("Failed to get local address")?;
-    eprintln!(
+    println!(
         "docent server listening on http://{} (open in browser for web UI)",
         addr
     );
@@ -219,7 +219,7 @@ async fn shutdown_signal() {
     tokio::signal::ctrl_c()
         .await
         .expect("Failed to install Ctrl+C handler");
-    eprintln!("Shutting down...");
+    println!("Shutting down...");
 }
 
 /// Recursively compute the total size (in bytes) of all files under `path`.

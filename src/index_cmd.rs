@@ -319,7 +319,7 @@ fn run_rebuild(config: &Config, input_root: &Path, verbose: bool) -> anyhow::Res
             let answer = input.trim();
 
             if answer != "y" && answer != "Y" {
-                eprintln!("Aborted.");
+                println!("Aborted.");
                 return Ok(());
             }
 
@@ -335,7 +335,7 @@ fn run_rebuild(config: &Config, input_root: &Path, verbose: bool) -> anyhow::Res
 
     // Discover files
     let all_files = discover_files(input_root)?;
-    eprintln!("Scanning: {} files found", all_files.len());
+    println!("Scanning: {} files found", all_files.len());
 
     // Initialize embedder and counter
     let mut embedder = Embedder::new(&config.index.embedding_model)?;
@@ -375,7 +375,7 @@ fn run_rebuild(config: &Config, input_root: &Path, verbose: bool) -> anyhow::Res
     // Write index
     index::write_index_to(&persist_path, "file", &header, &vectors, &metadata)?;
 
-    eprintln!(
+    println!(
         "Index written: {} chunks from {} documents ({:.1}s)",
         metadata.len(),
         doc_count,
@@ -477,7 +477,7 @@ fn run_incremental(config: &Config, input_root: &Path, verbose: bool) -> anyhow:
         .filter(|k| !discovered_paths.contains(*k))
         .count();
 
-    eprintln!(
+    println!(
         "Processing: {} new, {} changed, {} deleted, {} unchanged",
         new_files.len(),
         changed_files.len(),
@@ -488,7 +488,7 @@ fn run_incremental(config: &Config, input_root: &Path, verbose: bool) -> anyhow:
     // No-op check
     if new_files.is_empty() && changed_files.is_empty() && deleted_count == 0 {
         if index_exists {
-            eprintln!("No changes detected. Index is up to date.");
+            println!("No changes detected. Index is up to date.");
             return Ok(());
         }
         // If index doesn't exist, proceed to write empty index
@@ -541,7 +541,7 @@ fn run_incremental(config: &Config, input_root: &Path, verbose: bool) -> anyhow:
     // Write index
     index::write_index_to(&persist_path, "file", &header, &vectors, &metadata)?;
 
-    eprintln!(
+    println!(
         "Index written: {} chunks from {} documents ({:.1}s)",
         metadata.len(),
         doc_count,
@@ -593,8 +593,7 @@ fn warn_if_exceeds_limit(estimated_mb: u64, max_size_mb: u64, advice: &str) -> a
         std::io::stdin().read_line(&mut input)?;
         let answer = input.trim();
         if answer != "y" && answer != "Y" {
-            eprintln!("Aborted.");
-            return Ok(false);
+            println!("Aborted.");
         }
     }
     Ok(true)
@@ -717,7 +716,7 @@ pub fn run_index_git(args: IndexGitArgs) -> anyhow::Result<()> {
         let elapsed1 = t1.elapsed();
 
         if docs.is_empty() {
-            eprintln!("No git documents found.");
+            println!("No git documents found.");
             return Ok(());
         }
 
@@ -766,7 +765,7 @@ pub fn run_index_git(args: IndexGitArgs) -> anyhow::Result<()> {
 
         index::write_index_to(&persist_path, "git", &header, &vectors, &metadata)?;
 
-        eprintln!(
+        println!(
             "Git index written: {} chunks from {} documents (walk: {:.1}s, embed: {:.1}s)",
             metadata.len(),
             header.doc_count,
@@ -818,7 +817,7 @@ pub fn run_index_git(args: IndexGitArgs) -> anyhow::Result<()> {
         let elapsed1 = t1.elapsed();
 
         if new_docs.is_empty() {
-            eprintln!("Git index is up to date.");
+            println!("Git index is up to date.");
             return Ok(());
         }
 
@@ -916,7 +915,7 @@ pub fn run_index_git(args: IndexGitArgs) -> anyhow::Result<()> {
 
         index::write_index_to(&persist_path, "git", &header, &combined_vectors, &combined_metadata)?;
 
-        eprintln!(
+        println!(
             "Git index updated: {} chunks from {} documents ({} new commits, walk: {:.1}s, embed: {:.1}s)",
             combined_metadata.len(),
             header.doc_count,

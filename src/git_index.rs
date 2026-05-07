@@ -85,7 +85,15 @@ pub fn index_git_history(
 
         if verbose {
             let summary = commit.summary().unwrap_or("(no message)");
-            eprintln!("  commit {}: {}", &commit_hash[..7.min(commit_hash.len())], summary);
+            if let Some(pb) = progress {
+                pb.set_message(format!(
+                    "commit {}: {}",
+                    &commit_hash[..7.min(commit_hash.len())],
+                    summary
+                ));
+            } else {
+                println!("  commit {}: {}", &commit_hash[..7.min(commit_hash.len())], summary);
+            }
         }
         if let Some(pb) = progress {
             pb.inc(1);
