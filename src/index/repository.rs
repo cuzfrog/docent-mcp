@@ -1,7 +1,9 @@
 use std::path::Path;
 
+use crate::config::IndexConfig;
 use crate::index::schema::{ChunkMetadata, IndexHeader};
 use crate::index::storage::{read_index, write_index};
+use crate::index::validate_header;
 
 pub(crate) enum SourceIndexKind {
     File,
@@ -44,6 +46,101 @@ impl IndexRepository {
         persist_path.join(kind.subdir()).join("header.json").exists()
     }
 
+    pub fn load_merged_for_serve(
+        persist_path: &Path,
+        config: &IndexConfig,
+    ) -> anyhow::Result<MergedIndex> {
+        if persist_path.join("header.json").exists() {
+            eprintln!(
+                "Warning: Detected old index format at {}. \
+                 Run 'docent index-file --rebuild' and 'docent index-git --rebuild' to migrate.",
+                persist_path.display()
+            );
+        }
+
+        let file_exists = Self::exists(persist_path, SourceIndexKind::File);
+        let git_exists = Self::exists(persist_path, SourceIndexKind::Git);
+
+        if !file_exists && !git_exists {
+            anyhow::bail!(
+                "No index found at '{}'. Run 'docent index-file' or 'docent index-git' first.",
+                persist_path.display()
+            );
+        }
+
+        let file_index = if file_exists {
+            let stored = Self::load_one(persist_path, SourceIndexKind::File)?;
+            validate_header(&stored.header, config)?;
+            Some(stored)
+        } else {
+            None
+        };
+
+        let git_index = if git_exists {
+            let stored = Self::load_one(persist_path, SourceIndexKind::Git)?;
+            if let Some(ref fh) = file_index {
+                if stored.header.embedding_model != fh.header.embedding_model {
+                    anyhow::bail!(
+                        "embedding_model mismatch between file/ and git/ subdirs: '{}' vs '{}'",
+                        stored.header.embedding_model,
+                        fh.header.embedding_model
+                    );
+                }
+                if stored.header.embedding_dims != fh.header.embedding_dims {
+                    anyhow::bail!(
+                        "embedding_dims mismatch between file/ and git/ subdirs: {} vs {}",
+                        stored.header.embedding_dims,
+                        fh.header.embedding_dims
+                    );
+                }
+            } else {
+                validate_header(&stored.header, config)?;
+            }
+            Some(stored)
+        } else {
+            None
+        };
+
+        let all_vectors: Vec<Vec<f32>> = file_index
+            .as_ref()
+            .map(|s| s.vectors.clone())
+            .unwrap_or_default()
+            .into_iter()
+            .chain(
+                git_index
+                    .as_ref()
+                    .map(|s| s.vectors.clone())
+                    .unwrap_or_default(),
+            )
+            .collect();
+
+        let all_metadata: Vec<ChunkMetadata> = file_index
+            .as_ref()
+            .map(|s| s.metadata.clone())
+            .unwrap_or_default()
+            .into_iter()
+            .chain(
+                git_index
+                    .as_ref()
+                    .map(|s| s.metadata.clone())
+                    .unwrap_or_default(),
+            )
+            .collect();
+
+        let built_at = file_index
+            .as_ref()
+            .or(git_index.as_ref())
+            .map(|s| s.header.built_at.clone())
+            .unwrap_or_default();
+
+        Ok(MergedIndex {
+            vectors: all_vectors,
+            metadata: all_metadata,
+            built_at,
+        })
+    }
+
+    #[allow(dead_code)]
     pub fn load_merged(
         persist_path: &Path,
     ) -> anyhow::Result<MergedIndex> {

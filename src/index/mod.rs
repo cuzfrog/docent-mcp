@@ -4,6 +4,7 @@ mod validation;
 mod repository;
 
 pub(crate) use schema::*;
-pub(crate) use storage::*;
+#[cfg(test)]
+pub(crate) use storage::read_subdir;
 pub(crate) use validation::*;
 pub(crate) use repository::{SourceIndexKind, IndexRepository};

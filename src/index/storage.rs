@@ -114,6 +114,7 @@ pub fn write_index_to(
 }
 
 /// Read index from a subdirectory. Returns `StoredIndex`.
+#[cfg(test)]
 pub fn read_subdir(
     persist_path: &Path,
     subdir: &str,
