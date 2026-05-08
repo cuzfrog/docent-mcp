@@ -14,49 +14,88 @@
 
   <main class="layout">
     <div class="left-col">
-      <div id="connection-status" class="status-connecting">
-        Connecting to MCP server…
-      </div>
-
-      <div id="tool-info"></div>
-
-      <form id="search-form" class="search-box">
-        <div class="input-row">
-          <input
-            type="text"
-            id="query"
-            placeholder="Ask a question about a design decision…"
-            required
-            autofocus
-            disabled
-          >
-          <select id="limit" disabled>
-            <option value="3">3 results</option>
-            <option value="5">5 results</option>
-            <option value="10">10 results</option>
-          </select>
-          <button type="submit" id="search-btn" disabled>Search</button>
+      <section id="status-section">
+        <div id="connection-status" class="status-connecting" aria-live="polite">
+          Connecting to MCP server…
         </div>
-      </form>
+      </section>
 
-      <div id="results">
-        <div class="result-placeholder">
-          Enter a query above to search Design Decision Records.
+      <section id="search-section">
+        <form id="search-form" class="search-box">
+          <div class="input-row">
+            <label for="query">Search query</label>
+            <input
+              type="text"
+              id="query"
+              placeholder="Ask a question about a design decision…"
+              required
+              autofocus
+              disabled
+            >
+            <label for="limit">Max results</label>
+            <select id="limit" disabled>
+              <option value="3">3 results</option>
+              <option value="5">5 results</option>
+              <option value="10">10 results</option>
+            </select>
+            <button type="submit" id="search-btn" disabled>Search</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="results-section" aria-busy="false">
+        <div id="results">
+          <div class="result-placeholder">
+            Enter a query above to search Design Decision Records.
+          </div>
         </div>
-      </div>
+      </section>
     </div>
 
     <div class="right-col">
-      <div id="raw-response">
-        <div class="raw-header">
-          <span>Raw MCP Response</span>
-          <button id="copy-raw">Copy</button>
+      <section id="debug-section">
+        <div id="tool-info"></div>
+        <div id="raw-response">
+          <div class="raw-header">
+            <span>Raw MCP Response</span>
+            <button id="copy-raw">Copy</button>
+          </div>
+          <pre id="raw-content"></pre>
         </div>
-        <pre id="raw-content"></pre>
-      </div>
+      </section>
     </div>
   </main>
 
-  <script src="/app.js"></script>
+  <template id="result-card-template">
+    <div class="result-card">
+      <div class="result-title"></div>
+      <div class="result-source-line">
+        <span class="result-source"></span>
+        <span class="result-lines"></span>
+        <button class="copy-link-btn">Copy link</button>
+      </div>
+      <div class="result-meta">
+        <span class="result-score"></span>
+        <span class="result-section"></span>
+      </div>
+      <div class="result-content-wrapper">
+        <div class="result-content"></div>
+        <button class="copy-content-btn">Copy content</button>
+      </div>
+      <div class="result-footer">
+        <span class="result-modified"></span>
+      </div>
+    </div>
+  </template>
+
+  <template id="error-card-template">
+    <div class="error-card"><span class="error-message"></span></div>
+  </template>
+
+  <template id="placeholder-template">
+    <div class="result-placeholder">Enter a query above to search Design Decision Records.</div>
+  </template>
+
+  <script type="module" src="/app.js"></script>
 </body>
 </html>
