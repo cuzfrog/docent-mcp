@@ -29,7 +29,8 @@ chunk_overlap = 64
 fn read_index_at(
     path: &std::path::Path,
 ) -> (index::IndexHeader, Vec<Vec<f32>>, Vec<index::ChunkMetadata>) {
-    index::read_subdir(path, "file").unwrap()
+    let stored = index::read_subdir(path, "file").unwrap();
+    (stored.header, stored.vectors, stored.metadata)
 }
 
 #[test]

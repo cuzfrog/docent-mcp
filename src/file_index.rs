@@ -1,14 +1,9 @@
-use crate::chunking::{self, ChunkingConfig, TokenCounter};
-use crate::config::IndexConfig;
-use crate::document;
-use crate::embedder::Embedder;
 use crate::index::{ChunkKind, ChunkMetadata};
-use crate::progress::Progress;
+use crate::indexing::IndexableDocument;
 use chrono::DateTime;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 use walkdir::WalkDir;
 
 // ---------------------------------------------------------------------------
@@ -147,30 +142,18 @@ pub fn get_file_mtime(path: &Path) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
-// chunk_files — Phase 1: read, hash, and chunk all files
+// prepare_files — produce normalized documents for the shared pipeline
 // ---------------------------------------------------------------------------
 
-/// Read, hash, and chunk a list of files.
-/// Pure I/O + CPU; no embedder needed.
-fn chunk_files(
+pub fn prepare_files(
     files: &[PathBuf],
-    config: &IndexConfig,
-    counter: &dyn TokenCounter,
     input_root: &Path,
-    progress: &Progress,
-) -> anyhow::Result<Vec<(String, Vec<(String, ChunkMetadata)>)>> {
-    let chunking_config = ChunkingConfig {
-        chunk_size: config.chunk_size,
-        chunk_overlap: config.chunk_overlap,
-    };
-
-    let mut file_chunks: Vec<(String, Vec<(String, ChunkMetadata)>)> = Vec::new();
+) -> anyhow::Result<Vec<IndexableDocument>> {
+    let mut docs = Vec::new();
 
     for file in files.iter() {
         let full_path = input_root.join(file);
         let relative_path = file.to_string_lossy().to_string();
-
-        progress.tick_msg(&relative_path);
 
         let content = match std::fs::read_to_string(&full_path) {
             Ok(c) => c,
@@ -181,108 +164,21 @@ fn chunk_files(
         };
 
         let source_revision = format!("{:x}", Sha256::digest(content.as_bytes()));
-
-        let mut doc = document::load_file_document_from_str(&full_path.to_string_lossy(), &content);
-        let relative_path = file.to_string_lossy().to_string();
-        doc.source_path = relative_path.clone();
-
-        let chunks = chunking::chunk_document(&doc.body, &chunking_config, counter);
-
-        if chunks.is_empty() {
-            continue;
-        }
-
+        let file_doc = crate::document::load_file_document_from_str(&relative_path, &content);
         let mtime = get_file_mtime(&full_path);
 
-        let mut chunks_for_file = Vec::new();
-        for chunk in &chunks {
-            chunks_for_file.push((
-                chunk.text.clone(),
-                ChunkMetadata {
-                    source_path: doc.source_path.clone(),
-                    source_revision: source_revision.clone(),
-                    title: doc.title.clone(),
-                    chunk_text: chunk.text.clone(),
-                    section_heading: chunk.section_heading.clone(),
-                    chunk_index: chunk.chunk_index,
-                    line_start: chunk.line_start,
-                    line_end: chunk.line_end,
-                    modified_at: mtime.clone(),
-                    kind: ChunkKind::File,
-                    is_fresh: None,
-                },
-            ));
-        }
-        file_chunks.push((relative_path, chunks_for_file));
+        docs.push(IndexableDocument {
+            kind: ChunkKind::File,
+            source_path: relative_path,
+            source_revision,
+            title: file_doc.title,
+            body: content,
+            modified_at: mtime,
+            is_fresh: None,
+        });
     }
 
-    Ok(file_chunks)
-}
-
-// ---------------------------------------------------------------------------
-// embed_chunks — Phase 2: embed pre-chunked file groups
-// ---------------------------------------------------------------------------
-
-/// Embed chunk texts from pre-chunked file groups.
-fn embed_chunks(
-    file_chunks: &[(String, Vec<(String, ChunkMetadata)>)],
-    embedder: &mut Embedder,
-    progress: &Progress,
-) -> anyhow::Result<(Vec<Vec<f32>>, Vec<ChunkMetadata>)> {
-    let mut all_vectors: Vec<Vec<f32>> = Vec::new();
-    let mut all_metadata: Vec<ChunkMetadata> = Vec::new();
-
-    for (relative_path, chunks) in file_chunks.iter() {
-        progress.tick_msg(relative_path);
-
-        let text_refs: Vec<&str> = chunks.iter().map(|(text, _)| text.as_str()).collect();
-        let vectors = embedder
-            .embed(&text_refs)
-            .map_err(|e| anyhow::anyhow!("Embedding operation failed: {}", e))?;
-
-        for (vec, (_, meta)) in vectors.into_iter().zip(chunks.iter()) {
-            all_vectors.push(vec);
-            all_metadata.push(meta.clone());
-        }
-    }
-
-    Ok((all_vectors, all_metadata))
-}
-
-// ---------------------------------------------------------------------------
-// index_files — public coordinator
-// ---------------------------------------------------------------------------
-
-pub fn index_files(
-    files: &[PathBuf],
-    config: &IndexConfig,
-    embedder: &mut Embedder,
-    counter: &dyn TokenCounter,
-    input_root: &Path,
-    verbose: bool,
-) -> anyhow::Result<(
-    Vec<Vec<f32>>,
-    Vec<ChunkMetadata>,
-    Duration,
-    Duration,
-)> {
-    let t1 = std::time::Instant::now();
-    let pb1 = Progress::new(files.len() as u64, "Indexing files", verbose);
-    let file_chunks = chunk_files(files, config, counter, input_root, &pb1)?;
-    pb1.finish();
-    let chunk_time = t1.elapsed();
-
-    if file_chunks.is_empty() {
-        return Ok((vec![], vec![], chunk_time, Duration::from_secs(0)));
-    }
-
-    let t2 = std::time::Instant::now();
-    let pb2 = Progress::new(file_chunks.len() as u64, "Embedding files", verbose);
-    let (vectors, metadata) = embed_chunks(&file_chunks, embedder, &pb2)?;
-    pb2.finish();
-    let embed_time = t2.elapsed();
-
-    Ok((vectors, metadata, chunk_time, embed_time))
+    Ok(docs)
 }
 
 // ---------------------------------------------------------------------------

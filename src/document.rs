@@ -7,15 +7,6 @@ pub struct FileDocument {
     pub source_path: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct GitDocument {
-    pub commit_hash: String,
-    pub title: String,
-    pub file_path: String,
-    pub diff: String,
-    pub author_date: String,
-}
-
 // ---------------------------------------------------------------------------
 // title_from_path — derive a display title from a file path
 // ---------------------------------------------------------------------------

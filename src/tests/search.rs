@@ -1,10 +1,11 @@
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use crate::cli::IndexArgs;
 use crate::embedder::Embedder;
 use crate::index;
 use crate::index_cmd::run_index;
-use crate::search::{self, SearchResult};
+use crate::search::{SearchResult, VectorSearchService};
 
 fn make_temp_dir(name: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("docent_test_{}", name));
@@ -31,7 +32,8 @@ chunk_overlap = 64
 fn read_index_at(
     path: &std::path::Path,
 ) -> (index::IndexHeader, Vec<Vec<f32>>, Vec<index::ChunkMetadata>) {
-    index::read_subdir(path, "file").unwrap()
+    let stored = index::read_subdir(path, "file").unwrap();
+    (stored.header, stored.vectors, stored.metadata)
 }
 
 #[test]
@@ -135,19 +137,17 @@ loads data from the database and populates the cache for subsequent requests.
         "Chunks should have chunk_text populated"
     );
 
-    let mut embedder = Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
-
-    let index_time = _header.built_at.clone();
-    let results: Vec<SearchResult> = search::search(
-        "database schema design",
-        &mut embedder,
-        &vectors,
-        &metadata,
-        5,
+    let embedder = Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
+    let svc = VectorSearchService::new(
+        Arc::new(Mutex::new(embedder)),
+        Arc::new(vectors),
+        Arc::new(metadata),
         0.9,
-        &index_time,
-    )
-    .unwrap();
+        _header.built_at.clone(),
+    );
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let results: Vec<SearchResult> = rt.block_on(svc.search("database schema design", 5)).unwrap();
 
     assert!(!results.is_empty(), "Should return at least one result");
 

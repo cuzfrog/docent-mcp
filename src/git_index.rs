@@ -1,12 +1,20 @@
-use crate::chunking;
-use crate::config::{GitConfig, IndexConfig};
-use crate::document::GitDocument;
-use crate::embedder::Embedder;
+use crate::config::GitConfig;
 use crate::index::{ChunkKind, ChunkMetadata};
+use crate::indexing::IndexableDocument;
 use crate::progress::Progress;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::path::Path;
+
+/// A single git diff document produced by walking commit history.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GitDocument {
+    pub commit_hash: String,
+    pub title: String,
+    pub file_path: String,
+    pub diff: String,
+    pub author_date: String,
+}
 
 // ---------------------------------------------------------------------------
 // Pattern matching helper
@@ -248,62 +256,78 @@ pub fn estimate_git_index_size(commit_count: usize, dims: usize) -> u64 {
 }
 
 // ---------------------------------------------------------------------------
-// Embedding helper
+// Prepare git documents for the shared indexing pipeline
 // ---------------------------------------------------------------------------
 
-/// Chunk and embed a batch of `GitDocument`s (old and new) into parallel
-/// `(vectors, metadata)` arrays suitable for index writing.
-///
-/// `freshness` is a parallel array with one `bool` per document (true = the
-/// document is the latest commit touching its file at index time).
-pub fn embed_git_documents(
+pub fn prepare_git_documents(
     documents: &[GitDocument],
     freshness: &[bool],
-    embedder: &mut Embedder,
-    config: &IndexConfig,
-    counter: &dyn chunking::TokenCounter,
-    progress: Option<&Progress>,
-) -> anyhow::Result<(Vec<Vec<f32>>, Vec<ChunkMetadata>)> {
-    let chunking_config = chunking::ChunkingConfig {
-        chunk_size: config.chunk_size,
-        chunk_overlap: config.chunk_overlap,
-    };
+) -> Vec<IndexableDocument> {
+    documents
+        .iter()
+        .enumerate()
+        .map(|(i, gdoc)| IndexableDocument {
+            kind: ChunkKind::Git,
+            source_path: gdoc.file_path.clone(),
+            source_revision: gdoc.commit_hash.clone(),
+            title: gdoc.title.clone(),
+            body: gdoc.diff.clone(),
+            modified_at: Some(gdoc.author_date.clone()),
+            is_fresh: Some(freshness[i]),
+        })
+        .collect()
+}
 
-    let mut all_vectors: Vec<Vec<f32>> = Vec::new();
-    let mut all_metadata: Vec<ChunkMetadata> = Vec::new();
+// ---------------------------------------------------------------------------
+// Incremental merge for git index
+// ---------------------------------------------------------------------------
 
-    for (i, gdoc) in documents.iter().enumerate() {
-        let chunks = chunking::chunk_document(gdoc.diff.as_str(), &chunking_config, counter);
-
-        let text_refs: Vec<&str> = chunks.iter().map(|c| c.text.as_str()).collect();
-        let embeddings = embedder
-            .embed(&text_refs)
-            .map_err(|e| anyhow::anyhow!("Embedding operation failed: {}", e))?;
-
-        for (embedding, chunk) in embeddings.into_iter().zip(chunks.iter()) {
-            all_vectors.push(embedding);
-
-            all_metadata.push(ChunkMetadata {
-                kind: ChunkKind::Git,
-                source_path: gdoc.file_path.clone(),
-                source_revision: gdoc.commit_hash.clone(),
-                title: gdoc.title.clone(),
-                chunk_text: chunk.text.clone(),
-                section_heading: chunk.section_heading.clone(),
-                chunk_index: chunk.chunk_index,
-                line_start: chunk.line_start,
-                line_end: chunk.line_end,
-                modified_at: Some(gdoc.author_date.clone()),
-                is_fresh: Some(freshness[i]),
-            });
-        }
-
-        if let Some(p) = progress {
-            p.tick_msg(format!("{} ({})", gdoc.title, gdoc.file_path));
+/// Merge old and new git index data, computing freshness for all entries.
+pub fn merge_git_incremental(
+    old_metadata: &[ChunkMetadata],
+    old_vectors: &[Vec<f32>],
+    new_docs: &[GitDocument],
+    new_metadata: &[ChunkMetadata],
+    new_vectors: &[Vec<f32>],
+) -> (Vec<Vec<f32>>, Vec<ChunkMetadata>) {
+    let mut seen = std::collections::HashSet::new();
+    let mut all_docs: Vec<GitDocument> = new_docs.to_vec();
+    for m in old_metadata {
+        if m.kind == ChunkKind::Git {
+            let key = (m.source_path.clone(), m.source_revision.clone());
+            if seen.insert(key) {
+                all_docs.push(GitDocument {
+                    commit_hash: m.source_revision.clone(),
+                    title: m.title.clone(),
+                    file_path: m.source_path.clone(),
+                    diff: String::new(),
+                    author_date: m.modified_at.clone().unwrap_or_default(),
+                });
+            }
         }
     }
 
-    Ok((all_vectors, all_metadata))
+    let freshness = compute_freshness(&all_docs);
+    let fresh_map: HashMap<(String, String), bool> = all_docs
+        .iter()
+        .zip(freshness.iter())
+        .map(|(d, f)| ((d.file_path.clone(), d.commit_hash.clone()), *f))
+        .collect();
+
+    let mut combined_vectors = old_vectors.to_vec();
+    let mut combined_metadata = old_metadata.to_vec();
+    combined_vectors.extend(new_vectors.iter().cloned());
+    combined_metadata.extend(new_metadata.iter().cloned());
+
+    for m in &mut combined_metadata {
+        if m.kind == ChunkKind::Git {
+            m.is_fresh = fresh_map
+                .get(&(m.source_path.clone(), m.source_revision.clone()))
+                .copied();
+        }
+    }
+
+    (combined_vectors, combined_metadata)
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,4 @@
-use crate::config::IndexConfig;
-use crate::index::{ChunkMetadata, IndexHeader, SCHEMA_VERSION};
+use crate::index::schema::{ChunkMetadata, IndexHeader, StoredIndex};
 use std::path::Path;
 
 /// Write the index directory: `header.json`, `vectors.bin`, and `metadata.json`.
@@ -13,7 +12,6 @@ pub fn write_index(
     vectors: &[Vec<f32>],
     metadata: &[ChunkMetadata],
 ) -> anyhow::Result<()> {
-    // 1. Ensure directory exists
     std::fs::create_dir_all(path).map_err(|e| {
         anyhow::anyhow!(
             "Failed to create index directory '{}': {}",
@@ -22,13 +20,11 @@ pub fn write_index(
         )
     })?;
 
-    // 2. Write header.json (pretty-printed)
     let header_json = serde_json::to_string_pretty(header)
         .map_err(|e| anyhow::anyhow!("Failed to serialize header: {}", e))?;
     std::fs::write(path.join("header.json"), &header_json)
         .map_err(|e| anyhow::anyhow!("Failed to write header.json: {}", e))?;
 
-    // 3. Write vectors.bin (packed little-endian f32)
     let mut buf: Vec<u8> = Vec::with_capacity(vectors.len() * header.embedding_dims * 4);
     for vec in vectors {
         for &val in vec {
@@ -38,7 +34,6 @@ pub fn write_index(
     std::fs::write(path.join("vectors.bin"), &buf)
         .map_err(|e| anyhow::anyhow!("Failed to write vectors.bin: {}", e))?;
 
-    // 4. Write metadata.json (compact)
     let metadata_json = serde_json::to_vec(metadata)
         .map_err(|e| anyhow::anyhow!("Failed to serialize metadata: {}", e))?;
     std::fs::write(path.join("metadata.json"), &metadata_json)
@@ -47,19 +42,13 @@ pub fn write_index(
     Ok(())
 }
 
-/// Read the index from `path` and return the triple
-/// `(IndexHeader, Vec<Vec<f32>>, Vec<ChunkMetadata>)`.
-///
-/// Cross-validates that vector count, metadata count, and `header.chunk_count`
-/// are all equal.
-pub fn read_index(path: &Path) -> anyhow::Result<(IndexHeader, Vec<Vec<f32>>, Vec<ChunkMetadata>)> {
-    // 1. Check header.json exists
+/// Read the index from `path` and return `StoredIndex`.
+pub fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
     let header_path = path.join("header.json");
     if !header_path.exists() {
         anyhow::bail!("no index found at '{}'", path.display());
     }
 
-    // 2. Deserialize header
     let header_bytes = std::fs::read(&header_path)
         .map_err(|e| anyhow::anyhow!("Failed to read '{}': {}", header_path.display(), e))?;
     let header: IndexHeader = serde_json::from_slice(&header_bytes)
@@ -69,7 +58,6 @@ pub fn read_index(path: &Path) -> anyhow::Result<(IndexHeader, Vec<Vec<f32>>, Ve
         anyhow::bail!("corrupted '{}': embedding_dims is 0", header_path.display());
     }
 
-    // 3. Read vectors.bin and validate size
     let vectors_path = path.join("vectors.bin");
     let raw_bytes = std::fs::read(&vectors_path)
         .map_err(|e| anyhow::anyhow!("Failed to read '{}': {}", vectors_path.display(), e))?;
@@ -85,25 +73,22 @@ pub fn read_index(path: &Path) -> anyhow::Result<(IndexHeader, Vec<Vec<f32>>, Ve
         );
     }
 
-    // 4. Convert raw bytes to Vec<Vec<f32>>
     let mut vectors: Vec<Vec<f32>> = Vec::with_capacity(header.chunk_count);
     for chunk in raw_bytes.chunks_exact(header.embedding_dims * 4) {
         let mut vec: Vec<f32> = Vec::with_capacity(header.embedding_dims);
         for window in chunk.chunks_exact(4) {
-            let arr: [u8; 4] = window.try_into().unwrap(); // safe: chunks_exact(4)
+            let arr: [u8; 4] = window.try_into().unwrap();
             vec.push(f32::from_le_bytes(arr));
         }
         vectors.push(vec);
     }
 
-    // 5. Deserialize metadata
     let metadata_path = path.join("metadata.json");
     let metadata_bytes = std::fs::read(&metadata_path)
         .map_err(|e| anyhow::anyhow!("Failed to read '{}': {}", metadata_path.display(), e))?;
     let metadata: Vec<ChunkMetadata> = serde_json::from_slice(&metadata_bytes)
         .map_err(|e| anyhow::anyhow!("Failed to parse '{}': {}", metadata_path.display(), e))?;
 
-    // 6. Cross-validate counts
     if vectors.len() != header.chunk_count || metadata.len() != header.chunk_count {
         anyhow::bail!(
             "index consistency error: header.chunk_count = {}, vectors.len() = {}, metadata.len() = {}",
@@ -113,11 +98,10 @@ pub fn read_index(path: &Path) -> anyhow::Result<(IndexHeader, Vec<Vec<f32>>, Ve
         );
     }
 
-    Ok((header, vectors, metadata))
+    Ok(StoredIndex { header, vectors, metadata })
 }
 
 /// Write index into the given subdirectory (e.g. "file" or "git").
-/// The `subdir` is a relative directory name like "file" or "git".
 pub fn write_index_to(
     persist_path: &Path,
     subdir: &str,
@@ -128,53 +112,20 @@ pub fn write_index_to(
     write_index(&persist_path.join(subdir), header, vectors, metadata)
 }
 
-/// Read index from a subdirectory. Returns the header, vectors, metadata.
+/// Read index from a subdirectory. Returns `StoredIndex`.
 pub fn read_subdir(
     persist_path: &Path,
     subdir: &str,
-) -> anyhow::Result<(IndexHeader, Vec<Vec<f32>>, Vec<ChunkMetadata>)> {
+) -> anyhow::Result<StoredIndex> {
     read_index(&persist_path.join(subdir))
-}
-
-/// Validate that an existing `IndexHeader` is compatible with the current
-/// `IndexConfig`.  Returns `Ok(())` if all fields match; otherwise returns an
-/// error with a descriptive message instructing the user to run `--rebuild`.
-pub fn validate_header(header: &IndexHeader, config: &IndexConfig) -> anyhow::Result<()> {
-    if header.schema_version != SCHEMA_VERSION {
-        anyhow::bail!(
-            "schema_version mismatch: expected {}, found {}. Run with --rebuild to re-index.",
-            SCHEMA_VERSION,
-            header.schema_version,
-        );
-    }
-    if header.embedding_model != config.embedding_model {
-        anyhow::bail!(
-            "embedding_model mismatch: config uses '{}', index was built with '{}'. Run with --rebuild to re-index.",
-            config.embedding_model,
-            header.embedding_model,
-        );
-    }
-    if header.chunk_size != config.chunk_size {
-        anyhow::bail!(
-            "chunk_size mismatch: config uses {}, index was built with {}. Run with --rebuild to re-index.",
-            config.chunk_size,
-            header.chunk_size,
-        );
-    }
-    if header.chunk_overlap != config.chunk_overlap {
-        anyhow::bail!(
-            "chunk_overlap mismatch: config uses {}, index was built with {}. Run with --rebuild to re-index.",
-            config.chunk_overlap,
-            header.chunk_overlap,
-        );
-    }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::index::ChunkKind;
+    use crate::config::IndexConfig;
+    use crate::index::schema::ChunkKind;
+    use crate::index::SCHEMA_VERSION;
 
     fn test_config() -> IndexConfig {
         IndexConfig {
@@ -200,69 +151,6 @@ mod tests {
         }
     }
 
-    // Test: validate_header — matching config → Ok
-    #[test]
-    fn test_validate_header_matching_config() {
-        let result = validate_header(&matching_header(), &test_config());
-        assert!(result.is_ok());
-    }
-
-    // Test: validate_header — model mismatch → error with both names
-    #[test]
-    fn test_validate_header_model_mismatch() {
-        let mut header = matching_header();
-        header.embedding_model = "old-model".to_string();
-
-        let result = validate_header(&header, &test_config());
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("test-model"));
-        assert!(msg.contains("old-model"));
-        assert!(msg.contains("--rebuild"));
-    }
-
-    // Test: validate_header — chunk_size mismatch → error
-    #[test]
-    fn test_validate_header_chunk_size_mismatch() {
-        let mut header = matching_header();
-        header.chunk_size = 128;
-
-        let result = validate_header(&header, &test_config());
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("256"));
-        assert!(msg.contains("128"));
-        assert!(msg.contains("--rebuild"));
-    }
-
-    // Test: validate_header — chunk_overlap mismatch → error
-    #[test]
-    fn test_validate_header_chunk_overlap_mismatch() {
-        let mut header = matching_header();
-        header.chunk_overlap = 16;
-
-        let result = validate_header(&header, &test_config());
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("32"));
-        assert!(msg.contains("16"));
-        assert!(msg.contains("--rebuild"));
-    }
-
-    // Test: validate_header — schema_version mismatch
-    #[test]
-    fn test_validate_header_schema_version_mismatch() {
-        let mut header = matching_header();
-        header.schema_version = 999;
-
-        let result = validate_header(&header, &test_config());
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("schema_version mismatch"));
-        assert!(msg.contains("--rebuild"));
-    }
-
-    // Test: write + read round-trip
     #[test]
     fn test_write_read_roundtrip() {
         let temp_dir = std::env::temp_dir().join("docent_test_roundtrip");
@@ -318,19 +206,17 @@ mod tests {
 
         write_index(&temp_dir, &header, &vectors, &metadata).unwrap();
 
-        // Verify vectors.bin file size
         let vectors_meta = std::fs::metadata(temp_dir.join("vectors.bin")).unwrap();
-        assert_eq!(vectors_meta.len(), 3 * 4 * 4); // chunk_count * dims * 4
+        assert_eq!(vectors_meta.len(), 3 * 4 * 4);
 
-        let (read_header, read_vectors, read_metadata) = read_index(&temp_dir).unwrap();
-        assert_eq!(read_header, header);
-        assert_eq!(read_vectors, vectors);
-        assert_eq!(read_metadata, metadata);
+        let stored = read_index(&temp_dir).unwrap();
+        assert_eq!(stored.header, header);
+        assert_eq!(stored.vectors, vectors);
+        assert_eq!(stored.metadata, metadata);
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
-    // Test: vectors.bin exact byte count
     #[test]
     fn test_vectors_bin_exact_byte_count() {
         let temp_dir = std::env::temp_dir().join("docent_test_byte_count");
@@ -395,7 +281,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
-    // Test: read from nonexistent path → error
     #[test]
     fn test_read_index_nonexistent_path() {
         let path = Path::new("/nonexistent/docent_test_no_such_index");
@@ -406,7 +291,6 @@ mod tests {
         assert!(msg.contains("/nonexistent/docent_test_no_such_index"));
     }
 
-    // Test: read from directory with no header.json → error
     #[test]
     fn test_read_index_empty_directory() {
         let temp_dir = std::env::temp_dir().join("docent_test_empty_dir");
@@ -421,7 +305,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
-    // Test: corrupted vectors.bin (truncated)
     #[test]
     fn test_read_index_corrupted_truncated_vectors() {
         let temp_dir = std::env::temp_dir().join("docent_test_truncated");
@@ -470,27 +353,24 @@ mod tests {
             },
         ];
 
-        // Write header and metadata
         std::fs::create_dir_all(&temp_dir).unwrap();
         let header_json = serde_json::to_string_pretty(&header).unwrap();
         std::fs::write(temp_dir.join("header.json"), &header_json).unwrap();
         let metadata_json = serde_json::to_vec(&metadata).unwrap();
         std::fs::write(temp_dir.join("metadata.json"), &metadata_json).unwrap();
 
-        // Write truncated vectors.bin (only 8 bytes instead of 48)
         std::fs::write(temp_dir.join("vectors.bin"), &[0u8; 8]).unwrap();
 
         let result = read_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("corrupted"));
-        assert!(msg.contains("48")); // expected bytes
-        assert!(msg.contains("8")); // actual bytes
+        assert!(msg.contains("48"));
+        assert!(msg.contains("8"));
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
-    // Test: corrupted vectors.bin (extra bytes)
     #[test]
     fn test_read_index_corrupted_extra_bytes() {
         let temp_dir = std::env::temp_dir().join("docent_test_extra_bytes");
@@ -545,7 +425,6 @@ mod tests {
         let metadata_json = serde_json::to_vec(&metadata).unwrap();
         std::fs::write(temp_dir.join("metadata.json"), &metadata_json).unwrap();
 
-        // Write extra bytes (60 instead of 48)
         std::fs::write(temp_dir.join("vectors.bin"), &[0u8; 60]).unwrap();
 
         let result = read_index(&temp_dir);
@@ -556,19 +435,17 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
-    // Test: metadata count mismatch with header.chunk_count
     #[test]
     fn test_read_index_metadata_count_mismatch() {
         let temp_dir = std::env::temp_dir().join("docent_test_meta_mismatch");
         let _ = std::fs::remove_dir_all(&temp_dir);
 
-        let header = matching_header(); // chunk_count = 3
+        let header = matching_header();
         let vectors = vec![
             vec![1.0, 2.0, 3.0, 4.0],
             vec![5.0, 6.0, 7.0, 8.0],
             vec![9.0, 10.0, 11.0, 12.0],
         ];
-        // Only 2 metadata entries
         let metadata = vec![
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -610,7 +487,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
-    // Test: vector count mismatch with header.chunk_count
     #[test]
     fn test_read_index_vector_count_mismatch() {
         let temp_dir = std::env::temp_dir().join("docent_test_vec_mismatch");
@@ -698,7 +574,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
-    // Test: missing metadata.json
     #[test]
     fn test_read_index_missing_metadata() {
         let temp_dir = std::env::temp_dir().join("docent_test_missing_meta");
@@ -731,7 +606,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
-    // Test: missing vectors.bin
     #[test]
     fn test_read_index_missing_vectors() {
         let temp_dir = std::env::temp_dir().join("docent_test_missing_vectors");
@@ -794,7 +668,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
-    // Test: empty index (chunk_count = 0)
     #[test]
     fn test_read_index_empty() {
         let temp_dir = std::env::temp_dir().join("docent_test_empty_index");
@@ -816,15 +689,14 @@ mod tests {
 
         write_index(&temp_dir, &header, &vectors, &metadata).unwrap();
 
-        let (read_header, read_vectors, read_metadata) = read_index(&temp_dir).unwrap();
-        assert_eq!(read_header, header);
-        assert!(read_vectors.is_empty());
-        assert!(read_metadata.is_empty());
+        let stored = read_index(&temp_dir).unwrap();
+        assert_eq!(stored.header, header);
+        assert!(stored.vectors.is_empty());
+        assert!(stored.metadata.is_empty());
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
-    // Test: header.json with invalid JSON
     #[test]
     fn test_read_index_invalid_json_header() {
         let temp_dir = std::env::temp_dir().join("docent_test_invalid_json");
@@ -841,7 +713,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
-    // Test: write_index creates parent directories
     #[test]
     fn test_write_index_creates_parent_dirs() {
         let temp_dir = std::env::temp_dir().join("docent_test_nested_dirs");
@@ -885,7 +756,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
-    // Test: write_index_to and read_subdir helpers round-trip
     #[test]
     fn test_write_index_to_and_read_subdir_roundtrip() {
         let temp_dir = std::env::temp_dir().join("docent_test_subdir_roundtrip");
@@ -920,10 +790,10 @@ mod tests {
         write_index_to(&temp_dir, "file", &header, &vectors, &metadata).unwrap();
         assert!(temp_dir.join("file").join("header.json").exists());
 
-        let (read_header, read_vectors, read_metadata) = read_subdir(&temp_dir, "file").unwrap();
-        assert_eq!(read_header, header);
-        assert_eq!(read_vectors, vectors);
-        assert_eq!(read_metadata, metadata);
+        let stored = read_subdir(&temp_dir, "file").unwrap();
+        assert_eq!(stored.header, header);
+        assert_eq!(stored.vectors, vectors);
+        assert_eq!(stored.metadata, metadata);
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

@@ -5,6 +5,14 @@ use serde::{Deserialize, Serialize};
 /// in a backward-incompatible way.
 pub const SCHEMA_VERSION: u32 = 5;
 
+/// In-memory representation of an index loaded from disk.
+#[derive(Debug)]
+pub(crate) struct StoredIndex {
+    pub header: IndexHeader,
+    pub vectors: Vec<Vec<f32>>,
+    pub metadata: Vec<ChunkMetadata>,
+}
+
 /// Kind of source document for a chunk.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
