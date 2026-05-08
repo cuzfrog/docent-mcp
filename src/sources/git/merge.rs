@@ -9,29 +9,24 @@ pub fn merge_git_incremental(
     new_docs: &[GitDocument],
     new_metadata: &[ChunkMetadata],
     new_vectors: &[Vec<f32>],
-) -> crate::indexing::IndexedBatch {
-    let mut seen = std::collections::HashSet::new();
-    let mut all_docs: Vec<GitDocument> = new_docs.to_vec();
+) -> crate::indexing::MergedBatch {
+    let mut pairs: Vec<(&str, &str)> = Vec::new();
+
+    for doc in new_docs {
+        pairs.push((doc.file_path.as_str(), doc.commit_hash.as_str()));
+    }
     for m in old_metadata {
         if m.kind == ChunkKind::Git {
-            let key = (m.source_path.clone(), m.source_revision.clone());
-            if seen.insert(key) {
-                all_docs.push(GitDocument {
-                    commit_hash: m.source_revision.clone(),
-                    title: m.title.clone(),
-                    file_path: m.source_path.clone(),
-                    diff: String::new(),
-                    author_date: m.modified_at.clone().unwrap_or_default(),
-                });
-            }
+            pairs.push((m.source_path.as_str(), m.source_revision.as_str()));
         }
     }
 
-    let freshness = crate::sources::git::freshness::compute_freshness(&all_docs);
-    let fresh_map: HashMap<(String, String), bool> = all_docs
+    let freshness =
+        crate::sources::git::freshness::compute_freshness_from_pairs(&pairs);
+    let fresh_map: HashMap<(&str, &str), bool> = pairs
         .iter()
         .zip(freshness.iter())
-        .map(|(d, f)| ((d.file_path.clone(), d.commit_hash.clone()), *f))
+        .map(|(&pair, &f)| (pair, f))
         .collect();
 
     let mut combined_vectors = old_vectors.to_vec();
@@ -42,15 +37,13 @@ pub fn merge_git_incremental(
     for m in &mut combined_metadata {
         if m.kind == ChunkKind::Git {
             m.is_fresh = fresh_map
-                .get(&(m.source_path.clone(), m.source_revision.clone()))
+                .get(&(m.source_path.as_str(), m.source_revision.as_str()))
                 .copied();
         }
     }
 
-    crate::indexing::IndexedBatch {
+    crate::indexing::MergedBatch {
         vectors: combined_vectors,
         metadata: combined_metadata,
-        chunk_time: std::time::Duration::default(),
-        embed_time: std::time::Duration::default(),
     }
 }

@@ -1,15 +1,16 @@
 use std::collections::HashMap;
+use std::path::Path;
 use std::path::PathBuf;
 
 use crate::cli::IndexArgs;
-use crate::config::Config;
+use crate::config::{Config, GitConfig};
 use crate::index::{self, IndexRepository, SourceIndexKind};
 use crate::indexing;
 use crate::indexing::create_embedder;
-use crate::progress::Progress;
+use crate::support::progress::Progress;
 use crate::sources::file;
 use crate::sources::git;
-use crate::terminal;
+use crate::support::terminal;
 
 fn warn_if_exceeds_limit(estimated_mb: u64, max_size_mb: u64, advice: &str) -> anyhow::Result<bool> {
     if estimated_mb > max_size_mb {
@@ -59,11 +60,9 @@ fn run_rebuild_file(config: &Config, input_root: &std::path::Path, verbose: bool
     let doc_count = batch.metadata.iter().map(|m| &m.source_path[..]).collect::<std::collections::HashSet<_>>().len();
 
     println!(
-        "File index written: {} chunks from {} docs (chunk: {:.1}s, embed: {:.1}s)",
+        "File index written: {} chunks from {} docs",
         batch.metadata.len(),
         doc_count,
-        batch.chunk_time.as_secs_f64(),
-        batch.embed_time.as_secs_f64(),
     );
 
     Ok(())
@@ -134,11 +133,9 @@ fn run_incremental_file(config: &Config, input_root: &std::path::Path, verbose: 
     let doc_count = merged.metadata.iter().map(|m| &m.source_path[..]).collect::<std::collections::HashSet<_>>().len();
 
     println!(
-        "File index updated: {} chunks from {} docs (chunk: {:.1}s, embed: {:.1}s)",
+        "File index updated: {} chunks from {} docs",
         merged.metadata.len(),
         doc_count,
-        batch.chunk_time.as_secs_f64(),
-        batch.embed_time.as_secs_f64(),
     );
 
     Ok(())
@@ -162,6 +159,22 @@ pub fn run_index_file(args: IndexArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn check_git_index_size(
+    repo_path: &Path,
+    git_config: &GitConfig,
+    dims: usize,
+    max_size_mb: u64,
+    since_commit: Option<&str>,
+) -> anyhow::Result<()> {
+    let total = git::estimate_commit_count(repo_path, git_config, since_commit)?;
+    let estimated_mb = git::estimate_git_index_size(total, dims) / (1024 * 1024);
+    let advice = "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml".to_string();
+    if !warn_if_exceeds_limit(estimated_mb, max_size_mb, &advice)? {
+        anyhow::bail!("Aborted due to size limit");
+    }
+    Ok(())
+}
+
 pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
     let config = Config::load(&args.config)?;
     let verbose = args.verbose;
@@ -181,13 +194,9 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
     let dims = crate::embedder::Embedder::dims_for_model(&config.index.embedding_model)?;
 
     if args.rebuild || !IndexRepository::exists(&persist_path, SourceIndexKind::Git) {
-        let total_commits = git::estimate_commit_count(&repo_path, git_config, None)?;
-        let estimated_mb = git::estimate_git_index_size(total_commits, dims) / (1024 * 1024);
-        let advice = "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml".to_string();
-        if !warn_if_exceeds_limit(estimated_mb, config.index.max_size_mb, &advice)? {
-            return Ok(());
-        }
+        check_git_index_size(&repo_path, git_config, dims, config.index.max_size_mb, None)?;
 
+        let total_commits = git::estimate_commit_count(&repo_path, git_config, None)?;
         let pb1 = Progress::new(total_commits as u64, "Walking commits", verbose);
         let t1 = std::time::Instant::now();
         let docs = git::index_git_history(&repo_path, git_config, None, true, verbose, Some(&pb1))?;
@@ -230,13 +239,9 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
         let old_metadata = stored.metadata;
         let last_commit = old_header.last_indexed_commit.clone();
 
-        let total_new = git::estimate_commit_count(&repo_path, git_config, last_commit.as_deref())?;
-        let estimated_mb = git::estimate_git_index_size(total_new, dims) / (1024 * 1024);
-        let advice = "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml".to_string();
-        if !warn_if_exceeds_limit(estimated_mb, config.index.max_size_mb, &advice)? {
-            return Ok(());
-        }
+        check_git_index_size(&repo_path, git_config, dims, config.index.max_size_mb, last_commit.as_deref())?;
 
+        let total_new = git::estimate_commit_count(&repo_path, git_config, last_commit.as_deref())?;
         let pb1 = Progress::new(total_new as u64, "Walking commits", verbose);
         let t1 = std::time::Instant::now();
         let new_docs = git::index_git_history(

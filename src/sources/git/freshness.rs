@@ -1,23 +1,23 @@
 use crate::sources::git::extract::GitDocument;
 use std::collections::HashMap;
 
-pub fn compute_freshness(documents: &[GitDocument]) -> Vec<bool> {
+pub(crate) fn compute_freshness_from_pairs(pairs: &[(&str, &str)]) -> Vec<bool> {
     let mut latest_for_file: HashMap<&str, &str> = HashMap::new();
-    for doc in documents {
-        latest_for_file
-            .entry(doc.file_path.as_str())
-            .or_insert(doc.commit_hash.as_str());
+    for (file_path, commit_hash) in pairs {
+        latest_for_file.entry(file_path).or_insert(commit_hash);
     }
-
-    documents
+    pairs
         .iter()
-        .map(|doc| {
-            latest_for_file
-                .get(doc.file_path.as_str())
-                .map(|&latest| latest == doc.commit_hash.as_str())
-                .unwrap_or(false)
-        })
+        .map(|(file_path, commit_hash)| latest_for_file.get(file_path) == Some(commit_hash))
         .collect()
+}
+
+pub fn compute_freshness(documents: &[GitDocument]) -> Vec<bool> {
+    let pairs: Vec<(&str, &str)> = documents
+        .iter()
+        .map(|d| (d.file_path.as_str(), d.commit_hash.as_str()))
+        .collect();
+    compute_freshness_from_pairs(&pairs)
 }
 
 #[cfg(test)]

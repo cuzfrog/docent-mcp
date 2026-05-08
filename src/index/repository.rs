@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::config::IndexConfig;
 use crate::index::schema::ChunkMetadata;
-use crate::index::storage::{read_index, write_index};
+use crate::index::storage::{dir_size, read_index, write_index};
 use crate::index::build_header;
 use crate::index::validate_header;
 
@@ -24,6 +24,12 @@ pub(crate) struct MergedIndex {
     pub vectors: Vec<Vec<f32>>,
     pub metadata: Vec<ChunkMetadata>,
     pub built_at: String,
+}
+
+pub(crate) struct IndexSizeInfo {
+    pub total_bytes: u64,
+    pub file_bytes: u64,
+    pub git_bytes: u64,
 }
 
 pub(crate) struct IndexRepository;
@@ -48,6 +54,26 @@ impl IndexRepository {
 
     pub fn exists(persist_path: &Path, kind: SourceIndexKind) -> bool {
         persist_path.join(kind.subdir()).join("header.json").exists()
+    }
+
+    pub fn check_size(persist_path: &Path, max_size_mb: u64) -> anyhow::Result<Option<IndexSizeInfo>> {
+        let total_size = dir_size(persist_path);
+        let max_bytes = max_size_mb * 1024 * 1024;
+        if total_size > max_bytes {
+            let file_bytes = if persist_path.join("file").exists() {
+                dir_size(&persist_path.join("file"))
+            } else {
+                0
+            };
+            let git_bytes = if persist_path.join("git").exists() {
+                dir_size(&persist_path.join("git"))
+            } else {
+                0
+            };
+            Ok(Some(IndexSizeInfo { total_bytes: total_size, file_bytes, git_bytes }))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn load_merged_for_serve(
@@ -144,69 +170,5 @@ impl IndexRepository {
         })
     }
 
-    #[allow(dead_code)]
-    pub fn load_merged(
-        persist_path: &Path,
-    ) -> anyhow::Result<MergedIndex> {
-        let file_path = persist_path.join(SourceIndexKind::File.subdir()).join("header.json");
-        let git_path = persist_path.join(SourceIndexKind::Git.subdir()).join("header.json");
-        let file_exists = file_path.exists();
-        let git_exists = git_path.exists();
 
-        if !file_exists && !git_exists {
-            anyhow::bail!(
-                "No index found at '{}'. Run 'docent index-file' or 'docent index-git' first.",
-                persist_path.display()
-            );
-        }
-
-        let file_index = if file_exists {
-            Some(read_index(&persist_path.join(SourceIndexKind::File.subdir()))?)
-        } else {
-            None
-        };
-        let git_index = if git_exists {
-            Some(read_index(&persist_path.join(SourceIndexKind::Git.subdir()))?)
-        } else {
-            None
-        };
-
-        let all_vectors: Vec<Vec<f32>> = file_index
-            .as_ref()
-            .map(|s| s.vectors.clone())
-            .unwrap_or_default()
-            .into_iter()
-            .chain(
-                git_index
-                    .as_ref()
-                    .map(|s| s.vectors.clone())
-                    .unwrap_or_default(),
-            )
-            .collect();
-
-        let all_metadata: Vec<ChunkMetadata> = file_index
-            .as_ref()
-            .map(|s| s.metadata.clone())
-            .unwrap_or_default()
-            .into_iter()
-            .chain(
-                git_index
-                    .as_ref()
-                    .map(|s| s.metadata.clone())
-                    .unwrap_or_default(),
-            )
-            .collect();
-
-        let built_at = file_index
-            .as_ref()
-            .or(git_index.as_ref())
-            .map(|s| s.header.built_at.clone())
-            .unwrap_or_default();
-
-        Ok(MergedIndex {
-            vectors: all_vectors,
-            metadata: all_metadata,
-            built_at,
-        })
-    }
 }

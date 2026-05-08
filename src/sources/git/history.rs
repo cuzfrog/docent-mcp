@@ -1,5 +1,5 @@
 use crate::config::GitConfig;
-use crate::progress::Progress;
+use crate::support::progress::Progress;
 use chrono::{DateTime, Utc};
 use std::path::Path;
 

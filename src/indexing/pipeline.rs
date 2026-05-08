@@ -1,11 +1,9 @@
-use std::time::Duration;
-
 use crate::chunking::{self, ChunkingConfig, HuggingFaceTokenCounter};
 use crate::config::IndexConfig;
 use crate::embedder::Embedder;
 use crate::index::{ChunkMetadata};
 use crate::indexing::types::{IndexableDocument, IndexedBatch};
-use crate::progress::Progress;
+use crate::support::progress::Progress;
 
 pub(crate) fn index_documents(
     docs: &[IndexableDocument],
@@ -19,7 +17,6 @@ pub(crate) fn index_documents(
     };
     let counter = HuggingFaceTokenCounter::from_tokenizer(embedder.tokenizer());
 
-    let t1 = std::time::Instant::now();
     let mut all_chunk_texts: Vec<String> = Vec::new();
     let mut batch_metadata: Vec<ChunkMetadata> = Vec::new();
 
@@ -46,29 +43,22 @@ pub(crate) fn index_documents(
             p.tick_msg(&doc.source_path);
         }
     }
-    let chunk_time = t1.elapsed();
 
     if all_chunk_texts.is_empty() {
         return Ok(IndexedBatch {
             vectors: vec![],
             metadata: vec![],
-            chunk_time,
-            embed_time: Duration::from_secs(0),
         });
     }
 
-    let t2 = std::time::Instant::now();
     let text_refs: Vec<&str> = all_chunk_texts.iter().map(|s| s.as_str()).collect();
     let vectors = embedder
         .embed(&text_refs)
         .map_err(|e| anyhow::anyhow!("Embedding operation failed: {}", e))?;
-    let embed_time = t2.elapsed();
 
     Ok(IndexedBatch {
         vectors,
         metadata: batch_metadata,
-        chunk_time,
-        embed_time,
     })
 }
 

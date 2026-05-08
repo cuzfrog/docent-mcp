@@ -30,7 +30,7 @@ pub fn merge_incremental(
     unchanged_map: &HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>>,
     fresh_metadata: &[ChunkMetadata],
     fresh_vectors: &[Vec<f32>],
-) -> crate::indexing::IndexedBatch {
+) -> crate::indexing::MergedBatch {
     let mut fresh_map: HashMap<String, (usize, usize)> = HashMap::new();
     let mut i = 0;
     while i < fresh_metadata.len() {
@@ -76,11 +76,9 @@ pub fn merge_incremental(
         }
     }
 
-    crate::indexing::IndexedBatch {
+    crate::indexing::MergedBatch {
         vectors: all_vectors,
         metadata: all_metadata,
-        chunk_time: std::time::Duration::default(),
-        embed_time: std::time::Duration::default(),
     }
 }
 

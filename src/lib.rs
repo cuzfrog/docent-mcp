@@ -7,10 +7,9 @@ pub(crate) mod embedder;
 pub(crate) mod index;
 pub(crate) mod sources;
 pub(crate) mod indexing;
-pub(crate) mod mcp;
-pub(crate) mod progress;
+pub(crate) mod interfaces;
 pub(crate) mod search;
-pub(crate) mod terminal;
+pub(crate) mod support;
 pub(crate) mod ui;
 
 #[cfg(test)]
