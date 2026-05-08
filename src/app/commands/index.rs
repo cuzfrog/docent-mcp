@@ -3,11 +3,11 @@ use std::path::PathBuf;
 use crate::cli::IndexArgs;
 use crate::config::Config;
 use crate::embedder::Embedder;
-use crate::file_index;
-use crate::git_index;
 use crate::index::{self, build_header, IndexRepository, SourceIndexKind};
 use crate::indexing;
 use crate::progress::Progress;
+use crate::sources::file;
+use crate::sources::git;
 use crate::terminal;
 
 fn warn_if_exceeds_limit(estimated_mb: u64, max_size_mb: u64, advice: &str) -> anyhow::Result<bool> {
@@ -43,13 +43,13 @@ fn run_rebuild_file(config: &Config, input_root: &std::path::Path, verbose: bool
         }
     }
 
-    let all_files = file_index::discover_files(input_root)?;
+    let all_files = file::discover_files(input_root)?;
     println!("Scanning: {} files found", all_files.len());
 
     let mut embedder = Embedder::new(&config.index.embedding_model)?;
     let pb = Progress::new(all_files.len() as u64, "Indexing files", verbose);
 
-    let docs = file_index::prepare_files(&all_files, input_root)?;
+    let docs = file::prepare_files(&all_files, input_root)?;
     pb.finish();
 
     let batch = indexing::index_documents(&docs, &config.index, &mut embedder, None)?;
@@ -116,8 +116,8 @@ fn run_incremental_file(config: &Config, input_root: &std::path::Path, verbose: 
             }
         };
 
-    let all_files = file_index::discover_files(input_root)?;
-    let diff = file_index::diff_files(&all_files, &old_hashes, input_root)?;
+    let all_files = file::discover_files(input_root)?;
+    let diff = file::diff_files(&all_files, &old_hashes, input_root)?;
 
     println!(
         "Processing: {} new/changed, {} deleted, {} unchanged",
@@ -132,12 +132,12 @@ fn run_incremental_file(config: &Config, input_root: &std::path::Path, verbose: 
     }
 
     let pb = Progress::new(diff.to_index.len() as u64, "Indexing files", verbose);
-    let docs = file_index::prepare_files(&diff.to_index, input_root)?;
+    let docs = file::prepare_files(&diff.to_index, input_root)?;
     pb.finish();
 
     let batch = indexing::index_documents(&docs, &config.index, &mut embedder, None)?;
 
-    let (vectors, metadata) = file_index::merge_incremental(
+    let (vectors, metadata) = file::merge_incremental(
         &all_files,
         &old_chunks_by_path,
         &batch.metadata,
@@ -195,8 +195,8 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
     let dims = Embedder::dims_for_model(&config.index.embedding_model)?;
 
     if args.rebuild || !IndexRepository::exists(&persist_path, SourceIndexKind::Git) {
-        let total_commits = git_index::estimate_commit_count(&repo_path, git_config, None)?;
-        let estimated_mb = git_index::estimate_git_index_size(total_commits, dims) / (1024 * 1024);
+        let total_commits = git::estimate_commit_count(&repo_path, git_config, None)?;
+        let estimated_mb = git::estimate_git_index_size(total_commits, dims) / (1024 * 1024);
         let advice = "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml".to_string();
         if !warn_if_exceeds_limit(estimated_mb, config.index.max_size_mb, &advice)? {
             return Ok(());
@@ -204,7 +204,7 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
 
         let pb1 = Progress::new(total_commits as u64, "Walking commits", verbose);
         let t1 = std::time::Instant::now();
-        let docs = git_index::index_git_history(&repo_path, git_config, None, true, verbose, Some(&pb1))?;
+        let docs = git::index_git_history(&repo_path, git_config, None, true, verbose, Some(&pb1))?;
         pb1.finish();
         let walk_time = t1.elapsed();
 
@@ -213,14 +213,14 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
             return Ok(());
         }
 
-        let head_commit = git_index::resolve_head_commit(&repo_path, &git_config.branch)?;
+        let head_commit = git::resolve_head_commit(&repo_path, &git_config.branch)?;
         let total_docs = docs.len();
         let pb2 = Progress::new(total_docs as u64, "Embedding documents", verbose);
         let mut embedder = Embedder::new(&config.index.embedding_model)?;
         let t2 = std::time::Instant::now();
 
-        let freshness = git_index::compute_freshness(&docs);
-        let indexable = git_index::prepare_git_documents(&docs, &freshness);
+        let freshness = git::compute_freshness(&docs);
+        let indexable = git::prepare_git_documents(&docs, &freshness);
         let batch = indexing::index_documents(&indexable, &config.index, &mut embedder, Some(&pb2))?;
         pb2.finish();
         let embed_time = t2.elapsed();
@@ -249,8 +249,8 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
         let old_metadata = stored.metadata;
         let last_commit = old_header.last_indexed_commit.clone();
 
-        let total_new = git_index::estimate_commit_count(&repo_path, git_config, last_commit.as_deref())?;
-        let estimated_mb = git_index::estimate_git_index_size(total_new, dims) / (1024 * 1024);
+        let total_new = git::estimate_commit_count(&repo_path, git_config, last_commit.as_deref())?;
+        let estimated_mb = git::estimate_git_index_size(total_new, dims) / (1024 * 1024);
         let advice = "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml".to_string();
         if !warn_if_exceeds_limit(estimated_mb, config.index.max_size_mb, &advice)? {
             return Ok(());
@@ -258,7 +258,7 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
 
         let pb1 = Progress::new(total_new as u64, "Walking commits", verbose);
         let t1 = std::time::Instant::now();
-        let new_docs = git_index::index_git_history(
+        let new_docs = git::index_git_history(
             &repo_path, git_config, last_commit.as_deref(), false, verbose, Some(&pb1),
         )?;
         pb1.finish();
@@ -274,14 +274,14 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
         let mut embedder = Embedder::new(&config.index.embedding_model)?;
         let t2 = std::time::Instant::now();
 
-        let indexable = git_index::prepare_git_documents(&new_docs, &vec![true; new_docs.len()]);
+        let indexable = git::prepare_git_documents(&new_docs, &vec![true; new_docs.len()]);
         let batch = indexing::index_documents(&indexable, &config.index, &mut embedder, Some(&pb2))?;
         pb2.finish();
         let embed_time = t2.elapsed();
 
-        let head_commit = git_index::resolve_head_commit(&repo_path, &git_config.branch)?;
+        let head_commit = git::resolve_head_commit(&repo_path, &git_config.branch)?;
 
-        let (combined_vectors, combined_metadata) = git_index::merge_git_incremental(
+        let (combined_vectors, combined_metadata) = git::merge_git_incremental(
             &old_metadata, &old_vectors, &new_docs, &batch.metadata, &batch.vectors,
         );
 
