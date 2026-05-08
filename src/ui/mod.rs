@@ -1,40 +1,51 @@
-use axum::Router;
 use axum::response::IntoResponse;
+use axum::Router;
 use std::convert::Infallible;
 use tower::Service;
+
+/// Helper: return a static asset with a given content type.
+fn asset_response(
+    content_type: &'static str,
+    body: &'static str,
+) -> ([(axum::http::header::HeaderName, &'static str); 1], &'static str) {
+    ([(axum::http::header::CONTENT_TYPE, content_type)], body)
+}
 
 pub async fn handle_index() -> impl IntoResponse {
     axum::response::Html(include_str!("index.html"))
 }
 
-pub async fn handle_css() -> impl IntoResponse {
-    (
-        [(
-            axum::http::header::CONTENT_TYPE,
-            "text/css; charset=utf-8",
-        )],
-        include_str!("app.css"),
+async fn handle_css() -> impl IntoResponse {
+    asset_response("text/css; charset=utf-8", include_str!("app.css"))
+}
+
+async fn handle_js_app() -> impl IntoResponse {
+    asset_response(
+        "application/javascript; charset=utf-8",
+        include_str!("app.js"),
     )
 }
 
-macro_rules! js_handler {
-    ($name:ident, $file:expr) => {
-        pub async fn $name() -> impl IntoResponse {
-            (
-                [(
-                    axum::http::header::CONTENT_TYPE,
-                    "application/javascript; charset=utf-8",
-                )],
-                include_str!($file),
-            )
-        }
-    };
+async fn handle_js_mcp_client() -> impl IntoResponse {
+    asset_response(
+        "application/javascript; charset=utf-8",
+        include_str!("mcp_client.js"),
+    )
 }
 
-js_handler!(handle_js_app, "app.js");
-js_handler!(handle_js_mcp_client, "mcp_client.js");
-js_handler!(handle_js_search_api, "search_api.js");
-js_handler!(handle_js_view, "view.js");
+async fn handle_js_search_api() -> impl IntoResponse {
+    asset_response(
+        "application/javascript; charset=utf-8",
+        include_str!("search_api.js"),
+    )
+}
+
+async fn handle_js_view() -> impl IntoResponse {
+    asset_response(
+        "application/javascript; charset=utf-8",
+        include_str!("view.js"),
+    )
+}
 
 /// Build the HTTP router with UI static routes and the MCP endpoint.
 ///
@@ -52,10 +63,11 @@ where
             "/",
             axum::routing::get(handle_index).post_service(mcp_service.clone()),
         )
-        .route("/app.css", axum::routing::get(handle_css))
-        .route("/app.js", axum::routing::get(handle_js_app))
-        .route("/mcp_client.js", axum::routing::get(handle_js_mcp_client))
-        .route("/search_api.js", axum::routing::get(handle_js_search_api))
-        .route("/view.js", axum::routing::get(handle_js_view))
+        // UI assets under /ui/ namespace
+        .route("/ui/app.css", axum::routing::get(handle_css))
+        .route("/ui/app.js", axum::routing::get(handle_js_app))
+        .route("/ui/mcp_client.js", axum::routing::get(handle_js_mcp_client))
+        .route("/ui/search_api.js", axum::routing::get(handle_js_search_api))
+        .route("/ui/view.js", axum::routing::get(handle_js_view))
         .fallback_service(mcp_service)
 }
