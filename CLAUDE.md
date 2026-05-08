@@ -38,6 +38,7 @@ This applies to all dependencies, including python.
 - **Tests:** Each module has unit tests in a `#[cfg(test)] mod tests` block. Integration-style tests are under `src/tests/` (compiled as crate unit tests, avoiding separate integration-test link overhead). E2E tests are in `e2e-tests/`. E2E tests assume the binary is built and available.
 - **Naming:** Snake_case for files and functions. Types are PascalCase. Constants are UPPER_SNAKE_CASE.
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).
+- **No Dead Code** No `allow(dead_code)`. Remove unused code immediately to maintain codebase health.
 
 If any statement in this file is counter-intuitive or violate best practices, raise to me!
 Do you best to maintain code quality.
