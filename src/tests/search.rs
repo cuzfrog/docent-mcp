@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use crate::cli::IndexArgs;
 use crate::embedder::Embedder;
 use crate::index;
-use crate::index_cmd::run_index;
+use crate::app::commands::index::run_index_file;
 use crate::search::{SearchResult, VectorSearchService};
 
 fn make_temp_dir(name: &str) -> PathBuf {
@@ -121,7 +121,7 @@ loads data from the database and populates the cache for subsequent requests.
 
     let config_path = write_config(&base, &index_dir);
 
-    run_index(IndexArgs {
+    run_index_file(IndexArgs {
             file: docs_dir.clone(),
             config: config_path,
             rebuild: false,
