@@ -9,7 +9,7 @@ impl Progress {
     pub fn new(total: u64, label: &str, verbose: bool) -> Self {
         let pb = ProgressBar::new(total);
         let template: String = if verbose {
-            "  {wide_msg}  {pos}/{len}".to_string()
+            format!("  {{wide_msg}}  {label}: {{pos}}/{{len}}")
         } else {
             format!("  {label}: {{pos}}/{{len}} {{wide_bar}}")
         };
@@ -23,7 +23,7 @@ impl Progress {
 
     pub fn tick_msg(&self, msg: impl std::fmt::Display) {
         if self.verbose {
-            self.pb.set_message(msg.to_string());
+            self.pb.println(msg.to_string());
         }
         self.pb.inc(1);
     }
