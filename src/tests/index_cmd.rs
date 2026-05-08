@@ -55,10 +55,12 @@ fn test_fresh_index_on_directory() {
     let config_path = write_config(&base, &index_dir);
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path,
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path,
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 
@@ -93,10 +95,12 @@ fn test_incremental_no_changes() {
     let config_path = write_config(&base, &index_dir);
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path.clone(),
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path.clone(),
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 
@@ -108,10 +112,12 @@ fn test_incremental_no_changes() {
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path,
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path,
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 
@@ -138,10 +144,12 @@ fn test_incremental_one_file_modified() {
     let config_path = write_config(&base, &index_dir);
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path.clone(),
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path.clone(),
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 
@@ -168,10 +176,12 @@ fn test_incremental_one_file_modified() {
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path,
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path,
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 
@@ -215,10 +225,12 @@ fn test_incremental_file_deleted() {
     let config_path = write_config(&base, &index_dir);
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path.clone(),
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path.clone(),
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 
@@ -226,10 +238,12 @@ fn test_incremental_file_deleted() {
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path,
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path,
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 
@@ -256,10 +270,12 @@ fn test_incremental_file_added() {
     let config_path = write_config(&base, &index_dir);
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path.clone(),
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path.clone(),
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 
@@ -267,10 +283,12 @@ fn test_incremental_file_added() {
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path,
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path,
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 
@@ -297,10 +315,12 @@ fn test_rebuild_overwrites() {
     let config_path = write_config(&base, &index_dir);
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path.clone(),
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path.clone(),
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 
@@ -309,10 +329,12 @@ fn test_rebuild_overwrites() {
     std::fs::remove_dir_all(&index_dir).unwrap();
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path,
-        rebuild: true,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path,
+            rebuild: true,
+            verbose: false,
+        },
     })
     .unwrap();
 
@@ -342,10 +364,12 @@ fn test_empty_directory_produces_empty_index() {
     let config_path = write_config(&base, &index_dir);
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path,
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path,
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 
@@ -374,10 +398,12 @@ fn test_binary_file_skipped() {
     let config_path = write_config(&base, &index_dir);
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path,
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path,
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 
@@ -410,10 +436,12 @@ chunk_overlap = 64
     std::fs::write(&config_path1, content1).unwrap();
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path1.clone(),
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path1.clone(),
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 
@@ -438,10 +466,12 @@ chunk_overlap = 32
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path2,
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path2,
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 

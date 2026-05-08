@@ -1,16 +1,7 @@
-#![allow(dead_code)]
-
 use serde::Serialize;
 
 use crate::embedder::Embedder;
 use crate::index::ChunkMetadata;
-
-/// A search request. The `limit` field is clamped to [1, 10] by `search()`.
-/// Default is 3 when `limit == 0`.
-pub struct SearchRequest {
-    pub query: String,
-    pub limit: usize,
-}
 
 /// A ranked search result for a single source document.
 #[derive(Debug, Serialize)]

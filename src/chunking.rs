@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::document::Document;
 
 // ---------------------------------------------------------------------------
@@ -91,44 +89,6 @@ impl HuggingFaceTokenCounter {
         Self { tokenizer }
     }
 
-    /// Create a new instance by loading the tokenizer from the model cache.
-    ///
-    /// The tokenizer file is expected at:
-    /// `~/.cache/docent/models/<model_name>/tokenizer.json`
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - The home directory cannot be determined.
-    /// - The tokenizer file does not exist (model not yet downloaded).
-    /// - The tokenizer file exists but cannot be parsed.
-    pub fn new(model_name: &str) -> anyhow::Result<Self> {
-        let home = dirs_next::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
-        let tokenizer_path = home
-            .join(".cache")
-            .join("docent")
-            .join("models")
-            .join(model_name)
-            .join("tokenizer.json");
-
-        if !tokenizer_path.exists() {
-            anyhow::bail!(
-                "Tokenizer file not found at '{}'. The embedding model may need to be downloaded first.",
-                tokenizer_path.display()
-            );
-        }
-
-        let tokenizer = tokenizers::Tokenizer::from_file(&tokenizer_path).map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to load tokenizer from '{}': {}",
-                tokenizer_path.display(),
-                e
-            )
-        })?;
-
-        Ok(Self { tokenizer })
-    }
 }
 
 impl TokenCounter for HuggingFaceTokenCounter {
@@ -192,6 +152,23 @@ fn split_into_sections(body: &str) -> Vec<(Option<String>, String, usize)> {
     let mut current_body_start: usize = 0;
     let mut byte_cursor: usize = 0;
 
+    let mut flush_section = |heading: &mut Option<String>,
+                             body: &mut String,
+                             body_start: &mut usize| {
+        let trimmed = body.trim().to_string();
+        if !trimmed.is_empty() {
+            let skip = if let Some(ref h) = heading {
+                trimmed == format!("## {}", h) || trimmed == format!("### {}", h)
+            } else {
+                false
+            };
+            if !skip {
+                let leading_ws = body.len() - body.trim_start().len();
+                sections.push((heading.take(), trimmed, *body_start + leading_ws));
+            }
+        }
+    };
+
     for line in body.lines() {
         let line_len = line.len();
         let is_heading = line
@@ -200,18 +177,7 @@ fn split_into_sections(body: &str) -> Vec<(Option<String>, String, usize)> {
             .or_else(|| line.strip_prefix("# "));
 
         if let Some(heading_text) = is_heading {
-            let trimmed = current_body.trim().to_string();
-            if !trimmed.is_empty() {
-                let skip = if let Some(ref h) = current_heading {
-                    trimmed == format!("## {}", h) || trimmed == format!("### {}", h)
-                } else {
-                    false
-                };
-                if !skip {
-                    let leading_ws = current_body.len() - current_body.trim_start().len();
-                    sections.push((current_heading.take(), trimmed, current_body_start + leading_ws));
-                }
-            }
+            flush_section(&mut current_heading, &mut current_body, &mut current_body_start);
             current_heading = Some(heading_text.to_string());
             current_body = line.to_string();
             current_body_start = byte_cursor;
@@ -225,18 +191,7 @@ fn split_into_sections(body: &str) -> Vec<(Option<String>, String, usize)> {
         byte_cursor += line_len + 1;
     }
 
-    let trimmed = current_body.trim().to_string();
-    if !trimmed.is_empty() {
-        let skip = if let Some(ref h) = current_heading {
-            trimmed == format!("## {}", h) || trimmed == format!("### {}", h)
-        } else {
-            false
-        };
-        if !skip {
-            let leading_ws = current_body.len() - current_body.trim_start().len();
-            sections.push((current_heading.take(), trimmed, current_body_start + leading_ws));
-        }
-    }
+    flush_section(&mut current_heading, &mut current_body, &mut current_body_start);
 
     sections
 }

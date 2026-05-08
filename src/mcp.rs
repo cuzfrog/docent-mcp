@@ -10,7 +10,7 @@ use serde::Deserialize;
 
 use crate::config::Config;
 use crate::embedder::Embedder;
-use crate::index::{ChunkMetadata, IndexHeader};
+use crate::index::ChunkMetadata;
 use crate::search;
 
 /// Parameters for the `search_ddr` tool.
@@ -29,12 +29,9 @@ fn default_limit() -> u8 {
 
 /// Shared server state accessible to all MCP tool handlers.
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct DocentMcpServer {
     /// Application configuration (read-only).
     pub config: Config,
-    /// Index header from the on-disk index (prefers file/ over git/).
-    pub index_header: IndexHeader,
     /// All chunk vectors loaded from the index.
     pub vectors: Arc<Vec<Vec<f32>>>,
     /// All chunk metadata loaded from the index (1:1 with `vectors`).
@@ -175,17 +172,6 @@ mod tests {
         // Verify Clone compiles and doesn't deep-copy Arc data
         let _server = DocentMcpServer {
             config: crate::config::Config::default(),
-            index_header: crate::index::IndexHeader {
-                schema_version: crate::index::SCHEMA_VERSION,
-                embedding_model: "test".into(),
-                embedding_dims: 4,
-                chunk_size: 256,
-                chunk_overlap: 32,
-                built_at: "2026-01-01T00:00:00Z".into(),
-                doc_count: 0,
-                chunk_count: 0,
-                last_indexed_commit: None,
-            },
             vectors: Arc::new(vec![]),
             metadata: Arc::new(vec![]),
             embedder: Arc::new(Mutex::new(

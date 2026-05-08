@@ -25,42 +25,37 @@ pub enum Commands {
     ListModels,
 }
 
-/// Arguments for the `index-file` subcommand.
+/// Shared fields for `index-file` and `index-git` subcommands.
 #[derive(clap::Args)]
-pub struct IndexFileArgs {
-    /// Path to a file or directory to index (required).
+pub struct CommonIndexArgs {
+    /// Path to a file or directory (for index-file) or a git repository (for index-git).
     pub file: PathBuf,
 
     /// Path to config file (default: ./config.toml).
     #[arg(long, default_value = "./config.toml")]
     pub config: PathBuf,
 
-    /// Wipe existing index and re-embed everything from scratch.
+    /// Re-index from scratch (instead of incremental).
     #[arg(long)]
     pub rebuild: bool,
 
-    /// Show individual file paths as they are indexed.
+    /// Show detailed progress output.
     #[arg(long)]
     pub verbose: bool,
+}
+
+/// Arguments for the `index-file` subcommand.
+#[derive(clap::Args)]
+pub struct IndexFileArgs {
+    #[command(flatten)]
+    pub inner: CommonIndexArgs,
 }
 
 /// Arguments for the `index-git` subcommand.
 #[derive(clap::Args)]
 pub struct IndexGitArgs {
-    /// Path to a git repository (must contain .git).
-    pub file: PathBuf,
-
-    /// Path to config file (default: ./config.toml).
-    #[arg(long, default_value = "./config.toml")]
-    pub config: PathBuf,
-
-    /// Re-index full git history from scratch.
-    #[arg(long)]
-    pub rebuild: bool,
-
-    /// Show individual commits as they are indexed.
-    #[arg(long)]
-    pub verbose: bool,
+    #[command(flatten)]
+    pub inner: CommonIndexArgs,
 }
 
 /// Arguments for the `serve` subcommand.
@@ -83,9 +78,9 @@ mod tests {
         let cli = cli.unwrap();
         match cli.command {
             Commands::IndexFile(args) => {
-                assert_eq!(args.file, std::path::PathBuf::from("./ddrs"));
-                assert_eq!(args.config, std::path::PathBuf::from("./config.toml"));
-                assert!(!args.rebuild);
+                assert_eq!(args.inner.file, std::path::PathBuf::from("./ddrs"));
+                assert_eq!(args.inner.config, std::path::PathBuf::from("./config.toml"));
+                assert!(!args.inner.rebuild);
             }
             _ => panic!("expected IndexFile command"),
         }
@@ -99,8 +94,8 @@ mod tests {
         let cli = cli.unwrap();
         match cli.command {
             Commands::IndexFile(args) => {
-                assert_eq!(args.file, std::path::PathBuf::from("./ddrs"));
-                assert_eq!(args.config, std::path::PathBuf::from("/etc/docent.toml"));
+                assert_eq!(args.inner.file, std::path::PathBuf::from("./ddrs"));
+                assert_eq!(args.inner.config, std::path::PathBuf::from("/etc/docent.toml"));
             }
             _ => panic!("expected IndexFile command"),
         }
@@ -113,8 +108,8 @@ mod tests {
         let cli = cli.unwrap();
         match cli.command {
             Commands::IndexFile(args) => {
-                assert_eq!(args.file, std::path::PathBuf::from("./ddrs"));
-                assert!(args.rebuild);
+                assert_eq!(args.inner.file, std::path::PathBuf::from("./ddrs"));
+                assert!(args.inner.rebuild);
             }
             _ => panic!("expected IndexFile command"),
         }
@@ -134,9 +129,9 @@ mod tests {
         let cli = cli.unwrap();
         match cli.command {
             Commands::IndexFile(args) => {
-                assert_eq!(args.file, std::path::PathBuf::from("./ddrs"));
-                assert_eq!(args.config, std::path::PathBuf::from("custom.toml"));
-                assert!(args.rebuild);
+                assert_eq!(args.inner.file, std::path::PathBuf::from("./ddrs"));
+                assert_eq!(args.inner.config, std::path::PathBuf::from("custom.toml"));
+                assert!(args.inner.rebuild);
             }
             _ => panic!("expected IndexFile command"),
         }
@@ -149,7 +144,7 @@ mod tests {
         let cli = cli.unwrap();
         match cli.command {
             Commands::IndexFile(args) => {
-                assert!(args.verbose);
+                assert!(args.inner.verbose);
             }
             _ => panic!("expected IndexFile command"),
         }
@@ -168,10 +163,10 @@ mod tests {
         let cli = cli.unwrap();
         match cli.command {
             Commands::IndexGit(args) => {
-                assert_eq!(args.file, std::path::PathBuf::from("./my-repo"));
-                assert_eq!(args.config, std::path::PathBuf::from("./config.toml"));
-                assert!(!args.rebuild);
-                assert!(!args.verbose);
+                assert_eq!(args.inner.file, std::path::PathBuf::from("./my-repo"));
+                assert_eq!(args.inner.config, std::path::PathBuf::from("./config.toml"));
+                assert!(!args.inner.rebuild);
+                assert!(!args.inner.verbose);
             }
             _ => panic!("expected IndexGit command"),
         }
@@ -184,8 +179,8 @@ mod tests {
         let cli = cli.unwrap();
         match cli.command {
             Commands::IndexGit(args) => {
-                assert_eq!(args.file, std::path::PathBuf::from("./my-repo"));
-                assert!(args.rebuild);
+                assert_eq!(args.inner.file, std::path::PathBuf::from("./my-repo"));
+                assert!(args.inner.rebuild);
             }
             _ => panic!("expected IndexGit command"),
         }

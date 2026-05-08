@@ -120,10 +120,12 @@ loads data from the database and populates the cache for subsequent requests.
     let config_path = write_config(&base, &index_dir);
 
     run_index(IndexFileArgs {
-        file: docs_dir.clone(),
-        config: config_path,
-        rebuild: false,
-        verbose: false,
+        inner: crate::cli::CommonIndexArgs {
+            file: docs_dir.clone(),
+            config: config_path,
+            rebuild: false,
+            verbose: false,
+        },
     })
     .unwrap();
 

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -73,48 +71,55 @@ fn title_from_path(path: &Path) -> String {
 // ---------------------------------------------------------------------------
 
 fn extract_title_from_body(body: &str) -> Option<String> {
-    let mut best: Option<(u8, &str)> = None;
-
     for line in body.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
-        if let Some(text) = trimmed.strip_prefix("### ") {
-            if !text.is_empty() && best.map_or(true, |(lvl, _)| 3 < lvl) {
-                best = Some((3, text));
-            }
-        } else if let Some(text) = trimmed.strip_prefix("## ") {
-            if !text.is_empty() && best.map_or(true, |(lvl, _)| 2 < lvl) {
-                best = Some((2, text));
-            }
-        } else if let Some(text) = trimmed.strip_prefix("# ") {
-            if !text.is_empty() && best.map_or(true, |(lvl, _)| 1 < lvl) {
-                best = Some((1, text));
+        // H1 is the highest priority; if found, no need to continue.
+        if let Some(text) = trimmed.strip_prefix("# ") {
+            if !text.is_empty() {
+                return Some(text.to_string());
             }
         }
     }
 
-    best.map(|(_, text)| text.to_string())
+    // No H1 found; look for first H2, then H3 (lower level = higher priority).
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if let Some(text) = trimmed.strip_prefix("## ") {
+            if !text.is_empty() {
+                return Some(text.to_string());
+            }
+        }
+    }
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if let Some(text) = trimmed.strip_prefix("### ") {
+            if !text.is_empty() {
+                return Some(text.to_string());
+            }
+        }
+    }
+
+    None
 }
 
 // ---------------------------------------------------------------------------
 // load_document — read a text file from disk
 // ---------------------------------------------------------------------------
 
-pub fn load_document(source_path: &str) -> anyhow::Result<Document> {
+/// Create a `Document` from a pre-loaded string body, avoiding a second file read.
+pub fn load_document_from_str(source_path: &str, body: &str) -> Document {
     let path = Path::new(source_path);
-    let body = std::fs::read_to_string(path)
-        .map_err(|e| anyhow::anyhow!("Failed to read '{}': {}", source_path, e))?;
-
-    let title = extract_title_from_body(&body)
+    let title = extract_title_from_body(body)
         .unwrap_or_else(|| title_from_path(path));
 
-    Ok(Document::File(FileDocument {
+    Document::File(FileDocument {
         title,
-        body,
+        body: body.to_string(),
         source_path: source_path.to_string(),
-    }))
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -150,25 +155,19 @@ mod tests {
     }
 
     #[test]
-    fn test_load_text_file() {
-        let tmp = std::env::temp_dir().join("docent-test-load-text-file.txt");
-        std::fs::write(&tmp, "Hello, world!").unwrap();
-        let doc = load_document(tmp.to_str().unwrap()).unwrap();
-        assert_eq!(doc.title(), "docent test load text file");
+    fn test_load_document_from_str() {
+        let doc = load_document_from_str("/path/to/test-file.txt", "Hello, world!");
+        assert_eq!(doc.title(), "test file");
         assert_eq!(doc.body(), "Hello, world!");
-        assert_eq!(doc.source_id(), tmp.to_str().unwrap());
+        assert_eq!(doc.source_id(), "/path/to/test-file.txt");
         assert_eq!(doc.kind(), "file");
-        let _ = std::fs::remove_file(&tmp);
     }
 
     #[test]
-    fn test_load_empty_file() {
-        let tmp = std::env::temp_dir().join("docent-test-empty-file.md");
-        std::fs::write(&tmp, "").unwrap();
-        let doc = load_document(tmp.to_str().unwrap()).unwrap();
-        assert_eq!(doc.title(), "docent test empty file");
+    fn test_load_document_from_str_empty() {
+        let doc = load_document_from_str("/path/to/empty-file.md", "");
+        assert_eq!(doc.title(), "empty file");
         assert_eq!(doc.body(), "");
-        let _ = std::fs::remove_file(&tmp);
     }
 
     // -----------------------------------------------------------------------
@@ -235,10 +234,10 @@ mod tests {
     }
 
     #[test]
-    fn test_load_nonexistent_file() {
-        let result = load_document("/nonexistent/path/file.txt");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Failed to read"));
+    fn test_load_document_from_str_title_from_body() {
+        let doc = load_document_from_str("ignored-path.md", "# My Title\n\nContent");
+        assert_eq!(doc.title(), "My Title");
+        assert_eq!(doc.body(), "# My Title\n\nContent");
     }
 
     #[test]

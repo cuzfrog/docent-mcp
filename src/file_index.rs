@@ -123,18 +123,7 @@ pub fn index_files(
 
         pb1.tick_msg(&relative_path);
 
-        let source_hash = match hash_file(&full_path) {
-            Ok(h) => h,
-            Err(e) => {
-                eprintln!(
-                    "WARNING: skipping binary/unreadable file '{}': {}",
-                    relative_path, e
-                );
-                continue;
-            }
-        };
-
-        let _content = match std::fs::read_to_string(&full_path) {
+        let content = match std::fs::read_to_string(&full_path) {
             Ok(c) => c,
             Err(_) => {
                 eprintln!("WARNING: skipping binary/unreadable file '{}'", relative_path);
@@ -142,14 +131,9 @@ pub fn index_files(
             }
         };
 
-        let full_path_str = full_path.to_string_lossy().to_string();
-        let mut doc = match document::load_document(&full_path_str) {
-            Ok(d) => d,
-            Err(e) => {
-                eprintln!("WARNING: failed to read '{}': {}", relative_path, e);
-                continue;
-            }
-        };
+        let source_hash = format!("{:x}", Sha256::digest(content.as_bytes()));
+
+        let mut doc = document::load_document_from_str(&full_path.to_string_lossy(), &content);
 
         if let document::Document::File(ref mut file_doc) = doc {
             file_doc.source_path = relative_path.clone();

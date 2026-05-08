@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::config::GitConfig;
 use crate::document::GitDocument;
 use crate::progress::Progress;
@@ -30,6 +28,30 @@ fn matches_any_pattern(path: &str, patterns: &[String]) -> bool {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers: open_repo_and_branch, resolve_head_commit
+// ---------------------------------------------------------------------------
+
+/// Open a git repository and resolve the branch tip Oid.
+fn open_repo_and_branch(repo_path: &Path, branch: &str) -> anyhow::Result<(git2::Repository, git2::Oid)> {
+    let repo = git2::Repository::open(repo_path)
+        .map_err(|_| anyhow::anyhow!("not a Git repository"))?;
+    let oid = {
+        let branch_obj = repo
+            .find_branch(branch, git2::BranchType::Local)
+            .map_err(|_| anyhow::anyhow!("branch not found"))?;
+        let commit = branch_obj.get().peel_to_commit()?;
+        commit.id()
+    };
+    Ok((repo, oid))
+}
+
+/// Resolve the HEAD commit hash for a branch.
+pub fn resolve_head_commit(repo_path: &Path, branch: &str) -> anyhow::Result<String> {
+    let (_repo, oid) = open_repo_and_branch(repo_path, branch)?;
+    Ok(oid.to_string())
+}
+
+// ---------------------------------------------------------------------------
 // Core function: index_git_history
 // ---------------------------------------------------------------------------
 
@@ -45,19 +67,9 @@ pub fn index_git_history(
     verbose: bool,
     progress: Option<&Progress>,
 ) -> anyhow::Result<Vec<GitDocument>> {
-    // 1. Open repo
-    let repo = git2::Repository::open(repo_path)
-        .map_err(|_| anyhow::anyhow!("not a Git repository"))?;
-
-    // 2. Resolve branch
-    let branch = repo
-        .find_branch(&git_config.branch, git2::BranchType::Local)
-        .map_err(|_| anyhow::anyhow!("branch not found"))?;
-    let target_commit = branch.get().peel_to_commit()?;
-
-    // 3. Walk commits (newest first)
+    let (repo, tip_oid) = open_repo_and_branch(repo_path, &git_config.branch)?;
     let mut revwalk = repo.revwalk()?;
-    revwalk.push(target_commit.id())?;
+    revwalk.push(tip_oid)?;
     revwalk.set_sorting(git2::Sort::TIME)?;
 
     let mut documents: Vec<GitDocument> = Vec::new();
@@ -200,16 +212,9 @@ pub fn estimate_commit_count(
     git_config: &GitConfig,
     stop_commit: Option<&str>,
 ) -> anyhow::Result<usize> {
-    let repo = git2::Repository::open(repo_path)
-        .map_err(|_| anyhow::anyhow!("not a Git repository"))?;
-
-    let branch = repo
-        .find_branch(&git_config.branch, git2::BranchType::Local)
-        .map_err(|_| anyhow::anyhow!("branch not found"))?;
-    let target_commit = branch.get().peel_to_commit()?;
-
+    let (repo, tip_oid) = open_repo_and_branch(repo_path, &git_config.branch)?;
     let mut revwalk = repo.revwalk()?;
-    revwalk.push(target_commit.id())?;
+    revwalk.push(tip_oid)?;
     revwalk.set_sorting(git2::Sort::TIME)?;
 
     let mut count = 0;

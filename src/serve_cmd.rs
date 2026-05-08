@@ -162,17 +162,6 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
     // 9. Build DocentMcpServer with merged data + config
     let server = DocentMcpServer {
         config,
-        index_header: file_header.or(git_header).unwrap_or(index::IndexHeader {
-            schema_version: index::SCHEMA_VERSION,
-            embedding_model: String::new(),
-            embedding_dims: 0,
-            chunk_size: 0,
-            chunk_overlap: 0,
-            built_at: String::new(),
-            doc_count: 0,
-            chunk_count: 0,
-            last_indexed_commit: None,
-        }),
         vectors: Arc::new(all_vectors),
         metadata: Arc::new(all_metadata),
         embedder,
