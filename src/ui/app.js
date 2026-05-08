@@ -45,6 +45,7 @@ async function fetchAndRenderTools() {
 
 async function handleSearch(event) {
   event.preventDefault();
+  if (!state.connected) return;
 
   const query = view.elements.query.value.trim();
   if (!query) return;
