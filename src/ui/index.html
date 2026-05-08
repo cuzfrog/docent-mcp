@@ -54,14 +54,17 @@
 
     <div class="right-col">
       <section id="debug-section">
-        <div id="tool-info"></div>
-        <div id="raw-response">
-          <div class="raw-header">
-            <span>Raw MCP Response</span>
-            <button id="copy-raw">Copy</button>
+        <details>
+          <summary>Debug</summary>
+          <div id="tool-info"></div>
+          <div id="raw-response">
+            <div class="raw-header">
+              <span>Raw MCP Response</span>
+              <button id="copy-raw">Copy</button>
+            </div>
+            <pre id="raw-content"></pre>
           </div>
-          <pre id="raw-content"></pre>
-        </div>
+        </details>
       </section>
     </div>
   </main>
