@@ -1,5 +1,4 @@
-use crate::cli::IndexFileArgs;
-use crate::cli::IndexGitArgs;
+use crate::cli::IndexArgs;
 use crate::config::{Config, IndexConfig};
 use crate::document::GitDocument;
 use crate::embedder::Embedder;
@@ -273,19 +272,19 @@ fn run_incremental(config: &Config, input_root: &std::path::Path, verbose: bool)
 // Public entry point: run_index
 // ---------------------------------------------------------------------------
 
-pub fn run_index(args: IndexFileArgs) -> anyhow::Result<()> {
-    let config = Config::load(&args.inner.config)?;
-    let canonical = args.inner.file.canonicalize()?;
+pub fn run_index(args: IndexArgs) -> anyhow::Result<()> {
+    let config = Config::load(&args.config)?;
+    let canonical = args.file.canonicalize()?;
     let input_root = if canonical.is_file() {
         canonical.parent().unwrap_or(std::path::Path::new(".")).to_path_buf()
     } else {
         canonical
     };
 
-    if args.inner.rebuild {
-        run_rebuild(&config, &input_root, args.inner.verbose)?;
+    if args.rebuild {
+        run_rebuild(&config, &input_root, args.verbose)?;
     } else {
-        run_incremental(&config, &input_root, args.inner.verbose)?;
+        run_incremental(&config, &input_root, args.verbose)?;
     }
 
     Ok(())
@@ -352,9 +351,9 @@ fn index_git_documents(
 // Public entry point: run_index_git
 // ---------------------------------------------------------------------------
 
-pub fn run_index_git(args: IndexGitArgs) -> anyhow::Result<()> {
-    let config = Config::load(&args.inner.config)?;
-    let verbose = args.inner.verbose;
+pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
+    let config = Config::load(&args.config)?;
+    let verbose = args.verbose;
 
     let git_config = config.git.as_ref().ok_or_else(|| {
         anyhow::anyhow!(
@@ -363,17 +362,16 @@ pub fn run_index_git(args: IndexGitArgs) -> anyhow::Result<()> {
     })?;
 
     let repo_path = args
-        .inner
         .file
         .canonicalize()
-        .map_err(|_| anyhow::anyhow!("path '{}' does not exist", args.inner.file.display()))?;
+        .map_err(|_| anyhow::anyhow!("path '{}' does not exist", args.file.display()))?;
 
     let persist_path = PathBuf::from(&config.index.persist_path);
     let git_subdir = persist_path.join("git");
 
     let dims = Embedder::dims_for_model(&config.index.embedding_model)?;
 
-    if args.inner.rebuild || !git_subdir.join("header.json").exists() {
+    if args.rebuild || !git_subdir.join("header.json").exists() {
         // -------------------------------------------------------------------
         // REBUILD PATH
         // -------------------------------------------------------------------
