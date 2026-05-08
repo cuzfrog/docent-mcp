@@ -11,6 +11,7 @@ pub(crate) mod interfaces;
 pub(crate) mod search;
 pub(crate) mod support;
 pub(crate) mod ui;
+pub(crate) mod workflows;
 
 #[cfg(test)]
 mod tests;
