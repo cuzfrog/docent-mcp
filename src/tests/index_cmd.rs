@@ -150,13 +150,13 @@ fn test_incremental_one_file_modified() {
         .iter()
         .find(|m| m.source_path == "a.md")
         .unwrap()
-        .source_hash
+        .source_revision
         .clone();
     let hash_b_before: String = metadata1
         .iter()
         .find(|m| m.source_path == "b.md")
         .unwrap()
-        .source_hash
+        .source_revision
         .clone();
 
     std::fs::write(
@@ -180,13 +180,13 @@ fn test_incremental_one_file_modified() {
         .iter()
         .find(|m| m.source_path == "a.md")
         .unwrap()
-        .source_hash
+        .source_revision
         .clone();
     let hash_b_after: String = metadata2
         .iter()
         .find(|m| m.source_path == "b.md")
         .unwrap()
-        .source_hash
+        .source_revision
         .clone();
 
     assert_ne!(

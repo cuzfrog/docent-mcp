@@ -133,17 +133,6 @@ impl Config {
                 Run `docent list-models` to see available models."
             );
         }
-        let supported: Vec<String> = fastembed::TextEmbedding::list_supported_models()
-            .iter()
-            .map(|m| format!("{}", m.model))
-            .collect();
-        if !supported.contains(&self.index.embedding_model) {
-            anyhow::bail!(
-                "Unknown embedding model '{}'. \
-                Run `docent list-models` to see available models.",
-                self.index.embedding_model
-            );
-        }
         if self.index.persist_path.is_empty() {
             anyhow::bail!("persist_path must not be empty");
         }
@@ -366,29 +355,6 @@ embedding_model = "BGESmallENV15Q"
         assert!(
             err.to_string().contains("embedding_model is required in config.toml"),
             "Expected user-friendly error message, got: {}",
-            err
-        );
-        assert!(
-            err.to_string().contains("docent list-models"),
-            "Error message should suggest `docent list-models`, got: {}",
-            err
-        );
-    }
-
-    // 9b. Invalid embedding_model → validation error with friendly message
-    #[test]
-    fn test_invalid_embedding_model_validation_error() {
-        let config = Config {
-            index: IndexConfig {
-                embedding_model: "nonexistent-model".to_string(),
-                ..IndexConfig::default()
-            },
-            ..Config::default()
-        };
-        let err = config.validate().unwrap_err();
-        assert!(
-            err.to_string().contains("Unknown embedding model 'nonexistent-model'"),
-            "Expected unknown model error, got: {}",
             err
         );
         assert!(

@@ -3,6 +3,15 @@ use std::str::FromStr;
 
 use anyhow::Context;
 
+/// Return all supported embedding models as (name, dims) pairs.
+/// Hides `fastembed` types from callers.
+pub fn list_supported_models() -> Vec<(String, usize)> {
+    fastembed::TextEmbedding::list_supported_models()
+        .iter()
+        .map(|m| (format!("{}", m.model), m.dim))
+        .collect()
+}
+
 /// Facade over `fastembed::TextEmbedding` that hides init options, model enum
 /// parsing, and dimension retrieval behind a simple three-method interface.
 pub struct Embedder {
@@ -105,9 +114,12 @@ impl Embedder {
         self.dims
     }
 
-    /// Return a reference to the model's tokenizer for use by the chunker.
-    pub fn tokenizer(&self) -> &tokenizers::Tokenizer {
-        &self.model.tokenizer
+    /// Create a `HuggingFaceTokenCounter` from the model's internal tokenizer.
+    ///
+    /// Callers that need a `&dyn TokenCounter` for chunking should use this
+    /// method instead of reaching through to the `tokenizers` crate.
+    pub fn make_token_counter(&self) -> crate::chunking::HuggingFaceTokenCounter {
+        crate::chunking::HuggingFaceTokenCounter::from_tokenizer(self.model.tokenizer.clone())
     }
 }
 

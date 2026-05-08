@@ -44,6 +44,7 @@ impl Document {
         }
     }
 
+    #[allow(dead_code)]
     pub fn kind(&self) -> &str {
         match self {
             Document::File(_) => "file",

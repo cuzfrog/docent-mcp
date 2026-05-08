@@ -31,8 +31,8 @@ async fn main() -> anyhow::Result<()> {
             index_cmd::run_index_git(args)?;
         }
         Commands::ListModels => {
-            for model in fastembed::TextEmbedding::list_supported_models() {
-                println!("{} (dim: {})", model.model, model.dim);
+            for (name, dim) in embedder::list_supported_models() {
+                println!("{} (dim: {})", name, dim);
             }
         }
     }

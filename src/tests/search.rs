@@ -172,8 +172,7 @@ loads data from the database and populates the cache for subsequent requests.
             result.source_path
         );
         // Verify new fields are populated
-        assert!(!result.kind.is_empty(), "kind should be populated");
-        assert!(!result.source_hash.is_empty(), "source_hash should be populated");
+        assert!(!result.source_revision.is_empty(), "source_revision should be populated");
         assert!(!result.index_time.is_empty(), "index_time should be populated");
     }
 

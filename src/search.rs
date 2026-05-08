@@ -1,15 +1,15 @@
 use serde::Serialize;
 
 use crate::embedder::Embedder;
-use crate::index::ChunkMetadata;
+use crate::index::{ChunkKind, ChunkMetadata};
 
 /// A ranked search result for a single source document.
 #[derive(Debug, Serialize)]
 pub struct SearchResult {
-    pub kind: String,
+    pub kind: ChunkKind,
     pub title: String,
     pub source_path: String,
-    pub source_hash: String,
+    pub source_revision: String,
     pub matched_content: String,
     pub score: f32,
     pub line_start: usize,
@@ -35,7 +35,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     dot / (norm_a * norm_b)
 }
 
-/// Group candidates by `source_path + ":" + source_hash`, apply score decay
+/// Group candidates by `source_path + ":" + source_revision`, apply score decay
 /// multiplier to subsequent chunks in the same group, re-sort, and return
 /// all (decayed_score, meta) pairs.
 ///
@@ -47,11 +47,11 @@ fn apply_score_decay<'a>(
     candidates: Vec<(f32, &'a ChunkMetadata)>,
     same_src_score_decay: f32,
 ) -> Vec<(f32, &'a ChunkMetadata)> {
-    // 1. Group by source_path + ":" + source_hash
+    // 1. Group by source_path + ":" + source_revision
     let mut groups: std::collections::HashMap<String, Vec<(f32, &'a ChunkMetadata)>> =
         std::collections::HashMap::new();
     for (score, meta) in candidates {
-        let key = format!("{}:{}", meta.source_path, meta.source_hash);
+        let key = format!("{}:{}", meta.source_path, meta.source_revision);
         groups.entry(key).or_default().push((score, meta));
     }
 
@@ -139,7 +139,7 @@ pub fn search(
             kind: meta.kind.clone(),
             title: meta.title.clone(),
             source_path: meta.source_path.clone(),
-            source_hash: meta.source_hash.clone(),
+            source_revision: meta.source_revision.clone(),
             matched_content: meta.chunk_text.clone(),
             score,
             line_start: meta.line_start,
@@ -166,7 +166,7 @@ mod tests {
     ) -> ChunkMetadata {
         ChunkMetadata {
             source_path: source_path.to_string(),
-            source_hash: "hash".to_string(),
+            source_revision: "hash".to_string(),
             title: title.to_string(),
             chunk_text: chunk_text.to_string(),
             section_heading: None,
@@ -174,7 +174,7 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: "file".to_string(),
+            kind: ChunkKind::File,
             is_fresh: None,
         }
     }
@@ -294,7 +294,7 @@ mod tests {
     fn test_search_result_fields() {
         let meta = ChunkMetadata {
             source_path: "doc.md".to_string(),
-            source_hash: "abc123".to_string(),
+            source_revision: "abc123".to_string(),
             title: "Doc".to_string(),
             chunk_text: "Content".to_string(),
             section_heading: Some("Intro".to_string()),
@@ -302,7 +302,7 @@ mod tests {
             line_start: 1,
             line_end: 5,
             modified_at: Some("2026-01-01T00:00:00Z".to_string()),
-            kind: "file".to_string(),
+            kind: ChunkKind::File,
             is_fresh: None,
         };
 
@@ -310,7 +310,7 @@ mod tests {
             kind: meta.kind.clone(),
             title: meta.title.clone(),
             source_path: meta.source_path.clone(),
-            source_hash: meta.source_hash.clone(),
+            source_revision: meta.source_revision.clone(),
             matched_content: meta.chunk_text.clone(),
             score: 0.95,
             line_start: meta.line_start,
@@ -321,15 +321,15 @@ mod tests {
             index_time: "2026-05-06T12:00:00Z".to_string(),
         };
 
-        assert_eq!(result.kind, "file");
-        assert_eq!(result.source_hash, "abc123");
+        assert_eq!(result.kind, ChunkKind::File);
+        assert_eq!(result.source_revision, "abc123");
         assert!(!result.is_fresh); // None → false
         assert_eq!(result.index_time, "2026-05-06T12:00:00Z");
 
         // Verify JSON serialization includes all new fields
         let json = serde_json::to_string(&result).unwrap();
         assert!(json.contains("\"kind\":\"file\""));
-        assert!(json.contains("\"source_hash\":\"abc123\""));
+        assert!(json.contains("\"source_revision\":\"abc123\""));
         assert!(json.contains("\"is_fresh\":false"));
         assert!(json.contains("\"index_time\":\"2026-05-06T12:00:00Z\""));
     }

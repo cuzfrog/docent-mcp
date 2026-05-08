@@ -4,7 +4,8 @@ use crate::document::GitDocument;
 use crate::embedder::Embedder;
 use crate::file_index;
 use crate::git_index;
-use crate::index::{self, ChunkMetadata, IndexHeader, SCHEMA_VERSION};
+use crate::index::{self, ChunkKind, ChunkMetadata, IndexHeader, SCHEMA_VERSION};
+use crate::progress;
 use crate::progress::Progress;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -27,14 +28,7 @@ fn warn_if_exceeds_limit(estimated_mb: u64, max_size_mb: u64, advice: &str) -> a
             estimated_mb, max_size_mb
         );
         eprintln!("{}", advice);
-        eprint!("Continue? (y/N) ");
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        let answer = input.trim();
-        if answer != "y" && answer != "Y" {
-            println!("Aborted.");
-            return Ok(false);
-        }
+        return progress::confirm("Continue?");
     }
     Ok(true)
 }
@@ -76,23 +70,15 @@ fn run_rebuild(config: &Config, input_root: &std::path::Path, verbose: bool) -> 
 
     match index::read_subdir(&persist_path, "file") {
         Ok(_) => {
-            eprintln!(
-                "Warning: this will delete the existing index at '{}' and rebuild it from scratch.",
-                persist_path.display()
-            );
-            eprint!("Are you sure? (y/N) ");
-
-            let mut input = String::new();
-            std::io::stdin().read_line(&mut input)?;
-            let answer = input.trim();
-
-            if answer != "y" && answer != "Y" {
-                println!("Aborted.");
-                return Ok(());
+                eprintln!(
+                    "Warning: this will delete the existing index at '{}' and rebuild it from scratch.",
+                    persist_path.display()
+                );
+                if !progress::confirm("Are you sure?")? {
+                    return Ok(());
+                }
+                std::fs::remove_dir_all(persist_path.join("file"))?;
             }
-
-            std::fs::remove_dir_all(persist_path.join("file"))?;
-        }
         Err(e) => {
             if !e.to_string().contains("no index found") {
                 return Err(e);
@@ -104,7 +90,7 @@ fn run_rebuild(config: &Config, input_root: &std::path::Path, verbose: bool) -> 
     println!("Scanning: {} files found", all_files.len());
 
     let mut embedder = Embedder::new(&config.index.embedding_model)?;
-    let counter = crate::chunking::HuggingFaceTokenCounter::from_tokenizer(embedder.tokenizer().clone());
+    let counter = embedder.make_token_counter();
 
     let t = std::time::Instant::now();
     let (vectors, metadata, chunk_time, embed_time) = file_index::index_files(
@@ -161,7 +147,7 @@ fn run_incremental(config: &Config, input_root: &std::path::Path, verbose: bool)
                 for meta in &old_metadata {
                     old_hashes
                         .entry(meta.source_path.clone())
-                        .or_insert_with(|| meta.source_hash.clone());
+                        .or_insert_with(|| meta.source_revision.clone());
                 }
 
                 let mut old_chunks_by_path: HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>> =
@@ -234,7 +220,7 @@ fn run_incremental(config: &Config, input_root: &std::path::Path, verbose: bool)
     to_index.extend(changed_files);
     to_index.sort();
 
-    let counter = crate::chunking::HuggingFaceTokenCounter::from_tokenizer(embedder.tokenizer().clone());
+    let counter = embedder.make_token_counter();
     let t = std::time::Instant::now();
     let (fresh_vectors, fresh_metadata, chunk_time, embed_time) = file_index::index_files(
         &to_index,
@@ -288,63 +274,6 @@ pub fn run_index(args: IndexArgs) -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// Helper: index_git_documents
-// ---------------------------------------------------------------------------
-
-fn index_git_documents(
-    documents: &[GitDocument],
-    freshness: &[bool],
-    embedder: &mut Embedder,
-    config: &IndexConfig,
-    progress: Option<&Progress>,
-) -> anyhow::Result<(Vec<Vec<f32>>, Vec<ChunkMetadata>)> {
-    let counter = crate::chunking::HuggingFaceTokenCounter::from_tokenizer(embedder.tokenizer().clone());
-
-    let chunking_config = crate::chunking::ChunkingConfig {
-        chunk_size: config.chunk_size,
-        chunk_overlap: config.chunk_overlap,
-    };
-
-    let mut all_vectors: Vec<Vec<f32>> = Vec::new();
-    let mut all_metadata: Vec<ChunkMetadata> = Vec::new();
-
-    for (i, gdoc) in documents.iter().enumerate() {
-        let doc = crate::document::Document::Git(gdoc.clone());
-
-        let chunks = crate::chunking::chunk_document(&doc, &chunking_config, &counter);
-
-        let text_refs: Vec<&str> = chunks.iter().map(|c| c.text.as_str()).collect();
-        let embeddings = embedder
-            .embed(&text_refs)
-            .map_err(|e| anyhow::anyhow!("Embedding operation failed: {}", e))?;
-
-        for (embedding, chunk) in embeddings.into_iter().zip(chunks.iter()) {
-            all_vectors.push(embedding);
-
-            all_metadata.push(ChunkMetadata {
-                kind: "git".to_string(),
-                source_path: gdoc.file_path.clone(),
-                source_hash: gdoc.commit_hash.clone(),
-                title: gdoc.title.clone(),
-                chunk_text: chunk.text.clone(),
-                section_heading: chunk.section_heading.clone(),
-                chunk_index: chunk.chunk_index,
-                line_start: chunk.line_start,
-                line_end: chunk.line_end,
-                modified_at: Some(gdoc.author_date.clone()),
-                is_fresh: Some(freshness[i]),
-            });
-        }
-
-        if let Some(p) = progress {
-            p.tick_msg(format!("{} ({})", gdoc.title, gdoc.file_path));
-        }
-    }
-
-    Ok((all_vectors, all_metadata))
 }
 
 // ---------------------------------------------------------------------------
@@ -414,7 +343,7 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
         let t2 = std::time::Instant::now();
 
         let freshness = git_index::compute_freshness(&docs);
-        let (vectors, metadata) = index_git_documents(
+        let (vectors, metadata) = git_index::embed_git_documents(
             &docs,
             &freshness,
             &mut embedder,
@@ -488,7 +417,7 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
         let mut embedder = Embedder::new(&config.index.embedding_model)?;
         let t2 = std::time::Instant::now();
 
-        let (new_vectors, new_metadata) = index_git_documents(
+        let (new_vectors, new_metadata) = git_index::embed_git_documents(
             &new_docs,
             &vec![true; new_docs.len()],
             &mut embedder,
@@ -505,11 +434,11 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
         {
             let mut seen = HashSet::new();
             for m in &old_metadata {
-                if m.kind == "git" {
-                    let key = (m.source_path.clone(), m.source_hash.clone());
+                if m.kind == ChunkKind::Git {
+                    let key = (m.source_path.clone(), m.source_revision.clone());
                     if seen.insert(key) {
                         all_docs.push(GitDocument {
-                            commit_hash: m.source_hash.clone(),
+                            commit_hash: m.source_revision.clone(),
                             title: m.title.clone(),
                             file_path: m.source_path.clone(),
                             diff: String::new(),
@@ -535,9 +464,9 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
             .map(|(d, f)| ((d.file_path.clone(), d.commit_hash.clone()), *f))
             .collect();
         for m in &mut combined_metadata {
-            if m.kind == "git" {
+            if m.kind == ChunkKind::Git {
                 m.is_fresh = fresh_map
-                    .get(&(m.source_path.clone(), m.source_hash.clone()))
+                    .get(&(m.source_path.clone(), m.source_revision.clone()))
                     .copied();
             }
         }

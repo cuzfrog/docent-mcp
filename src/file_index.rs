@@ -2,7 +2,7 @@ use crate::chunking::{self, ChunkingConfig, TokenCounter};
 use crate::config::IndexConfig;
 use crate::document;
 use crate::embedder::Embedder;
-use crate::index::ChunkMetadata;
+use crate::index::{ChunkKind, ChunkMetadata};
 use crate::progress::Progress;
 use chrono::DateTime;
 use sha2::{Digest, Sha256};
@@ -90,38 +90,30 @@ pub fn get_file_mtime(path: &Path) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
-// index_files
+// chunk_files — Phase 1: read, hash, and chunk all files
 // ---------------------------------------------------------------------------
 
-pub fn index_files(
+/// Read, hash, and chunk a list of files.
+/// Pure I/O + CPU; no embedder needed.
+fn chunk_files(
     files: &[PathBuf],
     config: &IndexConfig,
-    embedder: &mut Embedder,
     counter: &dyn TokenCounter,
     input_root: &Path,
-    verbose: bool,
-) -> anyhow::Result<(
-    Vec<Vec<f32>>,
-    Vec<ChunkMetadata>,
-    Duration,
-    Duration,
-)> {
+    progress: &Progress,
+) -> anyhow::Result<Vec<(String, Vec<(String, ChunkMetadata)>)>> {
     let chunking_config = ChunkingConfig {
         chunk_size: config.chunk_size,
         chunk_overlap: config.chunk_overlap,
     };
 
-    // Phase 1: collect chunks per file with progress bar
     let mut file_chunks: Vec<(String, Vec<(String, ChunkMetadata)>)> = Vec::new();
-
-    let t1 = std::time::Instant::now();
-    let pb1 = Progress::new(files.len() as u64, "Indexing files", verbose);
 
     for file in files.iter() {
         let full_path = input_root.join(file);
         let relative_path = file.to_string_lossy().to_string();
 
-        pb1.tick_msg(&relative_path);
+        progress.tick_msg(&relative_path);
 
         let content = match std::fs::read_to_string(&full_path) {
             Ok(c) => c,
@@ -131,7 +123,7 @@ pub fn index_files(
             }
         };
 
-        let source_hash = format!("{:x}", Sha256::digest(content.as_bytes()));
+        let source_revision = format!("{:x}", Sha256::digest(content.as_bytes()));
 
         let mut doc = document::load_document_from_str(&full_path.to_string_lossy(), &content);
 
@@ -153,7 +145,7 @@ pub fn index_files(
                 chunk.text.clone(),
                 ChunkMetadata {
                     source_path: doc.source_id().to_string(),
-                    source_hash: source_hash.clone(),
+                    source_revision: source_revision.clone(),
                     title: doc.title().to_string(),
                     chunk_text: chunk.text.clone(),
                     section_heading: chunk.section_heading.clone(),
@@ -161,7 +153,7 @@ pub fn index_files(
                     line_start: chunk.line_start,
                     line_end: chunk.line_end,
                     modified_at: mtime.clone(),
-                    kind: doc.kind().to_string(),
+                    kind: ChunkKind::File,
                     is_fresh: None,
                 },
             ));
@@ -169,23 +161,24 @@ pub fn index_files(
         file_chunks.push((relative_path, chunks_for_file));
     }
 
-    pb1.finish();
-    let chunk_time = t1.elapsed();
+    Ok(file_chunks)
+}
 
-    if file_chunks.is_empty() {
-        return Ok((vec![], vec![], chunk_time, Duration::from_secs(0)));
-    }
+// ---------------------------------------------------------------------------
+// embed_chunks — Phase 2: embed pre-chunked file groups
+// ---------------------------------------------------------------------------
 
-    // Phase 2: embed each file's chunks with progress
-    let total = file_chunks.len();
+/// Embed chunk texts from pre-chunked file groups.
+fn embed_chunks(
+    file_chunks: &[(String, Vec<(String, ChunkMetadata)>)],
+    embedder: &mut Embedder,
+    progress: &Progress,
+) -> anyhow::Result<(Vec<Vec<f32>>, Vec<ChunkMetadata>)> {
     let mut all_vectors: Vec<Vec<f32>> = Vec::new();
     let mut all_metadata: Vec<ChunkMetadata> = Vec::new();
 
-    let t2 = std::time::Instant::now();
-    let pb = Progress::new(total as u64, "Embedding files", verbose);
-
     for (relative_path, chunks) in file_chunks.iter() {
-        pb.tick_msg(relative_path);
+        progress.tick_msg(relative_path);
 
         let text_refs: Vec<&str> = chunks.iter().map(|(text, _)| text.as_str()).collect();
         let vectors = embedder
@@ -198,10 +191,43 @@ pub fn index_files(
         }
     }
 
-    pb.finish();
+    Ok((all_vectors, all_metadata))
+}
+
+// ---------------------------------------------------------------------------
+// index_files — public coordinator
+// ---------------------------------------------------------------------------
+
+pub fn index_files(
+    files: &[PathBuf],
+    config: &IndexConfig,
+    embedder: &mut Embedder,
+    counter: &dyn TokenCounter,
+    input_root: &Path,
+    verbose: bool,
+) -> anyhow::Result<(
+    Vec<Vec<f32>>,
+    Vec<ChunkMetadata>,
+    Duration,
+    Duration,
+)> {
+    let t1 = std::time::Instant::now();
+    let pb1 = Progress::new(files.len() as u64, "Indexing files", verbose);
+    let file_chunks = chunk_files(files, config, counter, input_root, &pb1)?;
+    pb1.finish();
+    let chunk_time = t1.elapsed();
+
+    if file_chunks.is_empty() {
+        return Ok((vec![], vec![], chunk_time, Duration::from_secs(0)));
+    }
+
+    let t2 = std::time::Instant::now();
+    let pb2 = Progress::new(file_chunks.len() as u64, "Embedding files", verbose);
+    let (vectors, metadata) = embed_chunks(&file_chunks, embedder, &pb2)?;
+    pb2.finish();
     let embed_time = t2.elapsed();
 
-    Ok((all_vectors, all_metadata, chunk_time, embed_time))
+    Ok((vectors, metadata, chunk_time, embed_time))
 }
 
 // ---------------------------------------------------------------------------
@@ -369,7 +395,7 @@ mod tests {
 
         let meta_a = ChunkMetadata {
             source_path: "a.md".to_string(),
-            source_hash: "hash_a".to_string(),
+            source_revision: "hash_a".to_string(),
             title: "A".to_string(),
             chunk_text: "chunk text".to_string(),
             section_heading: None,
@@ -377,14 +403,14 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: "file".to_string(),
+            kind: ChunkKind::File,
             is_fresh: None,
         };
         let vec_a: Vec<f32> = vec![1.0];
 
         let meta_c = ChunkMetadata {
             source_path: "c.md".to_string(),
-            source_hash: "hash_c".to_string(),
+            source_revision: "hash_c".to_string(),
             title: "C".to_string(),
             chunk_text: "chunk text".to_string(),
             section_heading: None,
@@ -392,7 +418,7 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: "file".to_string(),
+            kind: ChunkKind::File,
             is_fresh: None,
         };
         let vec_c: Vec<f32> = vec![3.0];
@@ -403,7 +429,7 @@ mod tests {
 
         let meta_b1 = ChunkMetadata {
             source_path: "b.md".to_string(),
-            source_hash: "hash_b_new".to_string(),
+            source_revision: "hash_b_new".to_string(),
             title: "B".to_string(),
             chunk_text: "chunk text".to_string(),
             section_heading: None,
@@ -411,12 +437,12 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: "file".to_string(),
+            kind: ChunkKind::File,
             is_fresh: None,
         };
         let meta_b2 = ChunkMetadata {
             source_path: "b.md".to_string(),
-            source_hash: "hash_b_new".to_string(),
+            source_revision: "hash_b_new".to_string(),
             title: "B".to_string(),
             chunk_text: "chunk text".to_string(),
             section_heading: Some("Section".to_string()),
@@ -424,7 +450,7 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: "file".to_string(),
+            kind: ChunkKind::File,
             is_fresh: None,
         };
         let fresh_metadata = vec![meta_b1.clone(), meta_b2.clone()];
@@ -450,7 +476,7 @@ mod tests {
 
         let meta_a = ChunkMetadata {
             source_path: "a.md".to_string(),
-            source_hash: "hash_a".to_string(),
+            source_revision: "hash_a".to_string(),
             title: "A".to_string(),
             chunk_text: "chunk text".to_string(),
             section_heading: None,
@@ -458,7 +484,7 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: "file".to_string(),
+            kind: ChunkKind::File,
             is_fresh: None,
         };
         let vec_a: Vec<f32> = vec![1.0];
@@ -489,7 +515,7 @@ mod tests {
 
         let meta_a = ChunkMetadata {
             source_path: "a.md".to_string(),
-            source_hash: "hash_a".to_string(),
+            source_revision: "hash_a".to_string(),
             title: "A".to_string(),
             chunk_text: "chunk text".to_string(),
             section_heading: None,
@@ -497,12 +523,12 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: "file".to_string(),
+            kind: ChunkKind::File,
             is_fresh: None,
         };
         let meta_b1 = ChunkMetadata {
             source_path: "b.md".to_string(),
-            source_hash: "hash_b".to_string(),
+            source_revision: "hash_b".to_string(),
             title: "B".to_string(),
             chunk_text: "chunk text".to_string(),
             section_heading: None,
@@ -510,12 +536,12 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: "file".to_string(),
+            kind: ChunkKind::File,
             is_fresh: None,
         };
         let meta_b2 = ChunkMetadata {
             source_path: "b.md".to_string(),
-            source_hash: "hash_b".to_string(),
+            source_revision: "hash_b".to_string(),
             title: "B".to_string(),
             chunk_text: "chunk text".to_string(),
             section_heading: Some("Section".to_string()),
@@ -523,7 +549,7 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: "file".to_string(),
+            kind: ChunkKind::File,
             is_fresh: None,
         };
 

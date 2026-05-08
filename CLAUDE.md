@@ -119,3 +119,7 @@ Source documents are **any text files**. The content is not parsed or interprete
 When implementing a task, if current branch is `main`, create a new feature branch. After a whole task is done, create a PR.
 - Main branch: `main`
 - Feature branches: `<task_id>_<short-description>`, e.g., `IMPL-2_config-loader`
+
+## Coding Principles
+- **Important**: You are a coding architect. Look the code from a mid/high perspective, follow development principles, such as separation of concerns, SOLID principles, correct abstraction levels (e.g. reflected by their hierarchy, type and file layout, code reusability, etc), loose coupled code. The goal is simplicity and maintenability
+- If a file's prod code is more than 200 lines, consider splitting it. If a function is more than 50 lines, consider splitting it.

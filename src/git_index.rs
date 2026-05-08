@@ -1,5 +1,8 @@
-use crate::config::GitConfig;
-use crate::document::GitDocument;
+use crate::chunking;
+use crate::config::{GitConfig, IndexConfig};
+use crate::document::{Document, GitDocument};
+use crate::embedder::Embedder;
+use crate::index::{ChunkKind, ChunkMetadata};
 use crate::progress::Progress;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
@@ -232,6 +235,68 @@ pub fn estimate_commit_count(
     }
 
     Ok(count)
+}
+
+// ---------------------------------------------------------------------------
+// Embedding helper
+// ---------------------------------------------------------------------------
+
+/// Chunk and embed a batch of `GitDocument`s (old and new) into parallel
+/// `(vectors, metadata)` arrays suitable for index writing.
+///
+/// `freshness` is a parallel array with one `bool` per document (true = the
+/// document is the latest commit touching its file at index time).
+pub fn embed_git_documents(
+    documents: &[GitDocument],
+    freshness: &[bool],
+    embedder: &mut Embedder,
+    config: &IndexConfig,
+    progress: Option<&Progress>,
+) -> anyhow::Result<(Vec<Vec<f32>>, Vec<ChunkMetadata>)> {
+    let counter = embedder.make_token_counter();
+
+    let chunking_config = chunking::ChunkingConfig {
+        chunk_size: config.chunk_size,
+        chunk_overlap: config.chunk_overlap,
+    };
+
+    let mut all_vectors: Vec<Vec<f32>> = Vec::new();
+    let mut all_metadata: Vec<ChunkMetadata> = Vec::new();
+
+    for (i, gdoc) in documents.iter().enumerate() {
+        let doc = Document::Git(gdoc.clone());
+
+        let chunks = chunking::chunk_document(&doc, &chunking_config, &counter);
+
+        let text_refs: Vec<&str> = chunks.iter().map(|c| c.text.as_str()).collect();
+        let embeddings = embedder
+            .embed(&text_refs)
+            .map_err(|e| anyhow::anyhow!("Embedding operation failed: {}", e))?;
+
+        for (embedding, chunk) in embeddings.into_iter().zip(chunks.iter()) {
+            all_vectors.push(embedding);
+
+            all_metadata.push(ChunkMetadata {
+                kind: ChunkKind::Git,
+                source_path: gdoc.file_path.clone(),
+                source_revision: gdoc.commit_hash.clone(),
+                title: gdoc.title.clone(),
+                chunk_text: chunk.text.clone(),
+                section_heading: chunk.section_heading.clone(),
+                chunk_index: chunk.chunk_index,
+                line_start: chunk.line_start,
+                line_end: chunk.line_end,
+                modified_at: Some(gdoc.author_date.clone()),
+                is_fresh: Some(freshness[i]),
+            });
+        }
+
+        if let Some(p) = progress {
+            p.tick_msg(format!("{} ({})", gdoc.title, gdoc.file_path));
+        }
+    }
+
+    Ok((all_vectors, all_metadata))
 }
 
 // ---------------------------------------------------------------------------

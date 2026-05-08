@@ -4,7 +4,15 @@ use std::path::Path;
 
 /// Current schema version. Increment when the index format changes
 /// in a backward-incompatible way.
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
+
+/// Kind of source document for a chunk.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ChunkKind {
+    File,
+    Git,
+}
 
 /// Build-time metadata written to `header.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -26,8 +34,10 @@ pub struct IndexHeader {
 /// Per-chunk source provenance written to `metadata.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ChunkMetadata {
-    pub source_path: String, // relative path to source file
-    pub source_hash: String, // SHA-256 hex of the source file
+    pub source_path: String,   // relative path to source file
+    /// For file documents: SHA-256 hex of the file content.
+    /// For git documents: commit hash.
+    pub source_revision: String,
     pub title: String,       // highest-level markdown heading (filename fallback)
     #[serde(default)]
     pub chunk_text: String, // the actual chunk text content
@@ -42,11 +52,11 @@ pub struct ChunkMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub modified_at: Option<String>,
 
-    /// Kind of source document: "file" or "git".
-    pub kind: String,
+    /// Kind of source document: file or git.
+    pub kind: ChunkKind,
 
     /// Whether this chunk is from a fresh/updated commit. Present only for git
-    /// documents (`kind == "git"`); `None` (absent from JSON) for file documents.
+    /// documents (`kind == ChunkKind::Git`); `None` (absent from JSON) for file documents.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub is_fresh: Option<bool>,
 }
@@ -263,7 +273,7 @@ mod tests {
         let metadata = vec![
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
-                source_hash: "abc123".to_string(),
+                source_revision: "abc123".to_string(),
                 title: "Doc 1".to_string(),
                 chunk_text: "Introduction text for Doc 1".to_string(),
                 section_heading: Some("Intro".to_string()),
@@ -271,12 +281,12 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
-                source_hash: "abc123".to_string(),
+                source_revision: "abc123".to_string(),
                 title: "Doc 1".to_string(),
                 chunk_text: "Body text for Doc 1".to_string(),
                 section_heading: Some("Body".to_string()),
@@ -284,12 +294,12 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
-                source_hash: "def456".to_string(),
+                source_revision: "def456".to_string(),
                 title: "Doc 2".to_string(),
                 chunk_text: "Content for Doc 2".to_string(),
                 section_heading: None,
@@ -297,7 +307,7 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
         ];
@@ -331,7 +341,7 @@ mod tests {
         let metadata = vec![
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
-                source_hash: "abc".to_string(),
+                source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
                 chunk_text: "Chunk 0 text for Doc 1".to_string(),
                 section_heading: None,
@@ -339,12 +349,12 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
-                source_hash: "abc".to_string(),
+                source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
                 chunk_text: "Chunk 1 text for Doc 1".to_string(),
                 section_heading: None,
@@ -352,12 +362,12 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
-                source_hash: "def".to_string(),
+                source_revision: "def".to_string(),
                 title: "Doc 2".to_string(),
                 chunk_text: "Chunk 0 text for Doc 2".to_string(),
                 section_heading: None,
@@ -365,7 +375,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
         ];
@@ -479,7 +489,7 @@ mod tests {
         let metadata = vec![
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
-                source_hash: "abc".to_string(),
+                source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
                 chunk_text: "Chunk 0 text".to_string(),
                 section_heading: None,
@@ -487,12 +497,12 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
-                source_hash: "abc".to_string(),
+                source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
                 chunk_text: "Chunk 1 text".to_string(),
                 section_heading: None,
@@ -500,12 +510,12 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
-                source_hash: "def".to_string(),
+                source_revision: "def".to_string(),
                 title: "Doc 2".to_string(),
                 chunk_text: "Chunk 0 text for doc2".to_string(),
                 section_heading: None,
@@ -513,7 +523,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
         ];
@@ -548,7 +558,7 @@ mod tests {
         let metadata = vec![
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
-                source_hash: "abc".to_string(),
+                source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
                 chunk_text: "Extra bytes chunk 0".to_string(),
                 section_heading: None,
@@ -556,12 +566,12 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
-                source_hash: "abc".to_string(),
+                source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
                 chunk_text: "Extra bytes chunk 1".to_string(),
                 section_heading: None,
@@ -569,12 +579,12 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
-                source_hash: "def".to_string(),
+                source_revision: "def".to_string(),
                 title: "Doc 2".to_string(),
                 chunk_text: "Extra bytes doc2 chunk 0".to_string(),
                 section_heading: None,
@@ -582,7 +592,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
         ];
@@ -620,7 +630,7 @@ mod tests {
         let metadata = vec![
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
-                source_hash: "abc".to_string(),
+                source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
                 chunk_text: "Mismatch chunk 0".to_string(),
                 section_heading: None,
@@ -628,12 +638,12 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
-                source_hash: "abc".to_string(),
+                source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
                 chunk_text: "Mismatch chunk 1".to_string(),
                 section_heading: None,
@@ -641,7 +651,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
         ];
@@ -685,7 +695,7 @@ mod tests {
         let metadata = vec![
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
-                source_hash: "abc".to_string(),
+                source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
                 chunk_text: "Vec mismatch chunk 0".to_string(),
                 section_heading: None,
@@ -693,12 +703,12 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
-                source_hash: "abc".to_string(),
+                source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
                 chunk_text: "Vec mismatch chunk 1".to_string(),
                 section_heading: None,
@@ -706,12 +716,12 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
-                source_hash: "def".to_string(),
+                source_revision: "def".to_string(),
                 title: "Doc 2".to_string(),
                 chunk_text: "Vec mismatch doc2 chunk 0".to_string(),
                 section_heading: None,
@@ -719,12 +729,12 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
-                source_hash: "def".to_string(),
+                source_revision: "def".to_string(),
                 title: "Doc 2".to_string(),
                 chunk_text: "Vec mismatch doc2 chunk 1".to_string(),
                 section_heading: None,
@@ -732,7 +742,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
         ];
@@ -798,7 +808,7 @@ mod tests {
         let metadata = vec![
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
-                source_hash: "abc".to_string(),
+                source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
                 chunk_text: "Missing vectors chunk 0".to_string(),
                 section_heading: None,
@@ -806,12 +816,12 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc1.md".to_string(),
-                source_hash: "abc".to_string(),
+                source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
                 chunk_text: "Missing vectors chunk 1".to_string(),
                 section_heading: None,
@@ -819,12 +829,12 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
             ChunkMetadata {
                 source_path: "doc2.md".to_string(),
-                source_hash: "def".to_string(),
+                source_revision: "def".to_string(),
                 title: "Doc 2".to_string(),
                 chunk_text: "Missing vectors doc2 chunk 0".to_string(),
                 section_heading: None,
@@ -832,7 +842,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: "file".to_string(),
+                kind: ChunkKind::File,
                 is_fresh: None,
             },
         ];
@@ -922,7 +932,7 @@ mod tests {
         let vectors = vec![vec![1.0, 2.0, 3.0, 4.0]];
         let metadata = vec![ChunkMetadata {
             source_path: "doc.md".to_string(),
-            source_hash: "abc".to_string(),
+            source_revision: "abc".to_string(),
             title: "Doc".to_string(),
             chunk_text: "Parent dirs chunk text".to_string(),
             section_heading: None,
@@ -930,7 +940,7 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: "file".to_string(),
+            kind: ChunkKind::File,
             is_fresh: None,
         }];
 
@@ -949,7 +959,7 @@ mod tests {
     fn test_chunkmetadata_file_serialization() {
         let meta = ChunkMetadata {
             source_path: "doc.md".to_string(),
-            source_hash: "abc".to_string(),
+            source_revision: "abc".to_string(),
             title: "Doc".to_string(),
             chunk_text: "content".to_string(),
             section_heading: None,
@@ -957,7 +967,7 @@ mod tests {
             line_start: 1,
             line_end: 5,
             modified_at: None,
-            kind: "file".to_string(),
+            kind: ChunkKind::File,
             is_fresh: None,
         };
 
@@ -974,7 +984,7 @@ mod tests {
     fn test_chunkmetadata_git_serialization() {
         let meta = ChunkMetadata {
             source_path: "doc.md".to_string(),
-            source_hash: "abc".to_string(),
+            source_revision: "abc".to_string(),
             title: "Doc".to_string(),
             chunk_text: "content".to_string(),
             section_heading: None,
@@ -982,7 +992,7 @@ mod tests {
             line_start: 1,
             line_end: 5,
             modified_at: None,
-            kind: "git".to_string(),
+            kind: ChunkKind::Git,
             is_fresh: Some(true),
         };
 
@@ -998,7 +1008,7 @@ mod tests {
     fn test_chunkmetadata_deserialize_is_fresh_defaults_to_none() {
         let json = r#"{
             "source_path": "doc.md",
-            "source_hash": "abc",
+            "source_revision": "abc",
             "title": "Doc",
             "chunk_text": "content",
             "section_heading": null,
@@ -1009,7 +1019,7 @@ mod tests {
         }"#;
 
         let meta: ChunkMetadata = serde_json::from_str(json).unwrap();
-        assert_eq!(meta.kind, "file");
+        assert_eq!(meta.kind, ChunkKind::File);
         assert_eq!(meta.is_fresh, None);
     }
 
@@ -1033,7 +1043,7 @@ mod tests {
         let vectors = vec![vec![1.0, 2.0, 3.0, 4.0]];
         let metadata = vec![ChunkMetadata {
             source_path: "doc.md".to_string(),
-            source_hash: "abc".to_string(),
+            source_revision: "abc".to_string(),
             title: "Doc".to_string(),
             chunk_text: "content".to_string(),
             section_heading: None,
@@ -1041,7 +1051,7 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: "file".to_string(),
+            kind: ChunkKind::File,
             is_fresh: None,
         }];
 
