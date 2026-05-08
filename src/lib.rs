@@ -1,6 +1,7 @@
 pub mod app;
 pub mod cli;
 
+pub(crate) mod documents;
 pub(crate) mod chunking;
 pub(crate) mod config;
 pub(crate) mod embedder;

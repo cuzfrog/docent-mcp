@@ -2,8 +2,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::cli::IndexArgs;
+use crate::documents::ChunkMetadata;
 use crate::embedder::Embedder;
 use crate::index;
+use crate::index::{IndexRepository, SourceIndexKind};
 use crate::app::commands::index::run_index_file;
 use crate::search::{SearchResult, VectorSearchService};
 
@@ -31,8 +33,8 @@ chunk_overlap = 64
 
 fn read_index_at(
     path: &std::path::Path,
-) -> (index::IndexHeader, Vec<Vec<f32>>, Vec<index::ChunkMetadata>) {
-    let stored = index::read_subdir(path, "file").unwrap();
+) -> (index::IndexHeader, Vec<Vec<f32>>, Vec<ChunkMetadata>) {
+    let stored = IndexRepository::load_one(path, SourceIndexKind::File).unwrap();
     (stored.header, stored.vectors, stored.metadata)
 }
 

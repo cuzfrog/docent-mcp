@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::index::StoredIndex;
-use crate::index::ChunkMetadata;
+use crate::documents::ChunkMetadata;
 use crate::indexing::{IndexableDocument, MergedBatch};
 
 use super::diff::FileDiff;
@@ -36,15 +35,16 @@ impl FileIndexer {
         super::diff::diff_files(all_files, old_hashes, input_root)
     }
 
-    /// Extract merge state (hashes and chunks-by-path) from a stored index.
+    /// Extract merge state (hashes and chunks-by-path) from stored metadata/vectors.
     #[allow(clippy::type_complexity)]
     pub(crate) fn extract_merge_state(
-        stored: &StoredIndex,
+        metadata: &[ChunkMetadata],
+        vectors: &[Vec<f32>],
     ) -> (
         HashMap<String, String>,
         HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>>,
     ) {
-        super::merge::extract_merge_state(stored)
+        super::merge::extract_merge_state(metadata, vectors)
     }
 
     /// Merge unchanged and freshly-indexed chunks into a single batch.

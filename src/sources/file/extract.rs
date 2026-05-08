@@ -1,4 +1,4 @@
-use crate::index::ChunkKind;
+use crate::documents::ChunkKind;
 use crate::indexing::IndexableDocument;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};

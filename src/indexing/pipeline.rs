@@ -1,7 +1,7 @@
 use crate::chunking::{self, ChunkingConfig, HuggingFaceTokenCounter};
 use crate::config::IndexConfig;
 use crate::embedder::Embedder;
-use crate::index::{ChunkMetadata};
+use crate::documents::ChunkMetadata;
 use crate::indexing::types::{IndexableDocument, IndexedBatch};
 use crate::support::progress::Progress;
 

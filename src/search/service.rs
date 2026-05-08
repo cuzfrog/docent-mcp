@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::embedder::Embedder;
-use crate::index::ChunkMetadata;
+use crate::documents::ChunkMetadata;
 
 use super::ranking::rank_results;
 use super::types::SearchResult;
@@ -67,7 +67,7 @@ impl VectorSearchService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::index::ChunkKind;
+    use crate::documents::ChunkKind;
 
     fn make_meta(
         source_path: &str,

@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::config::GitConfig;
-use crate::index::ChunkMetadata;
+use crate::documents::ChunkMetadata;
 use crate::indexing::MergedBatch;
 use crate::sources::git::extract::GitDocument;
 use crate::support::progress::Progress;

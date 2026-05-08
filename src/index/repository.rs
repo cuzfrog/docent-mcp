@@ -1,10 +1,11 @@
 use std::path::Path;
 
 use crate::config::IndexConfig;
-use crate::index::schema::ChunkMetadata;
+use crate::documents::ChunkMetadata;
+use crate::index::schema::{StoredChunkMetadata, StoredIndex};
 use crate::index::storage::{dir_size, read_index, write_index};
-use crate::index::build_header;
 use crate::index::validate_header;
+use super::schema::build_header;
 
 pub(crate) enum SourceIndexKind {
     File,
@@ -18,6 +19,13 @@ impl SourceIndexKind {
             SourceIndexKind::Git => "git",
         }
     }
+}
+
+/// Index loaded from disk with runtime (not persisted) metadata types.
+pub(crate) struct LoadedIndex {
+    pub header: crate::index::schema::IndexHeader,
+    pub vectors: Vec<Vec<f32>>,
+    pub metadata: Vec<ChunkMetadata>,
 }
 
 pub(crate) struct MergedIndex {
@@ -35,8 +43,13 @@ pub(crate) struct IndexSizeInfo {
 pub(crate) struct IndexRepository;
 
 impl IndexRepository {
-    pub fn load_one(persist_path: &Path, kind: SourceIndexKind) -> anyhow::Result<crate::index::schema::StoredIndex> {
-        read_index(&persist_path.join(kind.subdir()))
+    pub fn load_one(persist_path: &Path, kind: SourceIndexKind) -> anyhow::Result<LoadedIndex> {
+        let stored: StoredIndex = read_index(&persist_path.join(kind.subdir()))?;
+        Ok(LoadedIndex {
+            header: stored.header,
+            vectors: stored.vectors,
+            metadata: stored.metadata.into_iter().map(ChunkMetadata::from).collect(),
+        })
     }
 
     pub fn store_index(
@@ -48,8 +61,9 @@ impl IndexRepository {
         metadata: &[ChunkMetadata],
         last_indexed_commit: Option<String>,
     ) -> anyhow::Result<()> {
+        let stored_metadata: Vec<StoredChunkMetadata> = metadata.iter().cloned().map(Into::into).collect();
         let header = build_header(config, embedding_dims, metadata, last_indexed_commit);
-        write_index(&persist_path.join(kind.subdir()), &header, vectors, metadata)
+        write_index(&persist_path.join(kind.subdir()), &header, vectors, &stored_metadata)
     }
 
     pub fn exists(persist_path: &Path, kind: SourceIndexKind) -> bool {

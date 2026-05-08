@@ -1,4 +1,4 @@
-use crate::index::schema::{ChunkMetadata, IndexHeader, StoredIndex};
+use crate::index::schema::{IndexHeader, StoredChunkMetadata, StoredIndex};
 use std::path::Path;
 
 /// Write the index directory: `header.json`, `vectors.bin`, and `metadata.json`.
@@ -10,7 +10,7 @@ pub fn write_index(
     path: &Path,
     header: &IndexHeader,
     vectors: &[Vec<f32>],
-    metadata: &[ChunkMetadata],
+    metadata: &[StoredChunkMetadata],
 ) -> anyhow::Result<()> {
     std::fs::create_dir_all(path).map_err(|e| {
         anyhow::anyhow!(
@@ -86,7 +86,7 @@ pub fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
     let metadata_path = path.join("metadata.json");
     let metadata_bytes = std::fs::read(&metadata_path)
         .map_err(|e| anyhow::anyhow!("Failed to read '{}': {}", metadata_path.display(), e))?;
-    let metadata: Vec<ChunkMetadata> = serde_json::from_slice(&metadata_bytes)
+    let metadata: Vec<StoredChunkMetadata> = serde_json::from_slice(&metadata_bytes)
         .map_err(|e| anyhow::anyhow!("Failed to parse '{}': {}", metadata_path.display(), e))?;
 
     if vectors.len() != header.chunk_count || metadata.len() != header.chunk_count {
@@ -123,7 +123,7 @@ pub fn write_index_to(
     subdir: &str,
     header: &IndexHeader,
     vectors: &[Vec<f32>],
-    metadata: &[ChunkMetadata],
+    metadata: &[StoredChunkMetadata],
 ) -> anyhow::Result<()> {
     write_index(&persist_path.join(subdir), header, vectors, metadata)
 }
@@ -140,7 +140,7 @@ pub fn read_subdir(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::index::schema::ChunkKind;
+    use crate::index::schema::StoredChunkKind;
     use crate::index::SCHEMA_VERSION;
 
     fn matching_header() -> IndexHeader {
@@ -169,7 +169,7 @@ mod tests {
             vec![9.0, 10.0, 11.0, 12.0],
         ];
         let metadata = vec![
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
                 source_revision: "abc123".to_string(),
                 title: "Doc 1".to_string(),
@@ -179,10 +179,10 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
                 source_revision: "abc123".to_string(),
                 title: "Doc 1".to_string(),
@@ -192,10 +192,10 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc2.md".to_string(),
                 source_revision: "def456".to_string(),
                 title: "Doc 2".to_string(),
@@ -205,7 +205,7 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
         ];
@@ -235,7 +235,7 @@ mod tests {
             vec![9.0, 10.0, 11.0, 12.0],
         ];
         let metadata = vec![
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
                 source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
@@ -245,10 +245,10 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
                 source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
@@ -258,10 +258,10 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc2.md".to_string(),
                 source_revision: "def".to_string(),
                 title: "Doc 2".to_string(),
@@ -271,7 +271,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
         ];
@@ -318,7 +318,7 @@ mod tests {
 
         let header = matching_header();
         let metadata = vec![
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
                 source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
@@ -328,10 +328,10 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
                 source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
@@ -341,10 +341,10 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc2.md".to_string(),
                 source_revision: "def".to_string(),
                 title: "Doc 2".to_string(),
@@ -354,7 +354,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
         ];
@@ -384,7 +384,7 @@ mod tests {
 
         let header = matching_header();
         let metadata = vec![
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
                 source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
@@ -394,10 +394,10 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
                 source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
@@ -407,10 +407,10 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc2.md".to_string(),
                 source_revision: "def".to_string(),
                 title: "Doc 2".to_string(),
@@ -420,7 +420,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
         ];
@@ -453,7 +453,7 @@ mod tests {
             vec![9.0, 10.0, 11.0, 12.0],
         ];
         let metadata = vec![
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
                 source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
@@ -463,10 +463,10 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
                 source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
@@ -476,7 +476,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
         ];
@@ -511,7 +511,7 @@ mod tests {
         };
         let vectors_bytes: Vec<u8> = (0..48).map(|i| i as u8).collect();
         let metadata = vec![
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
                 source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
@@ -521,10 +521,10 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
                 source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
@@ -534,10 +534,10 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc2.md".to_string(),
                 source_revision: "def".to_string(),
                 title: "Doc 2".to_string(),
@@ -547,10 +547,10 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc2.md".to_string(),
                 source_revision: "def".to_string(),
                 title: "Doc 2".to_string(),
@@ -560,7 +560,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
         ];
@@ -619,7 +619,7 @@ mod tests {
 
         let header = matching_header();
         let metadata = vec![
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
                 source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
@@ -629,10 +629,10 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
                 source_revision: "abc".to_string(),
                 title: "Doc 1".to_string(),
@@ -642,10 +642,10 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
-            ChunkMetadata {
+            StoredChunkMetadata {
                 source_path: "doc2.md".to_string(),
                 source_revision: "def".to_string(),
                 title: "Doc 2".to_string(),
@@ -655,7 +655,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: StoredChunkKind::File,
                 is_fresh: None,
             },
         ];
@@ -691,7 +691,7 @@ mod tests {
             last_indexed_commit: None,
         };
         let vectors: Vec<Vec<f32>> = vec![];
-        let metadata: Vec<ChunkMetadata> = vec![];
+        let metadata: Vec<StoredChunkMetadata> = vec![];
 
         write_index(&temp_dir, &header, &vectors, &metadata).unwrap();
 
@@ -738,7 +738,7 @@ mod tests {
             last_indexed_commit: None,
         };
         let vectors = vec![vec![1.0, 2.0, 3.0, 4.0]];
-        let metadata = vec![ChunkMetadata {
+        let metadata = vec![StoredChunkMetadata {
             source_path: "doc.md".to_string(),
             source_revision: "abc".to_string(),
             title: "Doc".to_string(),
@@ -748,7 +748,7 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: ChunkKind::File,
+            kind: StoredChunkKind::File,
             is_fresh: None,
         }];
 
@@ -779,7 +779,7 @@ mod tests {
             last_indexed_commit: None,
         };
         let vectors = vec![vec![1.0, 2.0, 3.0, 4.0]];
-        let metadata = vec![ChunkMetadata {
+        let metadata = vec![StoredChunkMetadata {
             source_path: "doc.md".to_string(),
             source_revision: "abc".to_string(),
             title: "Doc".to_string(),
@@ -789,7 +789,7 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: ChunkKind::File,
+            kind: StoredChunkKind::File,
             is_fresh: None,
         }];
 

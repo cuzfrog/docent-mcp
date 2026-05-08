@@ -1,4 +1,4 @@
-use crate::index::{ChunkKind, ChunkMetadata};
+use crate::documents::{ChunkKind, ChunkMetadata};
 
 pub(crate) struct IndexableDocument {
     pub kind: ChunkKind,

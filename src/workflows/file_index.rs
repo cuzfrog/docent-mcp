@@ -88,7 +88,7 @@ fn run_incremental_file(config: &Config, input_root: &std::path::Path, verbose: 
                     );
                 }
 
-                let (old_hashes, old_chunks_by_path) = FileIndexer::extract_merge_state(&stored);
+                let (old_hashes, old_chunks_by_path) = FileIndexer::extract_merge_state(&stored.metadata, &stored.vectors);
                 (old_hashes, old_chunks_by_path, true)
             }
             Err(e) => {

@@ -1,25 +1,26 @@
-use crate::index::{ChunkMetadata, StoredIndex};
+use crate::documents::ChunkMetadata;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-/// Extract old hashes and old chunks grouped by source path from a stored index.
+/// Extract old hashes and old chunks grouped by source path from stored metadata/vectors.
 #[allow(clippy::type_complexity)]
 pub(crate) fn extract_merge_state(
-    stored: &StoredIndex,
+    metadata: &[ChunkMetadata],
+    vectors: &[Vec<f32>],
 ) -> (HashMap<String, String>, HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>>) {
     let mut old_hashes: HashMap<String, String> = HashMap::new();
-    for meta in &stored.metadata {
+    for meta in metadata {
         old_hashes
             .entry(meta.source_path.clone())
             .or_insert_with(|| meta.source_revision.clone());
     }
 
     let mut old_chunks_by_path: HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>> = HashMap::new();
-    for (i, meta) in stored.metadata.iter().enumerate() {
+    for (i, meta) in metadata.iter().enumerate() {
         old_chunks_by_path
             .entry(meta.source_path.clone())
             .or_default()
-            .push((meta.clone(), stored.vectors[i].clone()));
+            .push((meta.clone(), vectors[i].clone()));
     }
 
     (old_hashes, old_chunks_by_path)
@@ -85,7 +86,7 @@ pub fn merge_incremental(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::index::ChunkKind;
+    use crate::documents::ChunkKind;
 
     #[test]
     fn test_merge_incremental_basic() {

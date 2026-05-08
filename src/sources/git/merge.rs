@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::index::{ChunkKind, ChunkMetadata};
+use crate::documents::{ChunkKind, ChunkMetadata};
 use crate::sources::git::extract::GitDocument;
 
 pub fn merge_git_incremental(
