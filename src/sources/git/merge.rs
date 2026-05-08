@@ -9,7 +9,7 @@ pub fn merge_git_incremental(
     new_docs: &[GitDocument],
     new_metadata: &[ChunkMetadata],
     new_vectors: &[Vec<f32>],
-) -> (Vec<Vec<f32>>, Vec<ChunkMetadata>) {
+) -> crate::indexing::IndexedBatch {
     let mut seen = std::collections::HashSet::new();
     let mut all_docs: Vec<GitDocument> = new_docs.to_vec();
     for m in old_metadata {
@@ -47,5 +47,10 @@ pub fn merge_git_incremental(
         }
     }
 
-    (combined_vectors, combined_metadata)
+    crate::indexing::IndexedBatch {
+        vectors: combined_vectors,
+        metadata: combined_metadata,
+        chunk_time: std::time::Duration::default(),
+        embed_time: std::time::Duration::default(),
+    }
 }

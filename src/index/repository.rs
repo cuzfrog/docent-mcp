@@ -1,8 +1,9 @@
 use std::path::Path;
 
 use crate::config::IndexConfig;
-use crate::index::schema::{ChunkMetadata, IndexHeader};
+use crate::index::schema::ChunkMetadata;
 use crate::index::storage::{read_index, write_index};
+use crate::index::build_header;
 use crate::index::validate_header;
 
 pub(crate) enum SourceIndexKind {
@@ -32,14 +33,17 @@ impl IndexRepository {
         read_index(&persist_path.join(kind.subdir()))
     }
 
-    pub fn save_one(
+    pub fn store_index(
         persist_path: &Path,
         kind: SourceIndexKind,
-        header: &IndexHeader,
+        config: &crate::config::IndexConfig,
+        embedding_dims: usize,
         vectors: &[Vec<f32>],
         metadata: &[ChunkMetadata],
+        last_indexed_commit: Option<String>,
     ) -> anyhow::Result<()> {
-        write_index(&persist_path.join(kind.subdir()), header, vectors, metadata)
+        let header = build_header(config, embedding_dims, metadata, last_indexed_commit);
+        write_index(&persist_path.join(kind.subdir()), &header, vectors, metadata)
     }
 
     pub fn exists(persist_path: &Path, kind: SourceIndexKind) -> bool {

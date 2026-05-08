@@ -71,3 +71,7 @@ pub(crate) fn index_documents(
         embed_time,
     })
 }
+
+pub(crate) fn create_embedder(model: &str) -> anyhow::Result<Embedder> {
+    Embedder::new(model)
+}

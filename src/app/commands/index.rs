@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::cli::IndexArgs;
 use crate::config::Config;
-use crate::embedder::Embedder;
-use crate::index::{self, build_header, IndexRepository, SourceIndexKind};
+use crate::index::{self, IndexRepository, SourceIndexKind};
 use crate::indexing;
+use crate::indexing::create_embedder;
 use crate::progress::Progress;
 use crate::sources::file;
 use crate::sources::git;
@@ -46,7 +47,7 @@ fn run_rebuild_file(config: &Config, input_root: &std::path::Path, verbose: bool
     let all_files = file::discover_files(input_root)?;
     println!("Scanning: {} files found", all_files.len());
 
-    let mut embedder = Embedder::new(&config.index.embedding_model)?;
+    let mut embedder = create_embedder(&config.index.embedding_model)?;
     let pb = Progress::new(all_files.len() as u64, "Indexing files", verbose);
 
     let docs = file::prepare_files(&all_files, input_root)?;
@@ -54,13 +55,13 @@ fn run_rebuild_file(config: &Config, input_root: &std::path::Path, verbose: bool
 
     let batch = indexing::index_documents(&docs, &config.index, &mut embedder, None)?;
 
-    let header = build_header(&config.index, embedder.dims(), &batch.metadata, None);
-    IndexRepository::save_one(&persist_path, SourceIndexKind::File, &header, &batch.vectors, &batch.metadata)?;
+    IndexRepository::store_index(&persist_path, SourceIndexKind::File, &config.index, embedder.dims(), &batch.vectors, &batch.metadata, None)?;
+    let doc_count = batch.metadata.iter().map(|m| &m.source_path[..]).collect::<std::collections::HashSet<_>>().len();
 
     println!(
         "File index written: {} chunks from {} docs (chunk: {:.1}s, embed: {:.1}s)",
         batch.metadata.len(),
-        header.doc_count,
+        doc_count,
         batch.chunk_time.as_secs_f64(),
         batch.embed_time.as_secs_f64(),
     );
@@ -71,7 +72,7 @@ fn run_rebuild_file(config: &Config, input_root: &std::path::Path, verbose: bool
 fn run_incremental_file(config: &Config, input_root: &std::path::Path, verbose: bool) -> anyhow::Result<()> {
     let persist_path = PathBuf::from(&config.index.persist_path);
 
-    let mut embedder = Embedder::new(&config.index.embedding_model)?;
+    let mut embedder = create_embedder(&config.index.embedding_model)?;
 
     let (old_hashes, old_chunks_by_path, index_exists) =
         match IndexRepository::load_one(&persist_path, SourceIndexKind::File) {
@@ -89,27 +90,12 @@ fn run_incremental_file(config: &Config, input_root: &std::path::Path, verbose: 
                     );
                 }
 
-                let mut old_hashes: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-                for meta in &stored.metadata {
-                    old_hashes
-                        .entry(meta.source_path.clone())
-                        .or_insert_with(|| meta.source_revision.clone());
-                }
-
-                let mut old_chunks_by_path: std::collections::HashMap<String, Vec<(index::ChunkMetadata, Vec<f32>)>> =
-                    std::collections::HashMap::new();
-                for (i, meta) in stored.metadata.iter().enumerate() {
-                    old_chunks_by_path
-                        .entry(meta.source_path.clone())
-                        .or_default()
-                        .push((meta.clone(), stored.vectors[i].clone()));
-                }
-
+                let (old_hashes, old_chunks_by_path) = file::extract_merge_state(&stored);
                 (old_hashes, old_chunks_by_path, true)
             }
             Err(e) => {
                 if e.to_string().contains("no index found") {
-                    (std::collections::HashMap::new(), std::collections::HashMap::new(), false)
+                    (HashMap::new(), HashMap::new(), false)
                 } else {
                     return Err(e);
                 }
@@ -137,20 +123,20 @@ fn run_incremental_file(config: &Config, input_root: &std::path::Path, verbose: 
 
     let batch = indexing::index_documents(&docs, &config.index, &mut embedder, None)?;
 
-    let (vectors, metadata) = file::merge_incremental(
+    let merged = file::merge_incremental(
         &all_files,
         &old_chunks_by_path,
         &batch.metadata,
         &batch.vectors,
     );
 
-    let header = build_header(&config.index, embedder.dims(), &metadata, None);
-    IndexRepository::save_one(&persist_path, SourceIndexKind::File, &header, &vectors, &metadata)?;
+    IndexRepository::store_index(&persist_path, SourceIndexKind::File, &config.index, embedder.dims(), &merged.vectors, &merged.metadata, None)?;
+    let doc_count = merged.metadata.iter().map(|m| &m.source_path[..]).collect::<std::collections::HashSet<_>>().len();
 
     println!(
         "File index updated: {} chunks from {} docs (chunk: {:.1}s, embed: {:.1}s)",
-        metadata.len(),
-        header.doc_count,
+        merged.metadata.len(),
+        doc_count,
         batch.chunk_time.as_secs_f64(),
         batch.embed_time.as_secs_f64(),
     );
@@ -192,7 +178,7 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
         .map_err(|_| anyhow::anyhow!("path '{}' does not exist", args.file.display()))?;
 
     let persist_path = PathBuf::from(&config.index.persist_path);
-    let dims = Embedder::dims_for_model(&config.index.embedding_model)?;
+    let dims = crate::embedder::Embedder::dims_for_model(&config.index.embedding_model)?;
 
     if args.rebuild || !IndexRepository::exists(&persist_path, SourceIndexKind::Git) {
         let total_commits = git::estimate_commit_count(&repo_path, git_config, None)?;
@@ -216,7 +202,7 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
         let head_commit = git::resolve_head_commit(&repo_path, &git_config.branch)?;
         let total_docs = docs.len();
         let pb2 = Progress::new(total_docs as u64, "Embedding documents", verbose);
-        let mut embedder = Embedder::new(&config.index.embedding_model)?;
+        let mut embedder = create_embedder(&config.index.embedding_model)?;
         let t2 = std::time::Instant::now();
 
         let freshness = git::compute_freshness(&docs);
@@ -225,18 +211,13 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
         pb2.finish();
         let embed_time = t2.elapsed();
 
-        let header = build_header(
-            &config.index,
-            if batch.vectors.is_empty() { dims } else { batch.vectors[0].len() },
-            &batch.metadata,
-            Some(head_commit),
-        );
-        IndexRepository::save_one(&persist_path, SourceIndexKind::Git, &header, &batch.vectors, &batch.metadata)?;
+        IndexRepository::store_index(&persist_path, SourceIndexKind::Git, &config.index, dims, &batch.vectors, &batch.metadata, Some(head_commit))?;
+        let doc_count = batch.metadata.iter().map(|m| &m.source_path[..]).collect::<std::collections::HashSet<_>>().len();
 
         println!(
             "Git index written: {} chunks from {} docs (walk: {:.1}s, embed: {:.1}s)",
             batch.metadata.len(),
-            header.doc_count,
+            doc_count,
             walk_time.as_secs_f64(),
             embed_time.as_secs_f64(),
         );
@@ -271,7 +252,7 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
 
         let total_new_docs = new_docs.len();
         let pb2 = Progress::new(total_new_docs as u64, "Embedding documents", verbose);
-        let mut embedder = Embedder::new(&config.index.embedding_model)?;
+        let mut embedder = create_embedder(&config.index.embedding_model)?;
         let t2 = std::time::Instant::now();
 
         let indexable = git::prepare_git_documents(&new_docs, &vec![true; new_docs.len()]);
@@ -281,22 +262,17 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
 
         let head_commit = git::resolve_head_commit(&repo_path, &git_config.branch)?;
 
-        let (combined_vectors, combined_metadata) = git::merge_git_incremental(
+        let merged = git::merge_git_incremental(
             &old_metadata, &old_vectors, &new_docs, &batch.metadata, &batch.vectors,
         );
 
-        let header = build_header(
-            &config.index,
-            if combined_vectors.is_empty() { dims } else { combined_vectors[0].len() },
-            &combined_metadata,
-            Some(head_commit),
-        );
-        IndexRepository::save_one(&persist_path, SourceIndexKind::Git, &header, &combined_vectors, &combined_metadata)?;
+        IndexRepository::store_index(&persist_path, SourceIndexKind::Git, &config.index, dims, &merged.vectors, &merged.metadata, Some(head_commit))?;
+        let doc_count = merged.metadata.iter().map(|m| &m.source_path[..]).collect::<std::collections::HashSet<_>>().len();
 
         println!(
             "Git index updated: {} chunks from {} docs ({} new commits, walk: {:.1}s, embed: {:.1}s)",
-            combined_metadata.len(),
-            header.doc_count,
+            merged.metadata.len(),
+            doc_count,
             new_docs.len(),
             walk_time.as_secs_f64(),
             embed_time.as_secs_f64(),

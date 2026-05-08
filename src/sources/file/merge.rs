@@ -1,13 +1,36 @@
-use crate::index::ChunkMetadata;
+use crate::index::{ChunkMetadata, StoredIndex};
 use std::collections::HashMap;
 use std::path::PathBuf;
+
+/// Extract old hashes and old chunks grouped by source path from a stored index.
+#[allow(clippy::type_complexity)]
+pub(crate) fn extract_merge_state(
+    stored: &StoredIndex,
+) -> (HashMap<String, String>, HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>>) {
+    let mut old_hashes: HashMap<String, String> = HashMap::new();
+    for meta in &stored.metadata {
+        old_hashes
+            .entry(meta.source_path.clone())
+            .or_insert_with(|| meta.source_revision.clone());
+    }
+
+    let mut old_chunks_by_path: HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>> = HashMap::new();
+    for (i, meta) in stored.metadata.iter().enumerate() {
+        old_chunks_by_path
+            .entry(meta.source_path.clone())
+            .or_default()
+            .push((meta.clone(), stored.vectors[i].clone()));
+    }
+
+    (old_hashes, old_chunks_by_path)
+}
 
 pub fn merge_incremental(
     sorted_files: &[PathBuf],
     unchanged_map: &HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>>,
     fresh_metadata: &[ChunkMetadata],
     fresh_vectors: &[Vec<f32>],
-) -> (Vec<Vec<f32>>, Vec<ChunkMetadata>) {
+) -> crate::indexing::IndexedBatch {
     let mut fresh_map: HashMap<String, (usize, usize)> = HashMap::new();
     let mut i = 0;
     while i < fresh_metadata.len() {
@@ -53,7 +76,12 @@ pub fn merge_incremental(
         }
     }
 
-    (all_vectors, all_metadata)
+    crate::indexing::IndexedBatch {
+        vectors: all_vectors,
+        metadata: all_metadata,
+        chunk_time: std::time::Duration::default(),
+        embed_time: std::time::Duration::default(),
+    }
 }
 
 #[cfg(test)]
@@ -132,17 +160,17 @@ mod tests {
         let fresh_metadata = vec![meta_b1.clone(), meta_b2.clone()];
         let fresh_vectors = vec![vec![2.1], vec![2.2]];
 
-        let (vectors, metadata) = merge_incremental(
+        let result = merge_incremental(
             &sorted_files,
             &unchanged_map,
             &fresh_metadata,
             &fresh_vectors,
         );
 
-        assert_eq!(metadata.len(), 4);
-        assert_eq!(vectors.len(), 4);
+        assert_eq!(result.metadata.len(), 4);
+        assert_eq!(result.vectors.len(), 4);
 
-        let source_paths: Vec<&str> = metadata.iter().map(|m| m.source_path.as_str()).collect();
+        let source_paths: Vec<&str> = result.metadata.iter().map(|m| m.source_path.as_str()).collect();
         assert_eq!(source_paths, vec!["a.md", "b.md", "b.md", "c.md"]);
     }
 
@@ -171,16 +199,16 @@ mod tests {
         let fresh_metadata: Vec<ChunkMetadata> = vec![];
         let fresh_vectors: Vec<Vec<f32>> = vec![];
 
-        let (vectors, metadata) = merge_incremental(
+        let result = merge_incremental(
             &sorted_files,
             &unchanged_map,
             &fresh_metadata,
             &fresh_vectors,
         );
 
-        assert_eq!(metadata.len(), 1);
-        assert_eq!(vectors.len(), 1);
-        assert_eq!(metadata[0].source_path, "a.md");
+        assert_eq!(result.metadata.len(), 1);
+        assert_eq!(result.vectors.len(), 1);
+        assert_eq!(result.metadata[0].source_path, "a.md");
     }
 
     #[test]
@@ -232,17 +260,17 @@ mod tests {
         let fresh_metadata = vec![meta_a.clone(), meta_b1.clone(), meta_b2.clone()];
         let fresh_vectors = vec![vec![1.0], vec![2.0], vec![3.0]];
 
-        let (vectors, metadata) = merge_incremental(
+        let result = merge_incremental(
             &sorted_files,
             &unchanged_map,
             &fresh_metadata,
             &fresh_vectors,
         );
 
-        assert_eq!(metadata.len(), 3);
-        assert_eq!(vectors.len(), 3);
+        assert_eq!(result.metadata.len(), 3);
+        assert_eq!(result.vectors.len(), 3);
 
-        let source_paths: Vec<&str> = metadata.iter().map(|m| m.source_path.as_str()).collect();
+        let source_paths: Vec<&str> = result.metadata.iter().map(|m| m.source_path.as_str()).collect();
         assert_eq!(source_paths, vec!["a.md", "b.md", "b.md"]);
     }
 }
