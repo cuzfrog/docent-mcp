@@ -37,7 +37,7 @@ fn load_merged_index(
     }
 
     let total_size = dir_size(persist_path);
-    let max_bytes = (config.index.max_size_mb as u64) * 1024 * 1024;
+    let max_bytes = config.index.max_size_mb * 1024 * 1024;
     if total_size > max_bytes {
         eprintln!(
             "The total index is {:.1} MB, which exceeds the configured limit of {} MB.",
@@ -144,7 +144,6 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
     ));
 
     let server = DocentMcpServer {
-        config,
         search_service,
     };
 

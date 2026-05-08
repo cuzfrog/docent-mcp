@@ -3,7 +3,6 @@ use std::path::Path;
 use crate::config::types::Config;
 
 impl Config {
-    #[allow(dead_code)]
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let content = match std::fs::read_to_string(path) {
             Ok(c) => c,

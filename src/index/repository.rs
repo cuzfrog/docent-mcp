@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::path::Path;
 
 use crate::index::schema::{ChunkMetadata, IndexHeader};
@@ -81,8 +79,7 @@ impl IndexRepository {
                 git_index
                     .as_ref()
                     .map(|s| s.vectors.clone())
-                    .unwrap_or_default()
-                    .into_iter(),
+                    .unwrap_or_default(),
             )
             .collect();
 
@@ -95,8 +92,7 @@ impl IndexRepository {
                 git_index
                     .as_ref()
                     .map(|s| s.metadata.clone())
-                    .unwrap_or_default()
-                    .into_iter(),
+                    .unwrap_or_default(),
             )
             .collect();
 

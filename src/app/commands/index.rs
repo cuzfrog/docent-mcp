@@ -126,11 +126,9 @@ fn run_incremental_file(config: &Config, input_root: &std::path::Path, verbose: 
         diff.unchanged_count
     );
 
-    if diff.to_index.is_empty() && diff.deleted_count == 0 {
-        if index_exists {
-            println!("No changes detected. Index is up to date.");
-            return Ok(());
-        }
+    if diff.to_index.is_empty() && diff.deleted_count == 0 && index_exists {
+        println!("No changes detected. Index is up to date.");
+        return Ok(());
     }
 
     let pb = Progress::new(diff.to_index.len() as u64, "Indexing files", verbose);
@@ -199,9 +197,7 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
     if args.rebuild || !IndexRepository::exists(&persist_path, SourceIndexKind::Git) {
         let total_commits = git_index::estimate_commit_count(&repo_path, git_config, None)?;
         let estimated_mb = git_index::estimate_git_index_size(total_commits, dims) / (1024 * 1024);
-        let advice = format!(
-            "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml"
-        );
+        let advice = "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml".to_string();
         if !warn_if_exceeds_limit(estimated_mb, config.index.max_size_mb, &advice)? {
             return Ok(());
         }
@@ -255,9 +251,7 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
 
         let total_new = git_index::estimate_commit_count(&repo_path, git_config, last_commit.as_deref())?;
         let estimated_mb = git_index::estimate_git_index_size(total_new, dims) / (1024 * 1024);
-        let advice = format!(
-            "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml"
-        );
+        let advice = "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml".to_string();
         if !warn_if_exceeds_limit(estimated_mb, config.index.max_size_mb, &advice)? {
             return Ok(());
         }

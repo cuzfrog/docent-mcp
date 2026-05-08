@@ -1,8 +1,7 @@
-#![allow(dead_code, unused_imports)]
-
 mod types;
 mod ranking;
 mod service;
 
+#[cfg(test)]
 pub(crate) use types::*;
 pub(crate) use service::*;

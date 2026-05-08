@@ -102,6 +102,7 @@ pub fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
 }
 
 /// Write index into the given subdirectory (e.g. "file" or "git").
+#[cfg(test)]
 pub fn write_index_to(
     persist_path: &Path,
     subdir: &str,
@@ -123,19 +124,8 @@ pub fn read_subdir(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::IndexConfig;
     use crate::index::schema::ChunkKind;
     use crate::index::SCHEMA_VERSION;
-
-    fn test_config() -> IndexConfig {
-        IndexConfig {
-            embedding_model: "test-model".to_string(),
-            persist_path: "/tmp/test-index".to_string(),
-            chunk_size: 256,
-            chunk_overlap: 32,
-            max_size_mb: 512,
-        }
-    }
 
     fn matching_header() -> IndexHeader {
         IndexHeader {
