@@ -20,10 +20,73 @@ Tasks reside in `.lissom/tasks/<task_id>/Specs.md`. The user may ask for a spec 
 
 ### Implementation Hooks
 - When MCP schema changes, update Web UI accordingly.
+- When files/dirs are updated, update below `Architecture` section if necessary.
 
 ## Architecture
 
-To be updated.
+```
+src/
+├── main.rs               # Binary entry: parses CLI, dispatches to app commands
+├── lib.rs                 # Crate root: declares modules, controls visibility
+├── cli.rs                 # CLI argument definitions (clap subcommands/args)
+│
+├── app/                   # Application layer: wires CLI → workflows
+│   └── commands/
+│       ├── index.rs       #   run_index_file / run_index_git entry points
+│       └── serve.rs       #   run_serve: server bootstrap
+│
+├── workflows/             # High-level orchestration
+│   ├── file_index.rs      #   File indexing workflow (discover → extract → index)
+│   └── git_index.rs       #   Git history indexing workflow
+│
+├── config/                # Configuration loading, types, validation, defaults
+│
+├── sources/               # Document extraction from raw sources
+│   ├── file/              #   File-system: discover, extract, diff, merge, index
+│   └── git/               #   Git repos: extract, history, freshness, estimate, merge, index
+│
+├── documents.rs           # Common runtime types (ChunkMetadata, ChunkKind)
+│
+├── chunking/              # Text splitting into embedding-sized chunks
+│   ├── engine.rs          #   Core chunking algorithm
+│   ├── sectioning.rs      #   Section-aware heading splitter
+│   └── counter.rs         #   Token counters (HuggingFace, whitespace)
+│
+├── embedder.rs            # EmbeddingService trait + fastembed wrapper
+│
+├── indexing/              # Indexing pipeline: extract → chunk → embed → store
+│   ├── types.rs           #   Pipeline types
+│   └── pipeline.rs        #   Orchestration logic
+│
+├── index/                 # Persistent index storage & retrieval
+│   ├── schema.rs          #   On-disk index header/schema
+│   ├── storage.rs         #   Vector storage (read/write)
+│   ├── repository.rs      #   IndexRepository: coordinates file/git sub-indexes
+│   └── validation.rs      #   Index integrity checks
+│
+├── search/                # Vector similarity search
+│   ├── types.rs           #   Search result types
+│   ├── service.rs         #   VectorSearchService: query orchestration
+│   └── ranking.rs         #   DecayRanker for interleaved result scoring
+│
+├── interfaces/            # External protocol adapters
+│   ├── mcp.rs             #   MCP server (DocentMcpServer, tool handlers)
+│   └── search_tool.rs     #   Search tool parameter validation & execution
+│
+├── ui/                    # Web UI (axum routes for static assets)
+│
+├── support/               # Utilities
+│   ├── progress.rs        #   Progress bar rendering
+│   └── terminal.rs        #   Terminal I/O helpers
+│
+├── templates/             # Default template files (e.g., config.toml)
+│
+└── tests/                 # Integration-style tests (compiled as crate unit tests)
+```
+
+**Data flow (index):** `sources/*/` extract documents → `chunking/` splits into chunks → `embedder.rs` embeds vectors → `indexing/pipeline.rs` coordinates → `index/storage.rs` persists
+
+**Data flow (search):** `interfaces/mcp.rs` receives query → `search/service.rs` retrieves from `index/` → `search/ranking.rs` scores results → response
 
 ## Dependencies
 
