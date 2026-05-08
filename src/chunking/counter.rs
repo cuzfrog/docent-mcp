@@ -15,7 +15,7 @@ pub trait TokenCounter: Send + Sync {
 // WhitespaceTokenCounter — mock for unit tests
 // ---------------------------------------------------------------------------
 
-pub struct WhitespaceTokenCounter;
+pub(crate) struct WhitespaceTokenCounter;
 
 impl TokenCounter for WhitespaceTokenCounter {
     fn count_tokens(&self, text: &str) -> usize {

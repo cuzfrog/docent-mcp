@@ -8,7 +8,7 @@ use rmcp::transport::streamable_http_server::{
 
 use crate::cli::ServeArgs;
 use crate::config::Config;
-use crate::embedder::Embedder;
+use crate::embedder::{Embedder, EmbeddingService};
 use crate::index::IndexRepository;
 use crate::interfaces::mcp::DocentMcpServer;
 use crate::search::VectorSearchService;
@@ -36,9 +36,10 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
     }
     let merged = IndexRepository::load_merged_for_serve(&persist_path, &config.index)?;
 
-    let embedder = Embedder::new(&config.index.embedding_model)
-        .context("Failed to initialize embedding model — cannot start server")?;
-    let embedder = Arc::new(Mutex::new(embedder));
+    let embedder: Arc<Mutex<dyn EmbeddingService>> = Arc::new(Mutex::new(
+        Embedder::new(&config.index.embedding_model)
+            .context("Failed to initialize embedding model — cannot start server")?,
+    ));
 
     let addr = format!("127.0.0.1:{}", config.server.port);
     let listener = tokio::net::TcpListener::bind(&addr)

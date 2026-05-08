@@ -1,14 +1,14 @@
 use crate::chunking::{self, ChunkingConfig};
 use crate::config::IndexConfig;
-use crate::embedder::Embedder;
 use crate::documents::ChunkMetadata;
+use crate::embedder::EmbeddingService;
 use crate::indexing::types::{IndexableDocument, IndexedBatch};
 use crate::support::progress::Progress;
 
 pub(crate) fn index_documents(
     docs: &[IndexableDocument],
     config: &IndexConfig,
-    embedder: &mut Embedder,
+    embedder: &mut dyn EmbeddingService,
     progress: Option<&Progress>,
 ) -> anyhow::Result<IndexedBatch> {
     let chunking_config = ChunkingConfig {
@@ -20,7 +20,7 @@ pub(crate) fn index_documents(
     let mut batch_metadata: Vec<ChunkMetadata> = Vec::new();
 
     for doc in docs {
-        let chunks = chunking::chunk_document_with_embedder(&doc.body, &chunking_config, embedder);
+        let chunks = chunking::chunk_document_with_embedder(&doc.body, &chunking_config, &*embedder);
         for chunk in &chunks {
             all_chunk_texts.push(chunk.text.clone());
             batch_metadata.push(ChunkMetadata {
@@ -61,6 +61,6 @@ pub(crate) fn index_documents(
     })
 }
 
-pub(crate) fn create_embedder(model: &str) -> anyhow::Result<Embedder> {
-    Embedder::new(model)
+pub(crate) fn create_embedder(model: &str) -> anyhow::Result<Box<dyn EmbeddingService>> {
+    Ok(Box::new(crate::embedder::Embedder::new(model)?))
 }

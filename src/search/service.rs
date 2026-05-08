@@ -1,13 +1,13 @@
 use std::sync::{Arc, Mutex};
 
-use crate::embedder::Embedder;
 use crate::documents::ChunkMetadata;
+use crate::embedder::EmbeddingService;
 
 use super::ranking::Ranker;
 use super::types::SearchResult;
 
 pub(crate) struct VectorSearchService {
-    embedder: Arc<Mutex<Embedder>>,
+    embedder: Arc<Mutex<dyn EmbeddingService>>,
     vectors: Arc<Vec<Vec<f32>>>,
     metadata: Arc<Vec<ChunkMetadata>>,
     ranker: Arc<dyn Ranker>,
@@ -16,7 +16,7 @@ pub(crate) struct VectorSearchService {
 
 impl VectorSearchService {
     pub fn new(
-        embedder: Arc<Mutex<Embedder>>,
+        embedder: Arc<Mutex<dyn EmbeddingService>>,
         vectors: Arc<Vec<Vec<f32>>>,
         metadata: Arc<Vec<ChunkMetadata>>,
         ranker: Arc<dyn Ranker>,
@@ -68,27 +68,6 @@ mod tests {
     use super::*;
     use crate::documents::ChunkKind;
 
-    fn make_meta(
-        source_path: &str,
-        title: &str,
-        chunk_text: &str,
-        chunk_index: usize,
-    ) -> ChunkMetadata {
-        ChunkMetadata {
-            source_path: source_path.to_string(),
-            source_revision: "hash".to_string(),
-            title: title.to_string(),
-            chunk_text: chunk_text.to_string(),
-            section_heading: None,
-            chunk_index,
-            line_start: 0,
-            line_end: 0,
-            modified_at: None,
-            kind: ChunkKind::File,
-            is_fresh: None,
-        }
-    }
-
     #[test]
     fn test_search_result_fields() {
         use crate::search::SearchResult;
@@ -131,124 +110,5 @@ mod tests {
         assert!(json.contains("\"source_revision\":\"abc123\""));
         assert!(json.contains("\"is_fresh\":false"));
         assert!(json.contains("\"index_time\":\"2026-05-06T12:00:00Z\""));
-    }
-
-    #[test]
-    #[ignore]
-    fn test_search_results_sorted_by_score() {
-        let mut embedder =
-            Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
-
-        let vectors: Vec<Vec<f32>> = (0..3)
-            .map(|i| {
-                let text = format!("Document number {}", i);
-                embedder.embed(&[&text]).unwrap().remove(0)
-            })
-            .collect();
-
-        let metadata: Vec<ChunkMetadata> = (0..3)
-            .map(|i| make_meta(
-                &format!("doc{}.md", i),
-                &format!("Doc {}", i),
-                &format!("Content {}", i),
-                0,
-            ))
-            .collect();
-
-        let embedder = Arc::new(Mutex::new(embedder));
-        let ranker = Arc::new(crate::search::DecayRanker::new(0.9));
-        let svc = VectorSearchService::new(
-            embedder,
-            Arc::new(vectors),
-            Arc::new(metadata),
-            ranker,
-            "2026-01-01T00:00:00Z".into(),
-        );
-
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let results = rt.block_on(svc.search("Document number 0", 10)).unwrap();
-        for i in 1..results.len() {
-            assert!(results[i - 1].score >= results[i].score);
-        }
-    }
-
-    #[test]
-    #[ignore]
-    fn test_search_fewer_results_than_limit() {
-        let mut embedder =
-            Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
-
-        let vectors: Vec<Vec<f32>> = (0..2)
-            .map(|i| {
-                let text = format!("Document number {}", i);
-                embedder.embed(&[&text]).unwrap().remove(0)
-            })
-            .collect();
-
-        let metadata: Vec<ChunkMetadata> = (0..2)
-            .map(|i| make_meta(
-                &format!("doc{}.md", i),
-                &format!("Doc {}", i),
-                &format!("Content {}", i),
-                0,
-            ))
-            .collect();
-
-        let embedder = Arc::new(Mutex::new(embedder));
-        let ranker = Arc::new(crate::search::DecayRanker::new(0.9));
-        let svc = VectorSearchService::new(
-            embedder,
-            Arc::new(vectors),
-            Arc::new(metadata),
-            ranker,
-            "2026-01-01T00:00:00Z".into(),
-        );
-
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let results = rt.block_on(svc.search("test", 5)).unwrap();
-        assert_eq!(results.len(), 2);
-    }
-
-    #[test]
-    #[ignore]
-    fn test_search_limit_clamping() {
-        let mut embedder =
-            Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
-
-        let vectors: Vec<Vec<f32>> = (0..5)
-            .map(|i| {
-                let text = format!("Document number {} about topic {}", i, i);
-                embedder.embed(&[&text]).unwrap().remove(0)
-            })
-            .collect();
-
-        let metadata: Vec<ChunkMetadata> = (0..5)
-            .map(|i| make_meta(
-                &format!("doc{}.md", i),
-                &format!("Doc {}", i),
-                &format!("Content {}", i),
-                0,
-            ))
-            .collect();
-
-        let embedder = Arc::new(Mutex::new(embedder));
-        let ranker = Arc::new(crate::search::DecayRanker::new(0.9));
-        let svc = VectorSearchService::new(
-            embedder,
-            Arc::new(vectors),
-            Arc::new(metadata),
-            ranker,
-            "2026-01-01T00:00:00Z".into(),
-        );
-
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let results = rt.block_on(svc.search("test query", 0)).unwrap();
-        assert_eq!(results.len(), 3);
-
-        let results = rt.block_on(svc.search("test query", 20)).unwrap();
-        assert_eq!(results.len(), 5);
-
-        let results = rt.block_on(svc.search("test query", 2)).unwrap();
-        assert_eq!(results.len(), 2);
     }
 }

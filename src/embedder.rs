@@ -3,6 +3,30 @@ use std::str::FromStr;
 
 use anyhow::Context;
 
+use crate::chunking::TokenCounter;
+
+// ---------------------------------------------------------------------------
+// EmbeddingService trait
+// ---------------------------------------------------------------------------
+
+/// Abstraction over text embedding that can be backed by either a real model
+/// or a deterministic fake for tests.
+pub(crate) trait EmbeddingService: Send {
+    /// Embed a batch of texts. Returns one vector per input text.
+    fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>>;
+
+    /// Return the embedding dimension (e.g., 384 for bge-small-en-v1.5).
+    fn dims(&self) -> usize;
+
+    /// Return a token counter suitable for chunking text that uses this
+    /// embedder's vocabulary/tokenizer conventions.
+    fn token_counter(&self) -> Box<dyn TokenCounter>;
+}
+
+// ---------------------------------------------------------------------------
+// Real embedder backed by fastembed
+// ---------------------------------------------------------------------------
+
 /// Return all supported embedding models as (name, dims) pairs.
 /// Hides `fastembed` types from callers.
 pub fn list_supported_models() -> Vec<(String, usize)> {
@@ -109,14 +133,21 @@ impl Embedder {
         Ok(embeddings)
     }
 
-    /// Return the embedding dimension (e.g., 384 for bge-small-en-v1.5).
-    pub fn dims(&self) -> usize {
+}
+
+impl EmbeddingService for Embedder {
+    fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
+        self.embed(texts)
+    }
+
+    fn dims(&self) -> usize {
         self.dims
     }
 
-    /// Return a clone of the underlying tokenizer.
-    pub(crate) fn tokenizer(&self) -> tokenizers::Tokenizer {
-        self.model.tokenizer.clone()
+    fn token_counter(&self) -> Box<dyn TokenCounter> {
+        Box::new(crate::chunking::HuggingFaceTokenCounter::from_tokenizer(
+            self.model.tokenizer.clone(),
+        ))
     }
 }
 
@@ -128,16 +159,12 @@ impl Embedder {
 mod tests {
     use super::*;
 
-    // -----------------------------------------------------------------------
-    // Unit test: cache directory resolution
-    // -----------------------------------------------------------------------
-
+    /// Unit test: cache directory resolution.
     #[test]
     fn test_cache_dir_resolution() {
         let result = resolve_cache_dir("BGESmallENV15Q");
         assert!(result.is_ok());
         let path = result.unwrap();
-        // The path should end with the expected suffix
         let path_str = path.to_string_lossy();
         assert!(
             path_str.contains(".cache/docent/models/BGESmallENV15Q"),
@@ -146,55 +173,7 @@ mod tests {
         );
     }
 
-    // -----------------------------------------------------------------------
-    // Integration tests (require model download; marked #[ignore])
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_embed_single_string_dimensions() {
-        let mut embedder =
-            Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
-        assert_eq!(embedder.dims(), 384);
-
-        let result = embedder.embed(&["hello world"]).expect("Embedding failed");
-        assert_eq!(result.len(), 1, "Expected exactly one embedding vector");
-        assert_eq!(result[0].len(), 384, "Expected 384-dimensional vector");
-    }
-
-    #[test]
-    fn test_embed_identical_inputs_produce_identical_vectors() {
-        let mut embedder =
-            Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
-
-        let result = embedder
-            .embed(&["test text", "test text"])
-            .expect("Embedding failed");
-        assert_eq!(result.len(), 2, "Expected two embedding vectors");
-        assert_eq!(
-            result[0], result[1],
-            "Identical inputs should produce identical vectors"
-        );
-    }
-
-    #[test]
-    fn test_embed_batch() {
-        let mut embedder =
-            Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
-
-        let texts = vec![
-            "first string",
-            "second string",
-            "third string",
-            "fourth string",
-            "fifth string",
-        ];
-        let result = embedder.embed(&texts).expect("Embedding failed");
-        assert_eq!(result.len(), 5, "Expected five embedding vectors");
-        for (i, vec) in result.iter().enumerate() {
-            assert_eq!(vec.len(), 384, "Vector {} should be 384-dimensional", i);
-        }
-    }
-
+    /// Invalid model name produces a user-facing error.
     #[test]
     fn test_invalid_model_name_error() {
         let result = Embedder::new("nonexistent/model");

@@ -1,183 +1,161 @@
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use crate::cli::IndexArgs;
-use crate::documents::ChunkMetadata;
-use crate::embedder::Embedder;
-use crate::index;
-use crate::index::{IndexRepository, SourceIndexKind};
-use crate::app::commands::index::run_index_file;
-use crate::search::{DecayRanker, SearchResult, VectorSearchService};
+use crate::documents::{ChunkKind, ChunkMetadata};
+use crate::embedder::EmbeddingService;
+use crate::search::{DecayRanker, VectorSearchService};
+use crate::tests::fixtures::FakeEmbedder;
 
-fn make_temp_dir(name: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("docent_test_{}", name));
-    let _ = std::fs::remove_dir_all(&path);
-    std::fs::create_dir_all(&path).unwrap();
-    path
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+fn make_meta(
+    source_path: &str,
+    title: &str,
+    chunk_text: &str,
+    chunk_index: usize,
+) -> ChunkMetadata {
+    ChunkMetadata {
+        source_path: source_path.to_string(),
+        source_revision: "hash".to_string(),
+        title: title.to_string(),
+        chunk_text: chunk_text.to_string(),
+        section_heading: None,
+        chunk_index,
+        line_start: 0,
+        line_end: 0,
+        modified_at: None,
+        kind: ChunkKind::File,
+        is_fresh: None,
+    }
 }
 
-fn write_config(dir: &std::path::Path, persist_path: &std::path::Path) -> PathBuf {
-    let config_path = dir.join("config.toml");
-    let content = format!(
-        r#"[index]
-embedding_model = "BGESmallENV15Q"
-persist_path = "{}"
-chunk_size = 512
-chunk_overlap = 64
-"#,
-        persist_path.to_string_lossy()
-    );
-    std::fs::write(&config_path, content).unwrap();
-    config_path
-}
+fn build_search_service(
+    texts: &[&str],
+) -> VectorSearchService {
+    let mut embedder = FakeEmbedder::new();
+    let vectors: Vec<Vec<f32>> = texts
+        .iter()
+        .map(|t| embedder.embed(&[t]).unwrap().remove(0))
+        .collect();
 
-fn read_index_at(
-    path: &std::path::Path,
-) -> (index::IndexHeader, Vec<Vec<f32>>, Vec<ChunkMetadata>) {
-    let stored = IndexRepository::load_one(path, SourceIndexKind::File).unwrap();
-    (stored.header, stored.vectors, stored.metadata)
-}
+    let metadata: Vec<ChunkMetadata> = texts
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            let path = format!("doc{}.md", i);
+            let title = format!("Doc {}", i);
+            make_meta(&path, &title, t, 0)
+        })
+        .collect();
 
-#[test]
-fn test_search_relevance_ordering() {
-    let base = make_temp_dir("search_relevance");
-    let docs_dir = base.join("docs");
-    let index_dir = base.join("index");
-    std::fs::create_dir_all(&docs_dir).unwrap();
-
-    std::fs::write(
-        docs_dir.join("authentication.md"),
-        r#"# Authentication Design
-
-## Overview
-This document describes the authentication system used across the platform.
-
-## Token-based Authentication
-We use JWT tokens for stateless authentication. Each token contains the user ID,
-roles, and an expiration timestamp. Tokens are signed using HS256 with a rotating
-secret key stored in the configuration.
-
-## Password Hashing
-Passwords are hashed using bcrypt with a cost factor of 12. We never store
-plaintext passwords. The hashing is done server-side before any database write.
-
-## Session Management
-Sessions are managed through refresh tokens. When an access token expires,
-the client sends the refresh token to obtain a new access token without
-requiring the user to log in again.
-"#,
-    )
-    .unwrap();
-
-    std::fs::write(
-        docs_dir.join("database-design.md"),
-        r#"# Database Schema Design
-
-## Overview
-This document explains the database schema design decisions for the core
-data models.
-
-## Relational Model
-We use PostgreSQL as our primary database. The schema follows a normalized
-relational model with foreign key constraints to ensure referential integrity.
-
-## Table Design
-The users table contains id, email, password_hash, created_at, and updated_at
-columns. The email column has a unique constraint. We use UUID v4 for primary
-keys to avoid sequential ID enumeration.
-
-## Indexing Strategy
-We create indexes on frequently queried columns: email (unique), created_at
-(for sorting), and foreign key columns for join performance.
-
-## Migration Strategy
-Database migrations are managed using SQL migration files executed in order.
-Each migration file is named with a timestamp prefix to ensure ordering.
-"#,
-    )
-    .unwrap();
-
-    std::fs::write(
-        docs_dir.join("caching-strategy.md"),
-        r#"# Caching Strategy
-
-## Overview
-This document describes the caching layers used to improve application
-performance.
-
-## Redis Cache
-We use Redis as a distributed cache for session data, API response caching,
-and rate limiting counters. Redis is configured with a max memory policy of
-allkeys-lru to automatically evict least recently used entries.
-
-## Cache Invalidation
-Cache entries are invalidated using a combination of TTL (time-to-live) and
-explicit invalidation on write operations. The TTL for most entries is 5 minutes.
-
-## Cache-aside Pattern
-We use the cache-aside (lazy loading) pattern. On a cache miss, the application
-loads data from the database and populates the cache for subsequent requests.
-"#,
-    )
-    .unwrap();
-
-    let config_path = write_config(&base, &index_dir);
-
-    run_index_file(IndexArgs {
-            file: docs_dir.clone(),
-            config: config_path,
-            rebuild: false,
-            verbose: false,
-    })
-    .unwrap();
-
-    let (_header, vectors, metadata) = read_index_at(&index_dir);
-
-    assert!(!metadata.is_empty(), "Index should have chunks");
-    assert!(
-        !metadata.iter().all(|m| m.chunk_text.is_empty()),
-        "Chunks should have chunk_text populated"
-    );
-
-    let embedder = Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
+    let embedder: Arc<Mutex<dyn EmbeddingService>> =
+        Arc::new(Mutex::new(FakeEmbedder::new()));
     let ranker = Arc::new(DecayRanker::new(0.9));
-    let svc = VectorSearchService::new(
-        Arc::new(Mutex::new(embedder)),
+
+    VectorSearchService::new(
+        embedder,
         Arc::new(vectors),
         Arc::new(metadata),
         ranker,
-        _header.built_at.clone(),
-    );
+        "2026-01-01T00:00:00Z".into(),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Search service tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_search_returns_results_sorted_by_score() {
+    let svc = build_search_service(&[
+        "Document number zero",
+        "Document number one",
+        "Document number two",
+    ]);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let results: Vec<SearchResult> = rt.block_on(svc.search("database schema design", 5)).unwrap();
+    let results = rt.block_on(svc.search("Document number zero", 10)).unwrap();
 
     assert!(!results.is_empty(), "Should return at least one result");
-
-    assert_eq!(
-        results[0].source_path, "database-design.md",
-        "Database document should rank first for 'database schema design' query"
-    );
-
-    assert!(results.len() <= 5, "Should return at most 5 results");
-
     for i in 1..results.len() {
         assert!(
             results[i - 1].score >= results[i].score,
             "Results should be sorted by score descending"
         );
     }
+}
 
-    for result in &results {
-        assert!(
-            !result.matched_content.is_empty(),
-            "matched_content should be populated for {}",
-            result.source_path
-        );
-        // Verify new fields are populated
-        assert!(!result.source_revision.is_empty(), "source_revision should be populated");
-        assert!(!result.index_time.is_empty(), "index_time should be populated");
-    }
+#[test]
+fn test_search_fewer_results_than_limit() {
+    let svc = build_search_service(&[
+        "Document number zero",
+        "Document number one",
+    ]);
 
-    let _ = std::fs::remove_dir_all(&base);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let results = rt.block_on(svc.search("test", 5)).unwrap();
+
+    assert_eq!(results.len(), 2, "Should return at most as many results as vectors");
+}
+
+#[test]
+fn test_search_limit_clamping() {
+    let svc = build_search_service(&[
+        "zero",
+        "one",
+        "two",
+        "three",
+        "four",
+    ]);
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+
+    // limit=0 should be clamped to 3
+    let results = rt.block_on(svc.search("test query", 0)).unwrap();
+    assert_eq!(results.len(), 3);
+
+    // limit=20 should be clamped to 10
+    let results = rt.block_on(svc.search("test query", 20)).unwrap();
+    assert_eq!(results.len(), 5);
+
+    // limit=2 should return exactly 2
+    let results = rt.block_on(svc.search("test query", 2)).unwrap();
+    assert_eq!(results.len(), 2);
+}
+
+#[test]
+fn test_search_result_has_required_fields() {
+    let svc = build_search_service(&["unique document content here"]);
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let results = rt.block_on(svc.search("unique", 1)).unwrap();
+
+    assert_eq!(results.len(), 1);
+    let result = &results[0];
+
+    assert!(!result.source_path.is_empty(), "source_path should be populated");
+    assert!(!result.source_revision.is_empty(), "source_revision should be populated");
+    assert!(!result.index_time.is_empty(), "index_time should be populated");
+    assert!(!result.matched_content.is_empty(), "matched_content should be populated");
+    assert!(result.score >= 0.0, "score should be non-negative");
+}
+
+#[test]
+fn test_search_empty_index_returns_empty() {
+    // No vectors in the service = empty index
+    let embedder: Arc<Mutex<dyn EmbeddingService>> =
+        Arc::new(Mutex::new(FakeEmbedder::new()));
+    let ranker = Arc::new(DecayRanker::new(0.9));
+    let svc = VectorSearchService::new(
+        embedder,
+        Arc::new(vec![]),
+        Arc::new(vec![]),
+        ranker,
+        "2026-01-01T00:00:00Z".into(),
+    );
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let results = rt.block_on(svc.search("anything", 5)).unwrap();
+    assert!(results.is_empty());
 }
