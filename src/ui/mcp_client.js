@@ -5,12 +5,12 @@
  * @param {string} block
  * @returns {string|null}
  */
-function extractDataField(block) {
+export function extractDataField(block) {
   for (const line of block.split('\n')) {
     if (line.startsWith('data:')) {
       let val = line.slice(5);
       if (val.startsWith(' ')) val = val.slice(1);
-      return val || null;
+      return val;
     }
   }
   return null;
@@ -21,7 +21,7 @@ function extractDataField(block) {
  * @param {string} buf
  * @returns {{ event: object|null, remainder: string }}
  */
-function extractFirstDataEvent(buf) {
+export function extractFirstDataEvent(buf) {
   let pos = 0;
 
   while (true) {

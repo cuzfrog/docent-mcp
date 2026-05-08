@@ -189,7 +189,9 @@ export class View {
    * @returns {Function} cleanup function
    */
   _copyWithFeedback(button, text) {
-    navigator.clipboard.writeText(text).catch(() => {});
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
     const originalText = button.textContent;
     button.textContent = 'Copied!';
     const timeoutId = setTimeout(() => {
