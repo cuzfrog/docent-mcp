@@ -3,14 +3,14 @@ use std::sync::{Arc, Mutex};
 use crate::embedder::Embedder;
 use crate::documents::ChunkMetadata;
 
-use super::ranking::rank_results;
+use super::ranking::Ranker;
 use super::types::SearchResult;
 
 pub(crate) struct VectorSearchService {
     embedder: Arc<Mutex<Embedder>>,
     vectors: Arc<Vec<Vec<f32>>>,
     metadata: Arc<Vec<ChunkMetadata>>,
-    same_src_score_decay: f32,
+    ranker: Arc<dyn Ranker>,
     index_time: String,
 }
 
@@ -19,14 +19,14 @@ impl VectorSearchService {
         embedder: Arc<Mutex<Embedder>>,
         vectors: Arc<Vec<Vec<f32>>>,
         metadata: Arc<Vec<ChunkMetadata>>,
-        same_src_score_decay: f32,
+        ranker: Arc<dyn Ranker>,
         index_time: String,
     ) -> Self {
         Self {
             embedder,
             vectors,
             metadata,
-            same_src_score_decay,
+            ranker,
             index_time,
         }
     }
@@ -36,8 +36,8 @@ impl VectorSearchService {
         let vectors = Arc::clone(&self.vectors);
         let metadata = Arc::clone(&self.metadata);
         let query = query.to_string();
-        let same_src_score_decay = self.same_src_score_decay;
         let index_time = self.index_time.clone();
+        let ranker = Arc::clone(&self.ranker);
 
         tokio::task::spawn_blocking(move || {
             let mut emb = embedder.lock().map_err(|e| {
@@ -50,12 +50,11 @@ impl VectorSearchService {
                 .next()
                 .ok_or_else(|| anyhow::anyhow!("Embedder returned no vectors for query"))?;
 
-            Ok(rank_results(
+            Ok(ranker.rank(
                 &query_vector,
                 &vectors,
                 &metadata,
                 limit,
-                same_src_score_decay,
                 &index_time,
             ))
         })
@@ -157,11 +156,12 @@ mod tests {
             .collect();
 
         let embedder = Arc::new(Mutex::new(embedder));
+        let ranker = Arc::new(crate::search::DecayRanker::new(0.9));
         let svc = VectorSearchService::new(
             embedder,
             Arc::new(vectors),
             Arc::new(metadata),
-            0.9,
+            ranker,
             "2026-01-01T00:00:00Z".into(),
         );
 
@@ -195,11 +195,12 @@ mod tests {
             .collect();
 
         let embedder = Arc::new(Mutex::new(embedder));
+        let ranker = Arc::new(crate::search::DecayRanker::new(0.9));
         let svc = VectorSearchService::new(
             embedder,
             Arc::new(vectors),
             Arc::new(metadata),
-            0.9,
+            ranker,
             "2026-01-01T00:00:00Z".into(),
         );
 
@@ -231,11 +232,12 @@ mod tests {
             .collect();
 
         let embedder = Arc::new(Mutex::new(embedder));
+        let ranker = Arc::new(crate::search::DecayRanker::new(0.9));
         let svc = VectorSearchService::new(
             embedder,
             Arc::new(vectors),
             Arc::new(metadata),
-            0.9,
+            ranker,
             "2026-01-01T00:00:00Z".into(),
         );
 

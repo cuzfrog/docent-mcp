@@ -1,4 +1,4 @@
-use crate::chunking::{self, ChunkingConfig, HuggingFaceTokenCounter};
+use crate::chunking::{self, ChunkingConfig};
 use crate::config::IndexConfig;
 use crate::embedder::Embedder;
 use crate::documents::ChunkMetadata;
@@ -15,13 +15,12 @@ pub(crate) fn index_documents(
         chunk_size: config.chunk_size,
         chunk_overlap: config.chunk_overlap,
     };
-    let counter = HuggingFaceTokenCounter::from_tokenizer(embedder.tokenizer());
 
     let mut all_chunk_texts: Vec<String> = Vec::new();
     let mut batch_metadata: Vec<ChunkMetadata> = Vec::new();
 
     for doc in docs {
-        let chunks = chunking::chunk_document(&doc.body, &chunking_config, &counter);
+        let chunks = chunking::chunk_document_with_embedder(&doc.body, &chunking_config, embedder);
         for chunk in &chunks {
             all_chunk_texts.push(chunk.text.clone());
             batch_metadata.push(ChunkMetadata {

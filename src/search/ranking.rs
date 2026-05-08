@@ -2,7 +2,66 @@ use crate::documents::ChunkMetadata;
 
 use super::types::SearchResult;
 
-pub(crate) fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+// ---------------------------------------------------------------------------
+// Ranker trait — swappable ranking strategy
+// ---------------------------------------------------------------------------
+
+/// A strategy for ranking and selecting search results from a set of
+/// candidate vectors and metadata.
+pub(crate) trait Ranker: Send + Sync {
+    /// Rank candidates by similarity to `query_vector`, apply any
+    /// de-duplication or score decay, and return the top results.
+    fn rank(
+        &self,
+        query_vector: &[f32],
+        vectors: &[Vec<f32>],
+        metadata: &[ChunkMetadata],
+        limit: usize,
+        index_time: &str,
+    ) -> Vec<SearchResult>;
+}
+
+// ---------------------------------------------------------------------------
+// DecayRanker — concrete ranker with same-source score decay
+// ---------------------------------------------------------------------------
+
+/// A ranker that scores candidates by cosine similarity, then applies
+/// exponential decay to subsequent chunks from the same source document
+/// to reduce redundancy in results.
+pub(crate) struct DecayRanker {
+    same_src_score_decay: f32,
+}
+
+impl DecayRanker {
+    /// Create a new ranker with the given decay factor.
+    ///
+    /// `same_src_score_decay` is multiplied into the score of each
+    /// successive chunk from the same `(source_path, source_revision)`
+    /// pair. A value of `1.0` means no decay; `0.0` means only the
+    /// highest-scoring chunk per source survives.
+    pub(crate) fn new(same_src_score_decay: f32) -> Self {
+        Self { same_src_score_decay }
+    }
+}
+
+impl Ranker for DecayRanker {
+    fn rank(
+        &self,
+        query_vector: &[f32],
+        vectors: &[Vec<f32>],
+        metadata: &[ChunkMetadata],
+        limit: usize,
+        index_time: &str,
+    ) -> Vec<SearchResult> {
+        rank_results(query_vector, vectors, metadata, limit, self.same_src_score_decay, index_time)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
     let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
     let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
@@ -36,7 +95,7 @@ fn apply_score_decay<'a>(
     results
 }
 
-pub(crate) fn rank_results(
+fn rank_results(
     query_vector: &[f32],
     vectors: &[Vec<f32>],
     metadata: &[ChunkMetadata],

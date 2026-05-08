@@ -7,7 +7,7 @@ use crate::embedder::Embedder;
 use crate::index;
 use crate::index::{IndexRepository, SourceIndexKind};
 use crate::app::commands::index::run_index_file;
-use crate::search::{SearchResult, VectorSearchService};
+use crate::search::{DecayRanker, SearchResult, VectorSearchService};
 
 fn make_temp_dir(name: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("docent_test_{}", name));
@@ -140,11 +140,12 @@ loads data from the database and populates the cache for subsequent requests.
     );
 
     let embedder = Embedder::new("BGESmallENV15Q").expect("Failed to create embedder");
+    let ranker = Arc::new(DecayRanker::new(0.9));
     let svc = VectorSearchService::new(
         Arc::new(Mutex::new(embedder)),
         Arc::new(vectors),
         Arc::new(metadata),
-        0.9,
+        ranker,
         _header.built_at.clone(),
     );
 

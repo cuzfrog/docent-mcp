@@ -115,10 +115,7 @@ impl Embedder {
     }
 
     /// Return a clone of the underlying tokenizer.
-    ///
-    /// Callers can construct a `HuggingFaceTokenCounter` from this tokenizer
-    /// for use in chunking.
-    pub fn tokenizer(&self) -> tokenizers::Tokenizer {
+    pub(crate) fn tokenizer(&self) -> tokenizers::Tokenizer {
         self.model.tokenizer.clone()
     }
 }

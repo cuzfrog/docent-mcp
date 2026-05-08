@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{CallToolResult, ErrorCode};
+use rmcp::model::CallToolResult;
 use rmcp::ErrorData;
 use rmcp::{tool, tool_handler, tool_router};
 use rmcp::ServerHandler;
@@ -9,6 +9,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::search::VectorSearchService;
+
+use super::search_tool;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct SearchDdrParams {
@@ -36,39 +38,12 @@ impl DocentMcpServer {
         params: Parameters<SearchDdrParams>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
-
-        if params.query.trim().is_empty() {
-            return Err(ErrorData::invalid_params(
-                "query is required",
-                Some(serde_json::json!({"field": "query", "reason": "required"})),
-            ));
-        }
-        if !(1..=10).contains(&params.limit) {
-            return Err(ErrorData::invalid_params(
-                "limit must be between 1 and 10",
-                Some(serde_json::json!({"field": "limit", "reason": "must be between 1 and 10"})),
-            ));
-        }
-
-        let results = self
-            .search_service
-            .search(&params.query, params.limit as usize)
-            .await
-            .map_err(|e| {
-                ErrorData::new(
-                    ErrorCode::INTERNAL_ERROR,
-                    format!("Search failed: {}", e),
-                    Some(serde_json::json!({"reason": format!("Search failed: {}", e)})),
-                )
-            })?;
-
-        let json_str = serde_json::to_string(&results).map_err(|e| {
-            ErrorData::new(
-                ErrorCode::INTERNAL_ERROR,
-                format!("Failed to serialize results: {}", e),
-                Some(serde_json::json!({"reason": format!("Failed to serialize results: {}", e)})),
-            )
-        })?;
+        let json_str = search_tool::search_ddr_tool(
+            &self.search_service,
+            &params.query,
+            params.limit,
+        )
+        .await?;
 
         Ok(CallToolResult::success(vec![rmcp::model::Content::text(
             json_str,

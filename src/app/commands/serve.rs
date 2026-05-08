@@ -52,11 +52,12 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
         addr
     );
 
+    let ranker = Arc::new(crate::search::DecayRanker::new(config.search.same_src_score_decay));
     let search_service = Arc::new(VectorSearchService::new(
         embedder,
         Arc::new(merged.vectors),
         Arc::new(merged.metadata),
-        config.search.same_src_score_decay,
+        ranker,
         merged.built_at,
     ));
 
