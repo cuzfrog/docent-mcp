@@ -11,6 +11,7 @@ pub mod mcp;
 pub mod progress;
 pub mod search;
 pub mod serve_cmd;
+pub mod terminal;
 pub mod ui;
 
 #[cfg(test)]

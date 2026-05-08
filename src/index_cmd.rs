@@ -1,25 +1,19 @@
+use crate::chunking::HuggingFaceTokenCounter;
 use crate::cli::IndexArgs;
-use crate::config::{Config, IndexConfig};
+use crate::config::Config;
 use crate::document::GitDocument;
 use crate::embedder::Embedder;
 use crate::file_index;
 use crate::git_index;
-use crate::index::{self, ChunkKind, ChunkMetadata, IndexHeader, SCHEMA_VERSION};
-use crate::progress;
+use crate::index::{self, build_header, ChunkKind, ChunkMetadata};
 use crate::progress::Progress;
+use crate::terminal;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 // ---------------------------------------------------------------------------
 // Size estimation helpers
 // ---------------------------------------------------------------------------
-
-fn estimate_git_index_size(commit_count: usize, dims: usize) -> u64 {
-    let bytes_per_chunk = (dims * 4 + 300) as u64;
-    let avg_files_per_commit: u64 = 3;
-    let avg_chunks_per_file_diff: u64 = 1;
-    (commit_count as u64) * avg_files_per_commit * avg_chunks_per_file_diff * bytes_per_chunk
-}
 
 fn warn_if_exceeds_limit(estimated_mb: u64, max_size_mb: u64, advice: &str) -> anyhow::Result<bool> {
     if estimated_mb > max_size_mb {
@@ -28,37 +22,9 @@ fn warn_if_exceeds_limit(estimated_mb: u64, max_size_mb: u64, advice: &str) -> a
             estimated_mb, max_size_mb
         );
         eprintln!("{}", advice);
-        return progress::confirm("Continue?");
+        return terminal::confirm("Continue?");
     }
     Ok(true)
-}
-
-// ---------------------------------------------------------------------------
-// build_header — shared IndexHeader construction (avoids R-02/R-03 duplication)
-// ---------------------------------------------------------------------------
-
-fn build_header(
-    config: &IndexConfig,
-    embedding_dims: usize,
-    metadata: &[ChunkMetadata],
-    last_indexed_commit: Option<String>,
-) -> IndexHeader {
-    let doc_count = metadata
-        .iter()
-        .map(|m| &m.source_path)
-        .collect::<HashSet<&String>>()
-        .len();
-    IndexHeader {
-        schema_version: SCHEMA_VERSION,
-        embedding_model: config.embedding_model.clone(),
-        embedding_dims,
-        chunk_size: config.chunk_size,
-        chunk_overlap: config.chunk_overlap,
-        built_at: chrono::Utc::now().to_rfc3339(),
-        doc_count,
-        chunk_count: metadata.len(),
-        last_indexed_commit,
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -74,7 +40,7 @@ fn run_rebuild(config: &Config, input_root: &std::path::Path, verbose: bool) -> 
                     "Warning: this will delete the existing index at '{}' and rebuild it from scratch.",
                     persist_path.display()
                 );
-                if !progress::confirm("Are you sure?")? {
+                if !terminal::confirm("Are you sure?")? {
                     return Ok(());
                 }
                 std::fs::remove_dir_all(persist_path.join("file"))?;
@@ -90,7 +56,7 @@ fn run_rebuild(config: &Config, input_root: &std::path::Path, verbose: bool) -> 
     println!("Scanning: {} files found", all_files.len());
 
     let mut embedder = Embedder::new(&config.index.embedding_model)?;
-    let counter = embedder.make_token_counter();
+    let counter = HuggingFaceTokenCounter::from_tokenizer(embedder.tokenizer());
 
     let t = std::time::Instant::now();
     let (vectors, metadata, chunk_time, embed_time) = file_index::index_files(
@@ -172,58 +138,26 @@ fn run_incremental(config: &Config, input_root: &std::path::Path, verbose: bool)
 
     let all_files = file_index::discover_files(input_root)?;
 
-    let mut new_files: Vec<PathBuf> = Vec::new();
-    let mut changed_files: Vec<PathBuf> = Vec::new();
-    let mut unchanged_count: usize = 0;
-
-    let mut discovered_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
-
-    for file in &all_files {
-        let source_path = file.to_string_lossy().to_string();
-        discovered_paths.insert(source_path.clone());
-
-        let full_path = input_root.join(file);
-        let current_hash = file_index::hash_file(&full_path)?;
-
-        if let Some(old_hash) = old_hashes.get(&source_path) {
-            if *old_hash == current_hash {
-                unchanged_count += 1;
-            } else {
-                changed_files.push(file.clone());
-            }
-        } else {
-            new_files.push(file.clone());
-        }
-    }
-
-    let deleted_count = old_hashes
-        .keys()
-        .filter(|k| !discovered_paths.contains(*k))
-        .count();
+    let diff = file_index::diff_files(&all_files, &old_hashes, input_root)?;
 
     println!(
-        "Processing: {} new, {} changed, {} deleted, {} unchanged",
-        new_files.len(),
-        changed_files.len(),
-        deleted_count,
-        unchanged_count
+        "Processing: {} new/changed, {} deleted, {} unchanged",
+        diff.to_index.len(),
+        diff.deleted_count,
+        diff.unchanged_count
     );
 
-    if new_files.is_empty() && changed_files.is_empty() && deleted_count == 0 {
+    if diff.to_index.is_empty() && diff.deleted_count == 0 {
         if index_exists {
             println!("No changes detected. Index is up to date.");
             return Ok(());
         }
     }
 
-    let mut to_index = new_files;
-    to_index.extend(changed_files);
-    to_index.sort();
-
-    let counter = embedder.make_token_counter();
+    let counter = HuggingFaceTokenCounter::from_tokenizer(embedder.tokenizer());
     let t = std::time::Instant::now();
     let (fresh_vectors, fresh_metadata, chunk_time, embed_time) = file_index::index_files(
-        &to_index,
+        &diff.to_index,
         &config.index,
         &mut embedder,
         &counter,
@@ -306,7 +240,7 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
         // -------------------------------------------------------------------
 
         let total_commits = git_index::estimate_commit_count(&repo_path, git_config, None)?;
-        let estimated_mb = estimate_git_index_size(total_commits, dims) / (1024 * 1024);
+        let estimated_mb = git_index::estimate_git_index_size(total_commits, dims) / (1024 * 1024);
         let advice = format!(
             "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml"
         );
@@ -343,11 +277,13 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
         let t2 = std::time::Instant::now();
 
         let freshness = git_index::compute_freshness(&docs);
+        let counter = HuggingFaceTokenCounter::from_tokenizer(embedder.tokenizer());
         let (vectors, metadata) = git_index::embed_git_documents(
             &docs,
             &freshness,
             &mut embedder,
             &config.index,
+            &counter,
             Some(&pb2),
         )?;
         pb2.finish();
@@ -383,7 +319,7 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
             git_config,
             last_commit.as_deref(),
         )?;
-        let estimated_mb = estimate_git_index_size(total_new, dims) / (1024 * 1024);
+        let estimated_mb = git_index::estimate_git_index_size(total_new, dims) / (1024 * 1024);
         let advice = format!(
             "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml"
         );
@@ -416,12 +352,14 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
         let pb2 = Progress::new(total_new_docs as u64, "Embedding documents", verbose);
         let mut embedder = Embedder::new(&config.index.embedding_model)?;
         let t2 = std::time::Instant::now();
+        let counter = HuggingFaceTokenCounter::from_tokenizer(embedder.tokenizer());
 
         let (new_vectors, new_metadata) = git_index::embed_git_documents(
             &new_docs,
             &vec![true; new_docs.len()],
             &mut embedder,
             &config.index,
+            &counter,
             Some(&pb2),
         )?;
         pb2.finish();

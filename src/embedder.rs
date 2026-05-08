@@ -114,12 +114,12 @@ impl Embedder {
         self.dims
     }
 
-    /// Create a `HuggingFaceTokenCounter` from the model's internal tokenizer.
+    /// Return a clone of the underlying tokenizer.
     ///
-    /// Callers that need a `&dyn TokenCounter` for chunking should use this
-    /// method instead of reaching through to the `tokenizers` crate.
-    pub fn make_token_counter(&self) -> crate::chunking::HuggingFaceTokenCounter {
-        crate::chunking::HuggingFaceTokenCounter::from_tokenizer(self.model.tokenizer.clone())
+    /// Callers can construct a `HuggingFaceTokenCounter` from this tokenizer
+    /// for use in chunking.
+    pub fn tokenizer(&self) -> tokenizers::Tokenizer {
+        self.model.tokenizer.clone()
     }
 }
 

@@ -12,6 +12,63 @@ use std::time::Duration;
 use walkdir::WalkDir;
 
 // ---------------------------------------------------------------------------
+// FileDiff — result of comparing current files against old hashes
+// ---------------------------------------------------------------------------
+
+pub struct FileDiff {
+    pub to_index: Vec<PathBuf>,
+    pub deleted_count: usize,
+    pub unchanged_count: usize,
+}
+
+/// Compare a sorted list of discovered files against old hashes and return
+/// the set of files that need (re-)indexing plus deletion/unchanged counts.
+pub fn diff_files(
+    all_files: &[PathBuf],
+    old_hashes: &HashMap<String, String>,
+    input_root: &Path,
+) -> anyhow::Result<FileDiff> {
+    let mut new_files: Vec<PathBuf> = Vec::new();
+    let mut changed_files: Vec<PathBuf> = Vec::new();
+    let mut unchanged_count: usize = 0;
+
+    let mut discovered_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for file in all_files {
+        let source_path = file.to_string_lossy().to_string();
+        discovered_paths.insert(source_path.clone());
+
+        let full_path = input_root.join(file);
+        let current_hash = hash_file(&full_path)?;
+
+        if let Some(old_hash) = old_hashes.get(&source_path) {
+            if *old_hash == current_hash {
+                unchanged_count += 1;
+            } else {
+                changed_files.push(file.clone());
+            }
+        } else {
+            new_files.push(file.clone());
+        }
+    }
+
+    let deleted_count = old_hashes
+        .keys()
+        .filter(|k| !discovered_paths.contains(*k))
+        .count();
+
+    let mut to_index = new_files;
+    to_index.extend(changed_files);
+    to_index.sort();
+
+    Ok(FileDiff {
+        to_index,
+        deleted_count,
+        unchanged_count,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // discover_files
 // ---------------------------------------------------------------------------
 
@@ -125,13 +182,11 @@ fn chunk_files(
 
         let source_revision = format!("{:x}", Sha256::digest(content.as_bytes()));
 
-        let mut doc = document::load_document_from_str(&full_path.to_string_lossy(), &content);
+        let mut doc = document::load_file_document_from_str(&full_path.to_string_lossy(), &content);
+        let relative_path = file.to_string_lossy().to_string();
+        doc.source_path = relative_path.clone();
 
-        if let document::Document::File(ref mut file_doc) = doc {
-            file_doc.source_path = relative_path.clone();
-        }
-
-        let chunks = chunking::chunk_document(&doc, &chunking_config, counter);
+        let chunks = chunking::chunk_document(&doc.body, &chunking_config, counter);
 
         if chunks.is_empty() {
             continue;
@@ -144,9 +199,9 @@ fn chunk_files(
             chunks_for_file.push((
                 chunk.text.clone(),
                 ChunkMetadata {
-                    source_path: doc.source_id().to_string(),
+                    source_path: doc.source_path.clone(),
                     source_revision: source_revision.clone(),
-                    title: doc.title().to_string(),
+                    title: doc.title.clone(),
                     chunk_text: chunk.text.clone(),
                     section_heading: chunk.section_heading.clone(),
                     chunk_index: chunk.chunk_index,

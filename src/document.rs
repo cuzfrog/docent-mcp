@@ -1,12 +1,6 @@
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Document {
-    File(FileDocument),
-    Git(GitDocument),
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub struct FileDocument {
     pub title: String,
     pub body: String,
@@ -20,37 +14,6 @@ pub struct GitDocument {
     pub file_path: String,
     pub diff: String,
     pub author_date: String,
-}
-
-impl Document {
-    pub fn title(&self) -> &str {
-        match self {
-            Document::File(d) => &d.title,
-            Document::Git(d) => &d.title,
-        }
-    }
-
-    pub fn body(&self) -> &str {
-        match self {
-            Document::File(d) => &d.body,
-            Document::Git(d) => &d.diff,
-        }
-    }
-
-    pub fn source_id(&self) -> &str {
-        match self {
-            Document::File(d) => &d.source_path,
-            Document::Git(d) => &d.file_path,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn kind(&self) -> &str {
-        match self {
-            Document::File(_) => "file",
-            Document::Git(_) => "git",
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -77,7 +40,6 @@ fn extract_title_from_body(body: &str) -> Option<String> {
         if trimmed.is_empty() {
             continue;
         }
-        // H1 is the highest priority; if found, no need to continue.
         if let Some(text) = trimmed.strip_prefix("# ") {
             if !text.is_empty() {
                 return Some(text.to_string());
@@ -85,7 +47,6 @@ fn extract_title_from_body(body: &str) -> Option<String> {
         }
     }
 
-    // No H1 found; look for first H2, then H3 (lower level = higher priority).
     for line in body.lines() {
         let trimmed = line.trim();
         if let Some(text) = trimmed.strip_prefix("## ") {
@@ -110,17 +71,16 @@ fn extract_title_from_body(body: &str) -> Option<String> {
 // load_document — read a text file from disk
 // ---------------------------------------------------------------------------
 
-/// Create a `Document` from a pre-loaded string body, avoiding a second file read.
-pub fn load_document_from_str(source_path: &str, body: &str) -> Document {
+pub fn load_file_document_from_str(source_path: &str, body: &str) -> FileDocument {
     let path = Path::new(source_path);
     let title = extract_title_from_body(body)
         .unwrap_or_else(|| title_from_path(path));
 
-    Document::File(FileDocument {
+    FileDocument {
         title,
         body: body.to_string(),
         source_path: source_path.to_string(),
-    })
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -156,24 +116,19 @@ mod tests {
     }
 
     #[test]
-    fn test_load_document_from_str() {
-        let doc = load_document_from_str("/path/to/test-file.txt", "Hello, world!");
-        assert_eq!(doc.title(), "test file");
-        assert_eq!(doc.body(), "Hello, world!");
-        assert_eq!(doc.source_id(), "/path/to/test-file.txt");
-        assert_eq!(doc.kind(), "file");
+    fn test_load_file_document_from_str() {
+        let doc = load_file_document_from_str("/path/to/test-file.txt", "Hello, world!");
+        assert_eq!(doc.title, "test file");
+        assert_eq!(doc.body, "Hello, world!");
+        assert_eq!(doc.source_path, "/path/to/test-file.txt");
     }
 
     #[test]
-    fn test_load_document_from_str_empty() {
-        let doc = load_document_from_str("/path/to/empty-file.md", "");
-        assert_eq!(doc.title(), "empty file");
-        assert_eq!(doc.body(), "");
+    fn test_load_file_document_from_str_empty() {
+        let doc = load_file_document_from_str("/path/to/empty-file.md", "");
+        assert_eq!(doc.title, "empty file");
+        assert_eq!(doc.body, "");
     }
-
-    // -----------------------------------------------------------------------
-    // extract_title_from_body tests
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_extract_title_h1() {
@@ -235,51 +190,9 @@ mod tests {
     }
 
     #[test]
-    fn test_load_document_from_str_title_from_body() {
-        let doc = load_document_from_str("ignored-path.md", "# My Title\n\nContent");
-        assert_eq!(doc.title(), "My Title");
-        assert_eq!(doc.body(), "# My Title\n\nContent");
-    }
-
-    #[test]
-    fn test_document_kind() {
-        let file_doc = Document::File(FileDocument {
-            title: "test".to_string(),
-            body: "body".to_string(),
-            source_path: "path".to_string(),
-        });
-        assert_eq!(file_doc.kind(), "file");
-
-        let git_doc = Document::Git(GitDocument {
-            commit_hash: "abc123".to_string(),
-            title: "fix: bug".to_string(),
-            file_path: "src/main.rs".to_string(),
-            diff: "-old\n+new".to_string(),
-            author_date: "2024-01-01".to_string(),
-        });
-        assert_eq!(git_doc.kind(), "git");
-    }
-
-    #[test]
-    fn test_document_accessors() {
-        let file_doc = Document::File(FileDocument {
-            title: "My Doc".to_string(),
-            body: "Content here".to_string(),
-            source_path: "/path/to/doc.md".to_string(),
-        });
-        assert_eq!(file_doc.title(), "My Doc");
-        assert_eq!(file_doc.body(), "Content here");
-        assert_eq!(file_doc.source_id(), "/path/to/doc.md");
-
-        let git_doc = Document::Git(GitDocument {
-            commit_hash: "def456".to_string(),
-            title: "Add feature".to_string(),
-            file_path: "src/lib.rs".to_string(),
-            diff: "+new code".to_string(),
-            author_date: "2024-06-15T10:00:00Z".to_string(),
-        });
-        assert_eq!(git_doc.title(), "Add feature");
-        assert_eq!(git_doc.body(), "+new code");
-        assert_eq!(git_doc.source_id(), "src/lib.rs");
+    fn test_load_file_document_from_str_title_from_body() {
+        let doc = load_file_document_from_str("ignored-path.md", "# My Title\n\nContent");
+        assert_eq!(doc.title, "My Title");
+        assert_eq!(doc.body, "# My Title\n\nContent");
     }
 }

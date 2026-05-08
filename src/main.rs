@@ -11,6 +11,7 @@ mod mcp;
 mod progress;
 mod search;
 mod serve_cmd;
+mod terminal;
 mod ui;
 
 use clap::Parser;

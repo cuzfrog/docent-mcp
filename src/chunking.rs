@@ -1,5 +1,3 @@
-use crate::document::Document;
-
 // ---------------------------------------------------------------------------
 // Chunk — a single chunk of document text
 // ---------------------------------------------------------------------------
@@ -291,17 +289,16 @@ fn chunk_section(
 // chunk_document — public API
 // ---------------------------------------------------------------------------
 
-/// Chunk a document into semantic chunks.
+/// Chunk a document body into semantic chunks.
 ///
 /// Splits the document body on H2/H3 heading boundaries, then applies
 /// a token-based sliding window to any section that exceeds `config.chunk_size`
 /// tokens. Returns chunks with globally incrementing `chunk_index` (0-based).
 pub fn chunk_document(
-    doc: &Document,
+    body: &str,
     config: &ChunkingConfig,
     counter: &dyn TokenCounter,
 ) -> Vec<Chunk> {
-    let body = doc.body();
     let body_newlines = build_newline_positions(body);
     let mut chunks = Vec::new();
     let mut next_index: usize = 0;
@@ -333,16 +330,6 @@ pub fn chunk_document(
 mod tests {
     use super::*;
 
-    /// Helper: create a Document from a title and body.
-    fn test_doc(title: &str, body: &str) -> Document {
-        Document::File(crate::document::FileDocument {
-            title: title.to_string(),
-            body: body.to_string(),
-            source_path: format!("{}.md", title),
-        })
-    }
-
-    /// Default config: chunk_size=10, chunk_overlap=2 (small for test brevity).
     fn test_config() -> ChunkingConfig {
         ChunkingConfig {
             chunk_size: 10,
@@ -350,66 +337,54 @@ mod tests {
         }
     }
 
-    // -----------------------------------------------------------------------
-    // AC 1: 3 short H2 sections → 3 chunks
-    // -----------------------------------------------------------------------
-
     #[test]
     fn test_three_short_h2_sections() {
-        let doc = test_doc("test", "## One\na b c\n## Two\nd e f\n## Three\ng h i");
-        let chunks = chunk_document(&doc, &test_config(), &WhitespaceTokenCounter);
+        let chunks = chunk_document(
+            "## One\na b c\n## Two\nd e f\n## Three\ng h i",
+            &test_config(),
+            &WhitespaceTokenCounter,
+        );
         assert_eq!(chunks.len(), 3);
         assert_eq!(chunks[0].section_heading.as_deref(), Some("One"));
         assert_eq!(chunks[1].section_heading.as_deref(), Some("Two"));
         assert_eq!(chunks[2].section_heading.as_deref(), Some("Three"));
-        // chunk_index should be 0, 1, 2
         assert_eq!(chunks[0].chunk_index, 0);
         assert_eq!(chunks[1].chunk_index, 1);
         assert_eq!(chunks[2].chunk_index, 2);
     }
 
-    // -----------------------------------------------------------------------
-    // AC 2: 1 large section → multiple overlapping chunks
-    // -----------------------------------------------------------------------
-
     #[test]
     fn test_large_section_sliding_window() {
-        // 30 words → 30 tokens with WhitespaceTokenCounter, chunk_size=10 → 3+ full windows
         let words: Vec<&str> = (0..30).map(|_| "word").collect();
         let body = words.join(" ");
-        let doc = test_doc("large", &body);
         let config = ChunkingConfig {
             chunk_size: 10,
             chunk_overlap: 2,
         };
-        let chunks = chunk_document(&doc, &config, &WhitespaceTokenCounter);
-        // 30 tokens, step=8: windows at 0-10, 8-18, 16-26, 24-30 (partial) = 4 chunks
+        let chunks = chunk_document(&body, &config, &WhitespaceTokenCounter);
         assert!(chunks.len() >= 2, "Expected multiple overlapping chunks");
     }
 
-    // -----------------------------------------------------------------------
-    // AC 3: Content before first heading → own chunk
-    // -----------------------------------------------------------------------
-
     #[test]
     fn test_content_before_first_heading() {
-        let doc = test_doc("preamble", "intro text here\n## Section A\nbody A");
-        let chunks = chunk_document(&doc, &test_config(), &WhitespaceTokenCounter);
+        let chunks = chunk_document(
+            "intro text here\n## Section A\nbody A",
+            &test_config(),
+            &WhitespaceTokenCounter,
+        );
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0].section_heading, None);
         assert!(chunks[0].text.contains("intro text here"));
         assert_eq!(chunks[1].section_heading.as_deref(), Some("Section A"));
     }
 
-    // -----------------------------------------------------------------------
-    // AC 4: Empty sections are skipped
-    // -----------------------------------------------------------------------
-
     #[test]
     fn test_empty_sections_skipped() {
-        let doc = test_doc("empty", "## A\nsome text\n\n## B\n\n## C\nmore text");
-        let chunks = chunk_document(&doc, &test_config(), &WhitespaceTokenCounter);
-        // Section B has no content → should be skipped
+        let chunks = chunk_document(
+            "## A\nsome text\n\n## B\n\n## C\nmore text",
+            &test_config(),
+            &WhitespaceTokenCounter,
+        );
         assert_eq!(chunks.len(), 2);
         let headings: Vec<Option<&str>> = chunks
             .iter()
@@ -418,137 +393,104 @@ mod tests {
         assert_eq!(headings, vec![Some("A"), Some("C")]);
     }
 
-    // -----------------------------------------------------------------------
-    // AC 5: Chunk text preserves original formatting
-    // -----------------------------------------------------------------------
-
     #[test]
     fn test_preserves_original_formatting() {
-        let doc = test_doc("fmt", "## Title\nline one\nline two\n  indented line");
-        let chunks = chunk_document(&doc, &test_config(), &WhitespaceTokenCounter);
+        let chunks = chunk_document(
+            "## Title\nline one\nline two\n  indented line",
+            &test_config(),
+            &WhitespaceTokenCounter,
+        );
         assert_eq!(chunks.len(), 1);
         assert!(chunks[0].text.contains("  indented line"));
         assert!(chunks[0].text.contains("line one\nline two"));
     }
 
-    // -----------------------------------------------------------------------
-    // AC 6: Sliding window overlap correctness
-    // -----------------------------------------------------------------------
-
     #[test]
     fn test_sliding_window_overlap() {
-        // Use distinct numbered words so we can verify overlap
         let words: Vec<String> = (0..25).map(|i| format!("w{}", i)).collect();
         let body = words.join(" ");
-        let doc = test_doc("overlap", &body);
         let config = ChunkingConfig {
             chunk_size: 10,
             chunk_overlap: 3,
         };
-        let chunks = chunk_document(&doc, &config, &WhitespaceTokenCounter);
+        let chunks = chunk_document(&body, &config, &WhitespaceTokenCounter);
         assert!(chunks.len() > 1);
-        // Chunk 0 should end with some tokens that Chunk 1 starts with
         let c0: Vec<&str> = chunks[0].text.split_whitespace().collect();
         let c1: Vec<&str> = chunks[1].text.split_whitespace().collect();
         assert!(c0.len() >= 3);
         assert!(c1.len() >= 3);
-        // The last 3 tokens of c0 should match the first 3 of c1
         assert_eq!(&c0[c0.len() - 3..], &c1[..3]);
     }
 
-    // -----------------------------------------------------------------------
-    // AC 7: Plain text (no headings) under chunk_size → 1 chunk
-    // -----------------------------------------------------------------------
-
     #[test]
     fn test_plain_text_under_chunk_size() {
-        let doc = test_doc("plain", "just a few words here");
-        let chunks = chunk_document(&doc, &test_config(), &WhitespaceTokenCounter);
+        let chunks = chunk_document(
+            "just a few words here",
+            &test_config(),
+            &WhitespaceTokenCounter,
+        );
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0].section_heading, None);
         assert_eq!(chunks[0].chunk_index, 0);
     }
 
-    // -----------------------------------------------------------------------
-    // AC 8: Plain text (no headings) over chunk_size → sliding window
-    // -----------------------------------------------------------------------
-
     #[test]
     fn test_plain_text_over_chunk_size() {
         let words: Vec<&str> = (0..50).map(|_| "word").collect();
         let body = words.join(" ");
-        let doc = test_doc("bigplain", &body);
-        let chunks = chunk_document(&doc, &test_config(), &WhitespaceTokenCounter);
+        let chunks = chunk_document(&body, &test_config(), &WhitespaceTokenCounter);
         assert!(
             chunks.len() > 1,
             "Expected sliding window for oversized plain text"
         );
     }
 
-    // -----------------------------------------------------------------------
-    // Additional: Empty body → 0 chunks
-    // -----------------------------------------------------------------------
-
     #[test]
     fn test_empty_body_zero_chunks() {
-        let doc = test_doc("empty", "");
-        let chunks = chunk_document(&doc, &test_config(), &WhitespaceTokenCounter);
+        let chunks = chunk_document("", &test_config(), &WhitespaceTokenCounter);
         assert_eq!(chunks.len(), 0);
 
-        let doc2 = test_doc("whitespace", "   \n  \n  ");
-        let chunks2 = chunk_document(&doc2, &test_config(), &WhitespaceTokenCounter);
+        let chunks2 = chunk_document("   \n  \n  ", &test_config(), &WhitespaceTokenCounter);
         assert_eq!(chunks2.len(), 0);
     }
 
-    // -----------------------------------------------------------------------
-    // Additional: H1 headings → section boundary
-    // -----------------------------------------------------------------------
-
     #[test]
     fn test_h1_section_boundary() {
-        let doc = test_doc("h1", "# One\nbody\n# Two\nmore");
-        let chunks = chunk_document(&doc, &test_config(), &WhitespaceTokenCounter);
+        let chunks = chunk_document(
+            "# One\nbody\n# Two\nmore",
+            &test_config(),
+            &WhitespaceTokenCounter,
+        );
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0].section_heading.as_deref(), Some("One"));
         assert_eq!(chunks[1].section_heading.as_deref(), Some("Two"));
     }
 
-    // -----------------------------------------------------------------------
-    // Additional: H3 nested under H2 → split at both levels
-    // -----------------------------------------------------------------------
-
     #[test]
     fn test_h3_nested_under_h2() {
-        let doc = test_doc("nested", "## H2\nh2 body\n### H3\nh3 body\n## H2B\nmore");
-        let chunks = chunk_document(&doc, &test_config(), &WhitespaceTokenCounter);
+        let chunks = chunk_document(
+            "## H2\nh2 body\n### H3\nh3 body\n## H2B\nmore",
+            &test_config(),
+            &WhitespaceTokenCounter,
+        );
         assert_eq!(chunks.len(), 3);
         assert_eq!(chunks[0].section_heading.as_deref(), Some("H2"));
         assert_eq!(chunks[1].section_heading.as_deref(), Some("H3"));
         assert_eq!(chunks[2].section_heading.as_deref(), Some("H2B"));
     }
 
-    // -----------------------------------------------------------------------
-    // Additional: Section exactly at chunk_size → 1 chunk (no split)
-    // -----------------------------------------------------------------------
-
     #[test]
     fn test_section_exactly_at_chunk_size() {
-        // "## Exact" = 2 tokens, need 8 more "w" to reach chunk_size=10
         let words: Vec<&str> = (0..8).map(|_| "w").collect();
-        let body = words.join(" ");
-        let doc = test_doc("exact", &format!("## Exact\n{}", body));
+        let body = format!("## Exact\n{}", words.join(" "));
         let config = ChunkingConfig {
             chunk_size: 10,
             chunk_overlap: 2,
         };
-        let chunks = chunk_document(&doc, &config, &WhitespaceTokenCounter);
+        let chunks = chunk_document(&body, &config, &WhitespaceTokenCounter);
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0].token_count, 10);
     }
-
-    // -----------------------------------------------------------------------
-    // Additional: WhitespaceTokenCounter basic correctness
-    // -----------------------------------------------------------------------
 
     #[test]
     fn test_whitespace_counter_basics() {
@@ -563,20 +505,16 @@ mod tests {
         assert_eq!(offsets, vec![(0, 5), (6, 11)]);
     }
 
-    // -----------------------------------------------------------------------
-    // Additional: chunk_index is contiguous across sections
-    // -----------------------------------------------------------------------
-
     #[test]
     fn test_chunk_index_contiguous() {
         let words: Vec<&str> = (0..15).map(|_| "w").collect();
         let big_section = words.join(" ");
-        let doc = test_doc("contig", &format!("## A\nsmall\n## B\n{}", big_section));
+        let body = format!("## A\nsmall\n## B\n{}", big_section);
         let config = ChunkingConfig {
             chunk_size: 10,
             chunk_overlap: 2,
         };
-        let chunks = chunk_document(&doc, &config, &WhitespaceTokenCounter);
+        let chunks = chunk_document(&body, &config, &WhitespaceTokenCounter);
         let indices: Vec<usize> = chunks.iter().map(|c| c.chunk_index).collect();
         let expected: Vec<usize> = (0..chunks.len()).collect();
         assert_eq!(indices, expected);

@@ -10,29 +10,15 @@ use crate::cli::ServeArgs;
 use crate::config::Config;
 use crate::embedder::Embedder;
 use crate::index;
+use crate::index::ChunkMetadata;
 use crate::mcp::DocentMcpServer;
+use crate::terminal;
 
-/// Run the `docent serve` subcommand.
-///
-/// Startup sequence:
-/// 1. Load config from the path in `args`
-/// 2. Check for `file/` and `git/` subdirectories under `config.index.persist_path`
-/// 3. Validate compatibility of subdirectory headers against config / each other
-/// 4. Check total index size vs `max_size_mb` — warn + prompt to continue
-/// 5. Merge vectors and metadata from both subdirectories
-/// 6. Create embedder (wrapped in `Arc<Mutex<_>>` for thread safety)
-/// 7. Build the `DocentMcpServer` with merged data
-/// 8. Start Streamable HTTP service on the configured port
-/// 9. Print listening address to stderr
-/// 10. Accept connections until SIGINT/SIGTERM
-pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
-    // 1. Load and validate config
-    let config =
-        Config::load(&args.config).context("Failed to load config — cannot start server")?;
-
-    let persist_path = PathBuf::from(&config.index.persist_path);
-
-    // 2. Check at least one subdirectory exists
+/// Load vectors, metadata, and index_time from file/ and git/ subdirectories.
+fn load_merged_index(
+    config: &Config,
+    persist_path: &Path,
+) -> anyhow::Result<(Vec<Vec<f32>>, Vec<ChunkMetadata>, String)> {
     let file_exists = persist_path.join("file").join("header.json").exists();
     let git_exists = persist_path.join("git").join("header.json").exists();
 
@@ -43,7 +29,6 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
         );
     }
 
-    // 2a. Warn if old-format root header.json exists (V3 migration advisory)
     if persist_path.join("header.json").exists() {
         eprintln!(
             "Warning: Detected old index format at {}. \
@@ -52,8 +37,7 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
         );
     }
 
-    // 3. Check total index size vs max_size_mb → warn + prompt
-    let total_size = dir_size(&persist_path);
+    let total_size = dir_size(persist_path);
     let max_bytes = (config.index.max_size_mb as u64) * 1024 * 1024;
     if total_size > max_bytes {
         eprintln!(
@@ -75,17 +59,13 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
                 git_size as f64 / (1024.0 * 1024.0)
             );
         }
-        eprint!("Continue? (y/N) ");
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        if input.trim().to_lowercase() != "y" {
+        if !terminal::confirm("Continue?")? {
             anyhow::bail!("Aborted by user.");
         }
     }
 
-    // 4. Load file/ subdirectory (if exists)
     let (file_header, file_vectors, file_metadata) = if file_exists {
-        let (header, vecs, meta) = index::read_subdir(&persist_path, "file")
+        let (header, vecs, meta) = index::read_subdir(persist_path, "file")
             .context("Failed to read file/ subdirectory")?;
         index::validate_header(&header, &config.index)
             .context("file/ subdirectory is incompatible with current config")?;
@@ -94,11 +74,9 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
         (None, vec![], vec![])
     };
 
-    // 5. Load git/ subdirectory (if exists) — validate compatibility
     let (git_header, git_vectors, git_metadata) = if git_exists {
-        let (header, vecs, meta) = index::read_subdir(&persist_path, "git")
+        let (header, vecs, meta) = index::read_subdir(persist_path, "git")
             .context("Failed to read git/ subdirectory")?;
-        // Validate embedding model, dims match file/ (if present)
         if let Some(ref fh) = file_header {
             if header.embedding_model != fh.embedding_model {
                 anyhow::bail!(
@@ -115,7 +93,6 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
                 );
             }
         } else {
-            // No file/ subdir, validate git header against config
             index::validate_header(&header, &config.index)
                 .context("git/ subdirectory is incompatible with current config")?;
         }
@@ -124,29 +101,45 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
         (None, vec![], vec![])
     };
 
-    // 6. Merge vectors and metadata
     let all_vectors: Vec<Vec<f32>> = file_vectors
         .into_iter()
         .chain(git_vectors.into_iter())
         .collect();
-    let all_metadata: Vec<index::ChunkMetadata> = file_metadata
+    let all_metadata: Vec<ChunkMetadata> = file_metadata
         .into_iter()
         .chain(git_metadata.into_iter())
         .collect();
 
-    // Determine index_time from whichever header is available
     let index_time = file_header
         .as_ref()
         .or(git_header.as_ref())
         .map(|h| h.built_at.clone())
         .unwrap_or_default();
 
-    // 7. Create embedder
+    Ok((all_vectors, all_metadata, index_time))
+}
+
+/// Run the `docent serve` subcommand.
+///
+/// Startup sequence:
+/// 1. Load config from the path in `args`
+/// 2. Call `load_merged_index` to discover, validate, and merge subdirectory indices
+/// 3. Create embedder (wrapped in `Arc<Mutex<_>>` for thread safety)
+/// 4. Build the `DocentMcpServer` with merged data
+/// 5. Start Streamable HTTP service on the configured port
+/// 6. Print listening address
+/// 7. Accept connections until SIGINT/SIGTERM
+pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
+    let config =
+        Config::load(&args.config).context("Failed to load config — cannot start server")?;
+
+    let persist_path = PathBuf::from(&config.index.persist_path);
+    let (all_vectors, all_metadata, index_time) = load_merged_index(&config, &persist_path)?;
+
     let embedder = Embedder::new(&config.index.embedding_model)
         .context("Failed to initialize embedding model — cannot start server")?;
     let embedder = Arc::new(Mutex::new(embedder));
 
-    // 8. Bind TCP listener (before config is moved into the server)
     let addr = format!("127.0.0.1:{}", config.server.port);
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
@@ -159,7 +152,6 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
         addr
     );
 
-    // 9. Build DocentMcpServer with merged data + config
     let server = DocentMcpServer {
         config,
         vectors: Arc::new(all_vectors),
@@ -168,7 +160,6 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
         index_time,
     };
 
-    // 10. Build Streamable HTTP service
     let service: StreamableHttpService<DocentMcpServer, LocalSessionManager> =
         StreamableHttpService::new(
             {
@@ -181,7 +172,6 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
 
     let router = crate::ui::router(service);
 
-    // 11. Serve with graceful shutdown on SIGINT/SIGTERM
     axum::serve(listener, router)
         .with_graceful_shutdown(shutdown_signal())
         .await

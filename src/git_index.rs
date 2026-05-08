@@ -1,6 +1,6 @@
 use crate::chunking;
 use crate::config::{GitConfig, IndexConfig};
-use crate::document::{Document, GitDocument};
+use crate::document::GitDocument;
 use crate::embedder::Embedder;
 use crate::index::{ChunkKind, ChunkMetadata};
 use crate::progress::Progress;
@@ -237,6 +237,16 @@ pub fn estimate_commit_count(
     Ok(count)
 }
 
+/// Estimate byte size for a git index with the given number of commits and
+/// embedding dimensions. Used to warn users before a potentially large index
+/// operation.
+pub fn estimate_git_index_size(commit_count: usize, dims: usize) -> u64 {
+    let bytes_per_chunk = (dims * 4 + 300) as u64;
+    let avg_files_per_commit: u64 = 3;
+    let avg_chunks_per_file_diff: u64 = 1;
+    (commit_count as u64) * avg_files_per_commit * avg_chunks_per_file_diff * bytes_per_chunk
+}
+
 // ---------------------------------------------------------------------------
 // Embedding helper
 // ---------------------------------------------------------------------------
@@ -251,10 +261,9 @@ pub fn embed_git_documents(
     freshness: &[bool],
     embedder: &mut Embedder,
     config: &IndexConfig,
+    counter: &dyn chunking::TokenCounter,
     progress: Option<&Progress>,
 ) -> anyhow::Result<(Vec<Vec<f32>>, Vec<ChunkMetadata>)> {
-    let counter = embedder.make_token_counter();
-
     let chunking_config = chunking::ChunkingConfig {
         chunk_size: config.chunk_size,
         chunk_overlap: config.chunk_overlap,
@@ -264,9 +273,7 @@ pub fn embed_git_documents(
     let mut all_metadata: Vec<ChunkMetadata> = Vec::new();
 
     for (i, gdoc) in documents.iter().enumerate() {
-        let doc = Document::Git(gdoc.clone());
-
-        let chunks = chunking::chunk_document(&doc, &chunking_config, &counter);
+        let chunks = chunking::chunk_document(gdoc.diff.as_str(), &chunking_config, counter);
 
         let text_refs: Vec<&str> = chunks.iter().map(|c| c.text.as_str()).collect();
         let embeddings = embedder
