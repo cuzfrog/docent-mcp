@@ -56,7 +56,7 @@ same_src_score_decay = 0.95
 
     #[test]
     fn test_load_nonexistent_path() {
-        let path = Path::new("/nonexistent/path/config.toml");
+        let path = Path::new("/nonexistent/path/docent.toml");
         let err = Config::load(path).unwrap_err();
         assert!(err.to_string().contains("Config file not found at"));
     }
@@ -71,10 +71,10 @@ same_src_score_decay = 0.95
 
     #[test]
     fn test_template_config_toml_parses_with_all_fields() {
-        let template_path = Path::new("src/templates/config.toml");
+        let template_path = Path::new("src/templates/docent.toml");
         let content = std::fs::read_to_string(template_path)
-            .expect("template config.toml should exist");
-        let config: Config = toml::from_str(&content).expect("template config.toml should parse");
+            .expect("template docent.toml should exist");
+        let config: Config = toml::from_str(&content).expect("template docent.toml should parse");
 
         assert_eq!(config.index.embedding_model, "BGESmallENV15Q");
         assert_eq!(config.index.persist_path, "./.docent-index");

@@ -17,7 +17,7 @@ pub(crate) struct GitIndexRequest {
 pub(crate) fn run_git_index(request: GitIndexRequest, config: &Config) -> anyhow::Result<()> {
     let git_config = config.git.as_ref().ok_or_else(|| {
         anyhow::anyhow!(
-            "[git] section required in config.toml for index-git. Please add it and try again."
+            "[git] section required in docent.toml for index-git. Please add it and try again."
         )
     })?;
 
@@ -52,7 +52,7 @@ fn check_git_index_size(
 ) -> anyhow::Result<()> {
     let total = GitIndexer::estimate_commit_count(repo_path, git_config, since_commit)?;
     let estimated_mb = GitIndexer::estimate_git_index_size(total, dims) / (1024 * 1024);
-    let advice = "To reduce the size:\n  - Set [git] depth_limit to a smaller value in config.toml\n  - Increase [index] max_size_mb in config.toml".to_string();
+    let advice = "To reduce the size:\n  - Set [git] depth_limit to a smaller value in docent.toml\n  - Increase [index] max_size_mb in docent.toml".to_string();
     if !warn_if_exceeds_limit(estimated_mb, max_size_mb, &advice)? {
         anyhow::bail!("Aborted due to size limit");
     }

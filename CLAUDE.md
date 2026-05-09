@@ -82,7 +82,7 @@ src/
 │   ├── progress.rs        #   Progress bar rendering
 │   └── terminal.rs        #   Terminal I/O helpers
 │
-├── templates/             # Default template files (e.g., config.toml)
+├── templates/             # Default template files (e.g., docent.toml)
 │
 └── tests/                 # Integration-style tests (compiled as crate unit tests)
 ```

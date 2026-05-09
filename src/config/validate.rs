@@ -4,7 +4,7 @@ impl Config {
     pub fn validate(&self) -> anyhow::Result<()> {
         if self.index.embedding_model.is_empty() {
             anyhow::bail!(
-                "embedding_model is required in config.toml. \
+                "embedding_model is required in docent.toml. \
                 Run `docent list-models` to see available models."
             );
         }
@@ -108,7 +108,7 @@ mod tests {
             ..Config::default()
         };
         let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("embedding_model is required in config.toml"));
+        assert!(err.to_string().contains("embedding_model is required in docent.toml"));
         assert!(err.to_string().contains("docent list-models"));
     }
 

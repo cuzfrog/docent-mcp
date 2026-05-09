@@ -18,10 +18,10 @@ pub fn make_temp_dir(name: &str) -> PathBuf {
     path
 }
 
-/// Write a `config.toml` with the given persist path and reasonable defaults.
+/// Write a `docent.toml` with the given persist path and reasonable defaults.
 #[allow(dead_code)]
 pub fn write_config(dir: &std::path::Path, persist_path: &std::path::Path) -> PathBuf {
-    let config_path = dir.join("config.toml");
+    let config_path = dir.join("docent.toml");
     let content = format!(
         r#"[index]
 embedding_model = "BGESmallENV15Q"

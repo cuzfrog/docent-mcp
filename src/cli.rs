@@ -34,8 +34,8 @@ pub struct IndexArgs {
     /// Path to a file or directory (for index-file) or a git repository (for index-git).
     pub file: PathBuf,
 
-    /// Path to config file (default: ./config.toml).
-    #[arg(long, default_value = "./config.toml")]
+    /// Path to config file (default: ./docent.toml).
+    #[arg(long, default_value = "./docent.toml")]
     pub config: PathBuf,
 
     /// Re-index from scratch (instead of incremental).
@@ -50,8 +50,8 @@ pub struct IndexArgs {
 /// Arguments for the `serve` subcommand.
 #[derive(clap::Args)]
 pub struct ServeArgs {
-    /// Path to config file (default: ./config.toml).
-    #[arg(long, default_value = "./config.toml")]
+    /// Path to config file (default: ./docent.toml).
+    #[arg(long, default_value = "./docent.toml")]
     pub config: PathBuf,
 }
 
@@ -68,7 +68,7 @@ mod tests {
         match cli.command {
             Commands::IndexFile(args) => {
                 assert_eq!(args.file, std::path::PathBuf::from("./ddrs"));
-                assert_eq!(args.config, std::path::PathBuf::from("./config.toml"));
+                assert_eq!(args.config, std::path::PathBuf::from("./docent.toml"));
                 assert!(!args.rebuild);
             }
             _ => panic!("expected IndexFile command"),
@@ -153,7 +153,7 @@ mod tests {
         match cli.command {
             Commands::IndexGit(args) => {
                 assert_eq!(args.file, std::path::PathBuf::from("./my-repo"));
-                assert_eq!(args.config, std::path::PathBuf::from("./config.toml"));
+                assert_eq!(args.config, std::path::PathBuf::from("./docent.toml"));
                 assert!(!args.rebuild);
                 assert!(!args.verbose);
             }
@@ -188,7 +188,7 @@ mod tests {
         let cli = cli.unwrap();
         match cli.command {
             Commands::Serve(args) => {
-                assert_eq!(args.config, std::path::PathBuf::from("./config.toml"));
+                assert_eq!(args.config, std::path::PathBuf::from("./docent.toml"));
             }
             _ => panic!("expected Serve command"),
         }

@@ -309,6 +309,6 @@ mod tests {
         let patterns = vec!["*.rs".to_string(), "*.md".to_string()];
         assert!(super::matches_any_pattern("lib.rs", &patterns));
         assert!(super::matches_any_pattern("readme.md", &patterns));
-        assert!(!super::matches_any_pattern("config.toml", &patterns));
+        assert!(!super::matches_any_pattern("docent.toml", &patterns));
     }
 }
