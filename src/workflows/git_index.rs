@@ -74,6 +74,35 @@ pub(crate) fn run_git_index_with(
 }
 
 // ---------------------------------------------------------------------------
+// check_git_size — shared size-check-and-confirm helper
+// ---------------------------------------------------------------------------
+
+/// Check estimated git index size against the configured limit.
+/// Warns and asks the user for confirmation if the estimate exceeds the limit.
+///
+/// Returns `Ok(Some(total_est))` if it is safe to proceed, or
+/// `Ok(None)` if the user chose to abort.
+fn check_git_size(
+    repo_path: &Path,
+    git_config: &GitConfig,
+    dims: usize,
+    max_size_mb: u64,
+    since_commit: Option<&str>,
+    ui: &dyn WorkflowUi,
+) -> anyhow::Result<Option<usize>> {
+    let total = GitIndexer::estimate_commit_count(repo_path, git_config, since_commit)?;
+    let estimated_mb = GitIndexer::estimate_git_index_size(total, dims) / (1024 * 1024);
+    let advice = "To reduce the size:\n  - Set [git] depth_limit to a smaller value in docent.toml\n  - Increase [index] max_size_mb in docent.toml".to_string();
+    if estimated_mb > max_size_mb {
+        ui.warn(&format_size_warning(estimated_mb, max_size_mb, &advice));
+        if !ui.confirm("Continue?")? {
+            return Ok(None);
+        }
+    }
+    Ok(Some(total))
+}
+
+// ---------------------------------------------------------------------------
 // Rebuild path
 // ---------------------------------------------------------------------------
 
@@ -87,22 +116,16 @@ fn run_git_rebuild(
     embedder_factory: &dyn EmbedderFactory,
 ) -> anyhow::Result<GitIndexOutcome> {
     // Check size and confirm
-    let total_est =
-        GitIndexer::estimate_commit_count(&request.repo_path, git_config, None)?;
-    let estimated_mb = GitIndexer::estimate_git_index_size(total_est, dims) / (1024 * 1024);
-    let advice = "To reduce the size:\n  - Set [git] depth_limit to a smaller value in docent.toml\n  - Increase [index] max_size_mb in docent.toml".to_string();
-    if estimated_mb > config.index.max_size_mb {
-        ui.warn(&format_size_warning(estimated_mb, config.index.max_size_mb, &advice));
-        if !ui.confirm("Continue?")? {
-            return Ok(GitIndexOutcome::Aborted);
-        }
-    }
+    let total_est = match check_git_size(
+        &request.repo_path, git_config, dims, config.index.max_size_mb, None, ui,
+    )? {
+        Some(n) => n,
+        None => return Ok(GitIndexOutcome::Aborted),
+    };
 
     // Walk history
     let walk_start = Instant::now();
-    let total_commits =
-        GitIndexer::estimate_commit_count(&request.repo_path, git_config, None)?;
-    let pb1 = ui.progress(total_commits as u64, "Walking commits", request.verbose);
+    let pb1 = ui.progress(total_est as u64, "Walking commits", request.verbose);
     let docs = GitIndexer::index_git_history(
         &request.repo_path,
         git_config,
@@ -165,22 +188,17 @@ fn run_git_incremental(
     let last_commit = old_header.last_indexed_commit.clone();
 
     // Check size and confirm
-    let total_new =
-        GitIndexer::estimate_commit_count(&request.repo_path, git_config, last_commit.as_deref())?;
-    let estimated_mb = GitIndexer::estimate_git_index_size(total_new, dims) / (1024 * 1024);
-    let advice = "To reduce the size:\n  - Set [git] depth_limit to a smaller value in docent.toml\n  - Increase [index] max_size_mb in docent.toml".to_string();
-    if estimated_mb > config.index.max_size_mb {
-        ui.warn(&format_size_warning(estimated_mb, config.index.max_size_mb, &advice));
-        if !ui.confirm("Continue?")? {
-            return Ok(GitIndexOutcome::Aborted);
-        }
-    }
+    let total_new = match check_git_size(
+        &request.repo_path, git_config, dims, config.index.max_size_mb,
+        last_commit.as_deref(), ui,
+    )? {
+        Some(n) => n,
+        None => return Ok(GitIndexOutcome::Aborted),
+    };
 
     // Walk new commits
     let walk_start = Instant::now();
-    let total_new_commits =
-        GitIndexer::estimate_commit_count(&request.repo_path, git_config, last_commit.as_deref())?;
-    let pb1 = ui.progress(total_new_commits as u64, "Walking commits", request.verbose);
+    let pb1 = ui.progress(total_new as u64, "Walking commits", request.verbose);
     let new_docs = GitIndexer::index_git_history(
         &request.repo_path,
         git_config,
