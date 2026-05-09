@@ -68,7 +68,7 @@ pub(crate) fn build_hybrid_search_service(
     };
 
     // Build fusion strategy
-    let fusion = Arc::new(create_fusion(
+    let fusion = Arc::from(create_fusion(
         &search_config.fusion_strategy,
         search_config.rrf_k,
         search_config.semantic_weight,

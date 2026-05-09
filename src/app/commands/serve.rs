@@ -1,37 +1,18 @@
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use anyhow::Context;
 use rmcp::transport::streamable_http_server::{
     session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
 };
 
+use crate::app::serve::{builder, preflight};
 use crate::cli::ServeArgs;
 use crate::config::{Config, IndexConfig};
-use crate::embedder::{EmbedderFactory, EmbeddingService};
+use crate::embedder::EmbedderFactory;
 use crate::index::{IndexRepository, IndexSizeInfo, MergedIndex};
 use crate::interfaces::mcp::DocentMcpServer;
-use crate::search::{build_bm25_backend, create_fusion, ScoreBackend, VectorScoreBackend};
-use crate::search::HybridSearchService;
 use crate::support::ui::WorkflowUi;
-
-/// Wrapper that bridges `Box<dyn EmbeddingService>` (the factory output) into
-/// `Mutex<dyn EmbeddingService>` (what `Arc<Mutex<dyn EmbeddingService>>` needs).
-struct BoxedEmbedder(Box<dyn EmbeddingService>);
-
-impl EmbeddingService for BoxedEmbedder {
-    fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
-        self.0.embed(texts)
-    }
-
-    fn dims(&self) -> usize {
-        self.0.dims()
-    }
-
-    fn token_counter(&self) -> Box<dyn crate::chunking::TokenCounter> {
-        self.0.token_counter()
-    }
-}
 
 // ---------------------------------------------------------------------------
 // ServeIndexAccess — narrow trait for index-loading operations needed by
@@ -48,7 +29,7 @@ pub(crate) trait ServeIndexAccess: Send + Sync {
     fn load_merged(
         &self,
         persist_path: &Path,
-        config: &crate::config::IndexConfig,
+        config: &IndexConfig,
     ) -> anyhow::Result<MergedIndex>;
 }
 
@@ -60,15 +41,14 @@ impl ServeIndexAccess for RealServeIndexAccess {
         persist_path: &Path,
         max_size_mb: u64,
     ) -> anyhow::Result<Option<IndexSizeInfo>> {
-        let config = IndexConfig::default();
-        let repo = IndexRepository::new(persist_path, &config);
+        let repo = IndexRepository::new(persist_path, &IndexConfig::default());
         repo.check_size(max_size_mb)
     }
 
     fn load_merged(
         &self,
         persist_path: &Path,
-        config: &crate::config::IndexConfig,
+        config: &IndexConfig,
     ) -> anyhow::Result<MergedIndex> {
         let repo = IndexRepository::new(persist_path, config);
         repo.load_merged()
@@ -105,93 +85,25 @@ pub(crate) fn prepare_serve(
     let persist_path = config.persist_path_buf();
 
     // 1. Check index size
-    if let Some(info) = index_access.check_size(&persist_path, config.index.max_size_mb)? {
-        ui.warn(&format!(
-            "The total index is {:.1} MB, which exceeds the configured limit of {} MB.",
-            info.total_bytes as f64 / (1024.0 * 1024.0),
-            config.index.max_size_mb
-        ));
-        if persist_path.join("file").exists() {
-            ui.warn(&format!(
-                "  file/ subdirectory: {:.1} MB",
-                info.file_bytes as f64 / (1024.0 * 1024.0)
-            ));
-        }
-        if persist_path.join("git").exists() {
-            ui.warn(&format!(
-                "  git/ subdirectory:  {:.1} MB",
-                info.git_bytes as f64 / (1024.0 * 1024.0)
-            ));
-        }
-        if !ui.confirm("Continue?")? {
-            anyhow::bail!("Aborted by user.");
-        }
+    if let Some(_info) = preflight::check_index_size(&persist_path, config, ui, index_access)? {
+        // Warning already printed; user confirmed (or abort returned Err above)
     }
 
     // 2. Load merged index
-    let merged = index_access
-        .load_merged(&persist_path, &config.index)
-        .with_context(|| "Failed to load merged index".to_string())?;
+    let merged = preflight::load_merged_index(&persist_path, &config.index, index_access)?;
 
     // 3. Create embedder
-    let embedder: Arc<Mutex<dyn EmbeddingService>> = Arc::new(Mutex::new(BoxedEmbedder(
-        embedder_factory
-            .create(&config.index.embedding_model)
-            .with_context(|| "Failed to initialize embedding model — cannot start server".to_string())?,
-    )));
+    let embedder = builder::build_embedder(embedder_factory, &config.index.embedding_model)?;
 
-    // 4. Build hybrid search service with vector + BM25 backends
-    let ranker = Arc::new(crate::search::DecayRanker::new(
-        config.search.same_src_score_decay,
-    ));
-
-    let vectors = merged.vectors.into_vec_vec();
-    let semantic_backend =
-        Arc::new(VectorScoreBackend::new(embedder, Arc::new(vectors)));
-
-    let bm25_backend: Arc<dyn ScoreBackend> = match merged.bm25_embeddings {
-        Some(ref bm25_embs) => {
-            let header = merged
-                .bm25_header
-                .as_ref()
-                .expect("bm25_header must be present when bm25_embeddings is present");
-            Arc::new(build_bm25_backend(
-                bm25_embs,
-                header.k1,
-                header.b,
-                header.avgdl,
-            ))
-        }
-        None => {
-            // No BM25 index available — return all zeros.
-            struct ZeroBackend(usize);
-            impl ScoreBackend for ZeroBackend {
-                fn score(&self, _query: &str) -> anyhow::Result<Vec<f32>> {
-                    Ok(vec![0.0; self.0])
-                }
-            }
-            Arc::new(ZeroBackend(merged.metadata.len()))
-        }
-    };
-
-    let fusion = Arc::from(create_fusion(
-        &config.search.fusion_strategy,
-        config.search.rrf_k,
-        config.search.semantic_weight,
-    ));
-
-    let search_service = Arc::new(HybridSearchService::new(
-        semantic_backend,
-        bm25_backend,
-        fusion,
-        ranker,
-        Arc::new(merged.metadata),
-        merged.built_at,
-    ));
+    // 4. Build hybrid search service
+    let search_service = Arc::new(builder::build_hybrid_search_service(
+        merged,
+        embedder,
+        &config.search,
+    )?);
 
     // 5. Build MCP server and router
     let server = DocentMcpServer { search_service };
-
     let service: StreamableHttpService<DocentMcpServer, LocalSessionManager> =
         StreamableHttpService::new(
             {
@@ -201,7 +113,6 @@ pub(crate) fn prepare_serve(
             LocalSessionManager::default().into(),
             StreamableHttpServerConfig::default(),
         );
-
     let router = crate::ui::router(service);
 
     Ok(PreparedServe { router })

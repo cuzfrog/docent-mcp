@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::config::{Config, IndexConfig};
-use crate::index::{IndexRepository, IndexSizeInfo, MergedIndex};
+use crate::index::{IndexSizeInfo, MergedIndex};
 use crate::support::ui::WorkflowUi;
 
 /// Check the on-disk index size against the configured limit.
