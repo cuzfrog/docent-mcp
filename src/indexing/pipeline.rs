@@ -3,13 +3,13 @@ use crate::config::IndexConfig;
 use crate::documents::ChunkMetadata;
 use crate::embedder::{EmbedderFactory, EmbeddingService, RealEmbedderFactory};
 use crate::indexing::types::{IndexableDocument, IndexedBatch};
-use crate::support::progress::Progress;
+use crate::support::ui::ProgressSink;
 
 pub(crate) fn index_documents(
     docs: &[IndexableDocument],
     config: &IndexConfig,
     embedder: &mut dyn EmbeddingService,
-    progress: Option<&Progress>,
+    progress: Option<&dyn ProgressSink>,
 ) -> anyhow::Result<IndexedBatch> {
     let chunking_config = ChunkingConfig {
         chunk_size: config.chunk_size,

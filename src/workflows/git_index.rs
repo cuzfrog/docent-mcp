@@ -8,6 +8,7 @@ use crate::indexing::unique_doc_count;
 use crate::sources::git::GitIndexer;
 use crate::support::progress::Progress;
 use crate::support::terminal;
+use crate::support::ui::ProgressSink;
 
 pub(crate) struct GitIndexRequest {
     pub repo_path: PathBuf,
@@ -89,7 +90,7 @@ fn run_rebuild_git(
 
     let freshness = GitIndexer::compute_freshness(&docs);
     let indexable = GitIndexer::prepare_git_documents(&docs, &freshness);
-    let batch = indexing::index_documents(&indexable, &config.index, &mut *embedder, Some(&pb2))?;
+    let batch = indexing::index_documents(&indexable, &config.index, &mut *embedder, Some(&pb2 as &dyn ProgressSink))?;
     pb2.finish();
     let embed_time = t2.elapsed();
 
@@ -144,7 +145,7 @@ fn run_incremental_git(
     let t2 = std::time::Instant::now();
 
     let indexable = GitIndexer::prepare_git_documents(&new_docs, &vec![true; new_docs.len()]);
-    let batch = indexing::index_documents(&indexable, &config.index, &mut *embedder, Some(&pb2))?;
+    let batch = indexing::index_documents(&indexable, &config.index, &mut *embedder, Some(&pb2 as &dyn ProgressSink))?;
     pb2.finish();
     let embed_time = t2.elapsed();
 
