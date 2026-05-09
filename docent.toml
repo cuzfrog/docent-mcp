@@ -1,19 +1,22 @@
-# For E2E tests
-[index]
-embedding_model = "BGESmallENV15Q"   
-persist_path    = "./e2e-tests/.ddr-index"             
-chunk_size      = 512                         
-chunk_overlap   = 64
-max_size_mb     = 4 # issue warning if total index size exceeds this limit
+[file]
+file_size_limit_mb = 2
+glob_patterns = ["*.md"]
 
 [git]
-depth_limit   = 2    # -1 = no limit (all history)
-branch        = "main"
-file_patterns = ["*.*"]
+branch = "main"
+depth_limit = 2
+glob_patterns = ["*.rs", "*.java", "*.py", "*.js", "*.ts", "*.go"]
+
+[index]
+chunk_overlap = 64
+chunk_size = 512
+embedding_model = "BGESmallENV15Q"
+max_size_mb = 4
+persist_path = "./e2e-tests/.ddr-index"
 
 [search]
-same_src_score_decay = 0.9  # score multiplier for subsequent chunks from same source
+same_src_score_decay = 0.9
 
 [server]
-log_level = "debug"    # debug | info | warn | error
-port      = 7878
+log_level = "debug"
+port = 7878

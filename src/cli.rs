@@ -15,6 +15,10 @@ pub struct Cli {
 /// Available subcommands.
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Generate a default docent.toml in the current directory.
+    Init,
+    /// Index files and/or git history based on config.
+    Index(IndexCommandArgs),
     /// Index files from a directory.
     IndexFile(IndexArgs),
     /// Index git history from a repository.
@@ -23,10 +27,6 @@ pub enum Commands {
     Serve(ServeArgs),
     /// List all supported embedding models.
     ListModels,
-    /// Generate a default docent.toml in the current directory.
-    Init,
-    /// Index files and/or git history based on config.
-    Index(IndexCommandArgs),
 }
 
 /// Shared fields for `index-file` and `index-git` subcommands.
