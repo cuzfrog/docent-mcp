@@ -68,16 +68,8 @@ fn test_index_and_store_round_trip() {
         assert_eq!(vec.len(), 4);
     }
 
-    IndexRepository::store_index(
-        &index_dir,
-        SourceIndexKind::File,
-        &config,
-        embedder.dims(),
-        &batch.vectors,
-        &batch.metadata,
-        None,
-    )
-    .unwrap();
+    let repo = IndexRepository::new(&index_dir, SourceIndexKind::File, &config);
+    repo.store_index(embedder.dims(), &batch.vectors, &batch.metadata, None).unwrap();
 
     let (header, vectors, metadata) = read_index_at(&index_dir);
 
@@ -105,16 +97,8 @@ fn test_empty_document_list_produces_empty_index() {
     assert!(batch.vectors.is_empty());
     assert!(batch.metadata.is_empty());
 
-    IndexRepository::store_index(
-        &index_dir,
-        SourceIndexKind::File,
-        &config,
-        embedder.dims(),
-        &batch.vectors,
-        &batch.metadata,
-        None,
-    )
-    .unwrap();
+    let repo = IndexRepository::new(&index_dir, SourceIndexKind::File, &config);
+    repo.store_index(embedder.dims(), &batch.vectors, &batch.metadata, None).unwrap();
 
     let (header, vectors, metadata) = read_index_at(&index_dir);
     assert_eq!(header.chunk_count, 0);
@@ -158,16 +142,8 @@ fn test_index_preserves_metadata_fields() {
     let mut embedder = FakeEmbedder::new();
     let batch = index_documents(&docs, &config, &mut embedder, None).unwrap();
 
-    IndexRepository::store_index(
-        &index_dir,
-        SourceIndexKind::File,
-        &config,
-        embedder.dims(),
-        &batch.vectors,
-        &batch.metadata,
-        None,
-    )
-    .unwrap();
+    let repo = IndexRepository::new(&index_dir, SourceIndexKind::File, &config);
+    repo.store_index(embedder.dims(), &batch.vectors, &batch.metadata, None).unwrap();
 
     let (_header, _vectors, metadata) = read_index_at(&index_dir);
 

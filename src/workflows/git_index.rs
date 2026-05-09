@@ -92,7 +92,8 @@ fn run_rebuild_git(
     pb2.finish();
     let embed_time = t2.elapsed();
 
-    IndexRepository::store_index(persist_path, SourceIndexKind::Git, &config.index, dims, &batch.vectors, &batch.metadata, Some(head_commit))?;
+    let repo = IndexRepository::new(persist_path, SourceIndexKind::Git, &config.index);
+    repo.store_index(dims, &batch.vectors, &batch.metadata, Some(head_commit))?;
     let doc_count = batch.metadata.iter().map(|m| &m.source_path[..]).collect::<std::collections::HashSet<_>>().len();
 
     println!(
@@ -113,7 +114,8 @@ fn run_incremental_git(
     persist_path: &Path,
     dims: usize,
 ) -> anyhow::Result<()> {
-    let stored = IndexRepository::load_one(persist_path, SourceIndexKind::Git)?;
+    let repo = IndexRepository::new(persist_path, SourceIndexKind::Git, &config.index);
+    let stored = repo.load_one()?;
     let old_header = stored.header;
     let old_vectors = stored.vectors;
     let old_metadata = stored.metadata;
@@ -151,7 +153,7 @@ fn run_incremental_git(
         &old_metadata, &old_vectors, &new_docs, &batch.metadata, &batch.vectors,
     );
 
-    IndexRepository::store_index(persist_path, SourceIndexKind::Git, &config.index, dims, &merged.vectors, &merged.metadata, Some(head_commit))?;
+    repo.store_index(dims, &merged.vectors, &merged.metadata, Some(head_commit))?;
     let doc_count = merged.metadata.iter().map(|m| &m.source_path[..]).collect::<std::collections::HashSet<_>>().len();
 
     println!(

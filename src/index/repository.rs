@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::config::IndexConfig;
 use crate::documents::ChunkMetadata;
@@ -7,6 +7,7 @@ use crate::index::storage::{dir_size, read_index, write_index};
 use crate::index::validate_header;
 use super::schema::build_header;
 
+#[derive(Clone, Copy)]
 pub(crate) enum SourceIndexKind {
     File,
     Git,
@@ -40,10 +41,22 @@ pub(crate) struct IndexSizeInfo {
     pub git_bytes: u64,
 }
 
-pub(crate) struct IndexRepository;
+pub(crate) struct IndexRepository {
+    persist_path: PathBuf,
+    kind: SourceIndexKind,
+    config: IndexConfig,
+}
 
 impl IndexRepository {
-    pub fn load_one(persist_path: &Path, kind: SourceIndexKind) -> anyhow::Result<LoadedIndex> {
+    pub fn new(persist_path: &Path, kind: SourceIndexKind, config: &IndexConfig) -> Self {
+        Self {
+            persist_path: persist_path.to_path_buf(),
+            kind,
+            config: config.clone(),
+        }
+    }
+
+    fn load_one_inner(persist_path: &Path, kind: SourceIndexKind) -> anyhow::Result<LoadedIndex> {
         let stored: StoredIndex = read_index(&persist_path.join(kind.subdir()))?;
         Ok(LoadedIndex {
             header: stored.header,
@@ -52,18 +65,20 @@ impl IndexRepository {
         })
     }
 
+    pub fn load_one(&self) -> anyhow::Result<LoadedIndex> {
+        Self::load_one_inner(&self.persist_path, self.kind)
+    }
+
     pub fn store_index(
-        persist_path: &Path,
-        kind: SourceIndexKind,
-        config: &crate::config::IndexConfig,
+        &self,
         embedding_dims: usize,
         vectors: &[Vec<f32>],
         metadata: &[ChunkMetadata],
         last_indexed_commit: Option<String>,
     ) -> anyhow::Result<()> {
         let stored_metadata: Vec<StoredChunkMetadata> = metadata.iter().cloned().map(Into::into).collect();
-        let header = build_header(config, embedding_dims, metadata, last_indexed_commit);
-        write_index(&persist_path.join(kind.subdir()), &header, vectors, &stored_metadata)
+        let header = build_header(&self.config, embedding_dims, metadata, last_indexed_commit);
+        write_index(&self.persist_path.join(self.kind.subdir()), &header, vectors, &stored_metadata)
     }
 
     pub fn exists(persist_path: &Path, kind: SourceIndexKind) -> bool {
@@ -113,7 +128,7 @@ impl IndexRepository {
         }
 
         let file_index = if file_exists {
-            let stored = Self::load_one(persist_path, SourceIndexKind::File)?;
+            let stored = Self::load_one_inner(persist_path, SourceIndexKind::File)?;
             validate_header(&stored.header, config)?;
             Some(stored)
         } else {
@@ -121,7 +136,7 @@ impl IndexRepository {
         };
 
         let git_index = if git_exists {
-            let stored = Self::load_one(persist_path, SourceIndexKind::Git)?;
+            let stored = Self::load_one_inner(persist_path, SourceIndexKind::Git)?;
             if let Some(ref fh) = file_index {
                 if stored.header.embedding_model != fh.header.embedding_model {
                     anyhow::bail!(

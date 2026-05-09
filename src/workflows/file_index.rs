@@ -25,8 +25,9 @@ pub(crate) fn run_file_index(request: FileIndexRequest, config: &Config) -> anyh
 
 fn run_rebuild_file(config: &Config, input_root: &std::path::Path, verbose: bool) -> anyhow::Result<()> {
     let persist_path = PathBuf::from(&config.index.persist_path);
+    let repo = IndexRepository::new(&persist_path, SourceIndexKind::File, &config.index);
 
-    match IndexRepository::load_one(&persist_path, SourceIndexKind::File) {
+    match repo.load_one() {
         Ok(_) => {
             eprintln!(
                 "Warning: this will delete the existing index at '{}' and rebuild it from scratch.",
@@ -55,7 +56,7 @@ fn run_rebuild_file(config: &Config, input_root: &std::path::Path, verbose: bool
     let batch = indexing::index_documents(&docs, &config.index, &mut *embedder, Some(&pb))?;
     pb.finish();
 
-    IndexRepository::store_index(&persist_path, SourceIndexKind::File, &config.index, embedder.dims(), &batch.vectors, &batch.metadata, None)?;
+    repo.store_index(embedder.dims(), &batch.vectors, &batch.metadata, None)?;
     let doc_count = batch.metadata.iter().map(|m| &m.source_path[..]).collect::<std::collections::HashSet<_>>().len();
 
     println!(
@@ -69,11 +70,12 @@ fn run_rebuild_file(config: &Config, input_root: &std::path::Path, verbose: bool
 
 fn run_incremental_file(config: &Config, input_root: &std::path::Path, verbose: bool) -> anyhow::Result<()> {
     let persist_path = PathBuf::from(&config.index.persist_path);
+    let repo = IndexRepository::new(&persist_path, SourceIndexKind::File, &config.index);
 
     let mut embedder = create_embedder(&config.index.embedding_model)?;
 
     let (old_hashes, old_chunks_by_path, index_exists) =
-        match IndexRepository::load_one(&persist_path, SourceIndexKind::File) {
+        match repo.load_one() {
             Ok(stored) => {
                 if let Err(e) = index::validate_header(&stored.header, &config.index) {
                     eprintln!("{} Run with --rebuild to re-index.", e);
@@ -128,7 +130,7 @@ fn run_incremental_file(config: &Config, input_root: &std::path::Path, verbose: 
         &batch.vectors,
     );
 
-    IndexRepository::store_index(&persist_path, SourceIndexKind::File, &config.index, embedder.dims(), &merged.vectors, &merged.metadata, None)?;
+    repo.store_index(embedder.dims(), &merged.vectors, &merged.metadata, None)?;
     let doc_count = merged.metadata.iter().map(|m| &m.source_path[..]).collect::<std::collections::HashSet<_>>().len();
 
     println!(

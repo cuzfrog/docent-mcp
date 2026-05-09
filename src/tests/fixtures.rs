@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::chunking::TokenCounter;
+use crate::config::IndexConfig;
 use crate::documents::ChunkMetadata;
 use crate::embedder::EmbeddingService;
 use crate::index::{IndexRepository, SourceIndexKind};
@@ -39,7 +40,8 @@ chunk_overlap = 64
 pub fn read_index_at(
     path: &std::path::Path,
 ) -> (crate::index::IndexHeader, Vec<Vec<f32>>, Vec<ChunkMetadata>) {
-    let stored = IndexRepository::load_one(path, SourceIndexKind::File).unwrap();
+    let repo = IndexRepository::new(path, SourceIndexKind::File, &IndexConfig::default());
+    let stored = repo.load_one().unwrap();
     (stored.header, stored.vectors, stored.metadata)
 }
 
