@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::config::{Config, GitConfig, IndexConfig};
 use crate::sources::git::history::test_helpers::{commit_file, init_test_repo};
 use crate::tests::fixtures::{make_temp_dir, FakeEmbedderFactory, RecordingUi};
-use crate::workflows::git_index::{run_git_index_with, GitIndexOutcome, GitIndexRequest};
+use crate::workflows::git_index::{GitIndexWorkflow, GitIndexOutcome, GitIndexRequest};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -72,7 +72,7 @@ fn missing_git_config_returns_error() {
     let ui = RecordingUi::always_confirm();
     let factory = FakeEmbedderFactory;
 
-    let result = run_git_index_with(request, &config, &ui, &factory);
+    let result = GitIndexWorkflow::new(&config, &ui, &factory).run(request);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(
@@ -82,30 +82,6 @@ fn missing_git_config_returns_error() {
     );
 
     let _ = std::fs::remove_dir_all(&persist);
-}
-
-#[test]
-fn format_size_warning_contains_estimated_and_limit() {
-    let warning = crate::workflows::git_index::format_size_warning(
-        500,
-        100,
-        "To reduce the size adjust depth_limit.",
-    );
-    assert!(
-        warning.contains("500 MB"),
-        "Should mention estimated size, got: {}",
-        warning
-    );
-    assert!(
-        warning.contains("100 MB"),
-        "Should mention limit, got: {}",
-        warning
-    );
-    assert!(
-        warning.contains("depth_limit"),
-        "Should mention advice, got: {}",
-        warning
-    );
 }
 
 #[test]
@@ -124,7 +100,7 @@ fn rebuild_returns_no_documents_on_empty_repo() {
     let ui = RecordingUi::always_confirm();
     let factory = FakeEmbedderFactory;
 
-    let outcome = run_git_index_with(request, &config, &ui, &factory).unwrap();
+    let outcome = GitIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
     assert!(
         matches!(outcome, GitIndexOutcome::NoDocuments),
         "Expected NoDocuments, got {:?}",
@@ -151,7 +127,7 @@ fn rebuild_writes_git_index_with_fake_embedder() {
     let ui = RecordingUi::always_confirm();
     let factory = FakeEmbedderFactory;
 
-    let outcome = run_git_index_with(request, &config, &ui, &factory).unwrap();
+    let outcome = GitIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
     match outcome {
         GitIndexOutcome::Indexed {
             rebuilt,
@@ -194,7 +170,7 @@ fn incremental_returns_uptodate_on_no_new_commits() {
         };
         let ui = RecordingUi::always_confirm();
         let factory = FakeEmbedderFactory;
-        run_git_index_with(request, &config, &ui, &factory).unwrap();
+        GitIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
     }
 
     // Now run incremental — no new commits
@@ -207,7 +183,7 @@ fn incremental_returns_uptodate_on_no_new_commits() {
         };
         let ui = RecordingUi::always_confirm();
         let factory = FakeEmbedderFactory;
-        let outcome = run_git_index_with(request, &config, &ui, &factory).unwrap();
+        let outcome = GitIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
         assert!(
             matches!(outcome, GitIndexOutcome::UpToDate),
             "Expected UpToDate, got {:?}",
@@ -235,7 +211,7 @@ fn incremental_merges_old_and_new_chunks() {
         };
         let ui = RecordingUi::always_confirm();
         let factory = FakeEmbedderFactory;
-        run_git_index_with(request, &config, &ui, &factory).unwrap();
+        GitIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
     }
 
     // Add a new file and commit
@@ -251,7 +227,7 @@ fn incremental_merges_old_and_new_chunks() {
         };
         let ui = RecordingUi::always_confirm();
         let factory = FakeEmbedderFactory;
-        let outcome = run_git_index_with(request, &config, &ui, &factory).unwrap();
+        let outcome = GitIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
         match outcome {
             GitIndexOutcome::Indexed {
                 rebuilt,

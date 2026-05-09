@@ -89,7 +89,44 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
         verbose: args.verbose,
     };
 
-    workflows::git_index::run_git_index(request, &config)
+    let ui = crate::support::ui::ConsoleUi;
+    let factory = crate::embedder::RealEmbedderFactory;
+    let workflow = workflows::git_index::GitIndexWorkflow::new(&config, &ui, &factory);
+    let outcome = workflow.run(request)?;
+
+    match outcome {
+        workflows::git_index::GitIndexOutcome::Aborted => {
+            println!("Aborted.");
+        }
+        workflows::git_index::GitIndexOutcome::UpToDate => {
+            println!("Git index is up to date.");
+        }
+        workflows::git_index::GitIndexOutcome::NoDocuments => {
+            println!("No git documents found.");
+        }
+        workflows::git_index::GitIndexOutcome::Indexed {
+            rebuilt,
+            chunk_count,
+            doc_count,
+            new_commit_count,
+            walk_secs,
+            embed_secs,
+        } => {
+            if rebuilt {
+                println!(
+                    "Git index written: {} chunks from {} docs (walk: {:.1}s, embed: {:.1}s)",
+                    chunk_count, doc_count, walk_secs, embed_secs
+                );
+            } else {
+                println!(
+                    "Git index updated: {} chunks from {} docs ({} new commits, walk: {:.1}s, embed: {:.1}s)",
+                    chunk_count, doc_count, new_commit_count, walk_secs, embed_secs
+                );
+            }
+        }
+    }
+
+    Ok(())
 }
 
 pub fn list_models() {
