@@ -1,13 +1,12 @@
-mod backend;
-mod fusion;
-mod orchestrator;
-mod ranking;
-mod service;
 mod types;
+mod ranking;
+mod fusion;
+mod backend;
+mod orchestrator;
 
-pub(crate) use backend::*;
-pub(crate) use orchestrator::HybridSearchService;
-pub(crate) use ranking::DecayRanker;
-pub(crate) use service::*;
 #[cfg(test)]
 pub(crate) use types::*;
+pub(crate) use ranking::{DecayRanker, Ranker};
+pub(crate) use fusion::{create_fusion, ScoreFusion};
+pub(crate) use backend::{Bm25ScoreBackend, ScoreBackend, VectorScoreBackend, build_bm25_backend};
+pub(crate) use orchestrator::HybridSearchService;
