@@ -5,6 +5,9 @@ use crate::embedder::EmbeddingService;
 use crate::indexing::types::{IndexableDocument, IndexedBatch};
 use crate::support::progress::ProgressSink;
 
+use rayon::prelude::*;
+use std::sync::atomic::{AtomicU64, Ordering};
+
 const BATCH_SIZE: usize = 64;
 
 pub(crate) fn index_documents(
@@ -18,26 +21,47 @@ pub(crate) fn index_documents(
         chunk_overlap: config.chunk_overlap,
     };
 
-    // Phase A: Chunk all documents, collecting chunks and their texts.
-    let mut all_chunks: Vec<Chunk> = Vec::new();
-    let mut chunk_texts_owned: Vec<String> = Vec::new();
-    let mut doc_chunk_counts: Vec<usize> = Vec::with_capacity(docs.len());
+    // Phase A: Parallel chunking of all documents.
+    // Extract the token counter once (it is Send + Sync) so rayon can share it.
+    let token_counter = embedder.token_counter();
 
-    for doc in docs {
-        let chunks = chunking::chunk_document_with_embedder(&doc.body, &chunking_config, &*embedder);
-        doc_chunk_counts.push(chunks.len());
-        for chunk in chunks {
-            chunk_texts_owned.push(chunk.text.clone());
-            all_chunks.push(chunk);
-        }
+    struct DocChunksResult {
+        doc_index: usize,
+        chunks: Vec<Chunk>,
+    }
 
-        if let Some(p) = progress {
-            p.tick_msg(&doc.source_path);
+    let doc_chunk_progress = AtomicU64::new(0);
+
+    let all_results: Vec<DocChunksResult> = docs
+        .par_iter()
+        .enumerate()
+        .map(|(i, doc)| {
+            let chunks = chunking::chunk_document(&doc.body, &chunking_config, &*token_counter);
+            let _ = doc_chunk_progress.fetch_add(1, Ordering::Relaxed);
+            DocChunksResult {
+                doc_index: i,
+                chunks,
+            }
+        })
+        .collect();
+
+    // Advance progress after all documents are chunked.
+    if let Some(p) = progress {
+        p.tick_n(doc_chunk_progress.load(Ordering::Relaxed));
+    }
+
+    // Phase B: Flatten results into (doc_index, Chunk) pairs and collect texts.
+    let mut all_chunks: Vec<(usize, Chunk)> = Vec::new();
+    for result in all_results {
+        for chunk in result.chunks {
+            all_chunks.push((result.doc_index, chunk));
         }
     }
 
-    // Phase B: Embed all chunk texts in batches of BATCH_SIZE.
+    let chunk_texts_owned: Vec<String> = all_chunks.iter().map(|(_, c)| c.text.clone()).collect();
     let chunk_texts: Vec<&str> = chunk_texts_owned.iter().map(|s| s.as_str()).collect();
+
+    // Phase C: Embed all chunk texts in batches of BATCH_SIZE.
     let mut all_vectors: Vec<Vec<f32>> = Vec::with_capacity(chunk_texts.len());
 
     for batch in chunk_texts.chunks(BATCH_SIZE) {
@@ -51,24 +75,20 @@ pub(crate) fn index_documents(
         all_vectors.extend(vectors);
     }
 
-    // Phase C: Reconstruct metadata from stored chunks and their source documents.
+    // Phase D: Reconstruct metadata from stored chunks and their source documents.
     let mut batch_metadata: Vec<ChunkMetadata> = Vec::with_capacity(all_chunks.len());
-    let mut chunk_offset = 0;
-    for (doc, &num_chunks) in docs.iter().zip(&doc_chunk_counts) {
+    for ((doc_index, chunk), _) in all_chunks.iter().zip(all_vectors.iter()) {
+        let doc = &docs[*doc_index];
         let doc_ctx = doc.doc_context();
-        for i in 0..num_chunks {
-            let chunk = &all_chunks[chunk_offset + i];
-            batch_metadata.push(ChunkMetadata {
-                doc_ctx: doc_ctx.clone(), // cheap Arc clone
-                chunk_text: chunk.text.clone(),
-                section_heading: chunk.section_heading.clone(),
-                chunk_index: chunk.chunk_index,
-                line_start: chunk.line_start,
-                line_end: chunk.line_end,
-                is_fresh: doc.is_fresh,
-            });
-        }
-        chunk_offset += num_chunks;
+        batch_metadata.push(ChunkMetadata {
+            doc_ctx, // cheap Arc clone
+            chunk_text: chunk.text.clone(),
+            section_heading: chunk.section_heading.clone(),
+            chunk_index: chunk.chunk_index,
+            line_start: chunk.line_start,
+            line_end: chunk.line_end,
+            is_fresh: doc.is_fresh,
+        });
     }
 
     Ok(IndexedBatch {
