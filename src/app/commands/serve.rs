@@ -77,15 +77,12 @@ impl ServeIndexAccess for RealServeIndexAccess {
 
 pub(crate) struct PreparedServe {
     pub router: axum::Router,
-    #[allow(dead_code)]
-    pub persist_path: std::path::PathBuf,
 }
 
 impl std::fmt::Debug for PreparedServe {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PreparedServe")
             .field("router", &"axum::Router { ... }")
-            .field("persist_path", &self.persist_path)
             .finish()
     }
 }
@@ -166,10 +163,7 @@ pub(crate) fn prepare_serve(
 
     let router = crate::ui::router(service);
 
-    Ok(PreparedServe {
-        router,
-        persist_path,
-    })
+    Ok(PreparedServe { router })
 }
 
 // ---------------------------------------------------------------------------
@@ -195,8 +189,9 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
         .local_addr()
         .context("Failed to get local address")?;
     println!(
-        "docent server listening on http://{} (open in browser for web UI)",
-        local_addr
+        "docent server listening on http://{} serving index at {} (open in browser for web UI)",
+        local_addr,
+        config.persist_path_buf().display(),
     );
 
     axum::serve(listener, prepared.router)
