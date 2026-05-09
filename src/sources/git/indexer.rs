@@ -65,9 +65,11 @@ impl GitIndexer {
     }
 
     /// Merge old and new metadata/vectors for git incremental updates.
+    ///
+    /// Takes ownership of old data to avoid cloning unchanged vectors/metadata.
     pub(crate) fn merge_git_incremental(
-        old_metadata: &[ChunkMetadata],
-        old_vectors: &crate::index::VectorStore,
+        old_metadata: Vec<ChunkMetadata>,
+        old_vectors: crate::index::VectorStore,
         new_docs: &[GitDocument],
         new_metadata: &[ChunkMetadata],
         new_vectors: &[Vec<f32>],

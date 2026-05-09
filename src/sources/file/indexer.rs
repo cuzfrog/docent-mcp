@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::documents::ChunkMetadata;
+use crate::index::VectorStore;
 use crate::indexing::{IndexableDocument, MergedBatch};
 
 use super::diff::FileDiff;
@@ -39,26 +40,31 @@ impl FileIndexer {
         super::diff::diff_files(all_files, old_hashes, input_root)
     }
 
-    /// Extract merge state (hashes and chunks-by-path) from stored metadata/vectors.
-    #[allow(clippy::type_complexity)]
-    pub(crate) fn extract_merge_state(
-        metadata: &[ChunkMetadata],
-        vectors: &crate::index::VectorStore,
-    ) -> (
-        HashMap<String, String>,
-        HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>>,
-    ) {
-        super::merge::extract_merge_state(metadata, vectors)
+    /// Extract old file hashes (source_path → source_revision) from stored metadata.
+    ///
+    /// Cheap: only reads `doc_ctx` fields, not vectors.
+    pub(crate) fn extract_old_hashes(metadata: &[ChunkMetadata]) -> HashMap<String, String> {
+        super::merge::extract_old_hashes(metadata)
     }
 
-    /// Merge unchanged and freshly-indexed chunks into a single batch.
+    /// Merge unchanged (old) and freshly-indexed chunks into a single batch.
+    ///
+    /// Avoids the double-clone pattern: old data is read directly from slices
+    /// rather than being copied into an intermediate HashMap first.
     pub(crate) fn merge_incremental(
         sorted_files: &[PathBuf],
-        unchanged_map: &HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>>,
+        old_metadata: &[ChunkMetadata],
+        old_vectors: &VectorStore,
         fresh_metadata: &[ChunkMetadata],
         fresh_vectors: &[Vec<f32>],
     ) -> MergedBatch {
-        super::merge::merge_incremental(sorted_files, unchanged_map, fresh_metadata, fresh_vectors)
+        super::merge::merge_incremental(
+            sorted_files,
+            old_metadata,
+            old_vectors,
+            fresh_metadata,
+            fresh_vectors,
+        )
     }
 }
 

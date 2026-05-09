@@ -56,6 +56,20 @@ impl VectorStore {
         self.dims
     }
 
+    /// Convert to `Vec<Vec<f32>>`, consuming self.
+    /// Each inner `Vec<f32>` is a copy of the original vector slice.
+    /// This is still a copy (flat → per-vec), but avoids cloning the
+    /// outer `VectorStore` struct.
+    pub fn into_vec_vec(self) -> Vec<Vec<f32>> {
+        let VectorStore { data, dims, count } = self;
+        let mut result = Vec::with_capacity(count);
+        for i in 0..count {
+            let start = i * dims;
+            result.push(data[start..start + dims].to_vec());
+        }
+        result
+    }
+
     /// Raw byte slice of the flat data (for zero-copy write).
     pub fn as_bytes(&self) -> &[u8] {
         if self.data.is_empty() {

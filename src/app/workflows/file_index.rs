@@ -142,7 +142,7 @@ impl<'a> FileIndexWorkflow<'a> {
             .embedder_factory
             .create(&self.config.index.embedding_model)?;
 
-        let (old_hashes, old_chunks_by_path, index_exists) = match repo.load_one() {
+        let (old_hashes, old_metadata, old_vectors, index_exists) = match repo.load_one() {
             Ok(stored) => {
                 if let Err(e) = index::validate_header(&stored.header, &self.config.index) {
                     self.ui.warn(&format!("{}", e));
@@ -159,13 +159,12 @@ impl<'a> FileIndexWorkflow<'a> {
                     );
                 }
 
-                let (old_hashes, old_chunks_by_path) =
-                    FileIndexer::extract_merge_state(&stored.metadata, &stored.vectors);
-                (old_hashes, old_chunks_by_path, true)
+                let old_hashes = FileIndexer::extract_old_hashes(&stored.metadata);
+                (old_hashes, stored.metadata, stored.vectors, true)
             }
             Err(e) => {
                 if e.to_string().contains("no index found") {
-                    (HashMap::new(), HashMap::new(), false)
+                    (HashMap::new(), vec![], crate::index::VectorStore::from_vec_vec(vec![])?, false)
                 } else {
                     return Err(e);
                 }
@@ -203,7 +202,8 @@ impl<'a> FileIndexWorkflow<'a> {
 
         let merged = FileIndexer::merge_incremental(
             &all_files,
-            &old_chunks_by_path,
+            &old_metadata,
+            &old_vectors,
             &batch.metadata,
             &batch.vectors,
         );

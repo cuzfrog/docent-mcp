@@ -226,8 +226,8 @@ impl<'a> GitIndexWorkflow<'a> {
         let head_commit = GitIndexer::resolve_head_commit(&request.repo_path, &git_config.branch)?;
 
         let merged = GitIndexer::merge_git_incremental(
-            &old_metadata,
-            &old_vectors,
+            old_metadata,      // moved, not cloned
+            old_vectors,       // moved, not cloned
             &new_docs,
             &batch.metadata,
             &batch.vectors,
