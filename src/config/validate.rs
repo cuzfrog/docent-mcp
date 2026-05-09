@@ -43,7 +43,7 @@ impl Config {
             if git.branch.is_empty() {
                 anyhow::bail!("git branch must not be empty");
             }
-            if git.file_patterns.is_empty() {
+            if git.glob_patterns.is_empty() {
                 anyhow::bail!("git file_patterns must not be empty");
             }
         }

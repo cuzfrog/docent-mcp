@@ -10,6 +10,8 @@ async fn main() -> anyhow::Result<()> {
         Commands::IndexGit(args) => run_index_git(args)?,
         Commands::Serve(args) => run_serve(args).await?,
         Commands::ListModels => list_models(),
+        Commands::Init => anyhow::bail!("init command not yet implemented"),
+        Commands::Index(_) => anyhow::bail!("index command not yet implemented"),
     }
     Ok(())
 }

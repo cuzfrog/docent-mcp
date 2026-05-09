@@ -29,3 +29,22 @@ pub(crate) fn default_same_src_score_decay() -> f32 {
 pub(crate) fn default_git_branch() -> String {
     "main".to_string()
 }
+
+pub(crate) const fn default_file_enabled() -> bool {
+    true
+}
+
+pub(crate) fn default_file_glob_patterns() -> Vec<String> {
+    vec!["*.md".to_string(), "*.txt".to_string()]
+}
+
+pub(crate) const fn default_file_size_limit_mb() -> u64 {
+    0 // 0 means no limit
+}
+
+pub(crate) const fn default_git_enabled() -> bool {
+    true
+}
+
+/// Embedded default docent.toml template for the `init` command.
+pub(crate) const DEFAULT_TEMPLATE: &str = include_str!("../templates/docent.toml");
