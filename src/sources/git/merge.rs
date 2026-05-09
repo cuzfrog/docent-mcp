@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
 use crate::documents::{ChunkKind, ChunkMetadata};
+use crate::index::VectorStore;
 use crate::sources::git::extract::GitDocument;
 
 pub fn merge_git_incremental(
     old_metadata: &[ChunkMetadata],
-    old_vectors: &[Vec<f32>],
+    old_vectors: &VectorStore,
     new_docs: &[GitDocument],
     new_metadata: &[ChunkMetadata],
     new_vectors: &[Vec<f32>],
@@ -29,7 +30,9 @@ pub fn merge_git_incremental(
         .map(|(&pair, &f)| (pair, f))
         .collect();
 
-    let mut combined_vectors = old_vectors.to_vec();
+    let mut combined_vectors: Vec<Vec<f32>> = (0..old_vectors.len())
+        .map(|i| old_vectors.get(i).to_vec())
+        .collect();
     let mut combined_metadata = old_metadata.to_vec();
     combined_vectors.extend(new_vectors.iter().cloned());
     combined_metadata.extend(new_metadata.iter().cloned());

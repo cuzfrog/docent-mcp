@@ -1,4 +1,4 @@
-use crate::index::schema::{IndexHeader, StoredChunkMetadata, StoredIndex};
+use crate::index::schema::{IndexHeader, StoredChunkMetadata, StoredIndex, VectorStore};
 use std::path::Path;
 
 /// Write the index directory: `header.json`, `vectors.bin`, and `metadata.json`.
@@ -9,7 +9,7 @@ use std::path::Path;
 pub fn write_index(
     path: &Path,
     header: &IndexHeader,
-    vectors: &[Vec<f32>],
+    vectors: &VectorStore,
     metadata: &[StoredChunkMetadata],
 ) -> anyhow::Result<()> {
     std::fs::create_dir_all(path).map_err(|e| {
@@ -29,23 +29,8 @@ pub fn write_index(
     let vectors_file = std::fs::File::create(path.join("vectors.bin"))
         .map_err(|e| anyhow::anyhow!("Failed to create vectors.bin: {}", e))?;
     let mut buf_writer = std::io::BufWriter::new(vectors_file);
-
-    #[cfg(target_endian = "little")]
-    {
-        for vec in vectors {
-            buf_writer.write_all(bytemuck::cast_slice(vec))
-                .map_err(|e| anyhow::anyhow!("Failed to write vectors.bin: {}", e))?;
-        }
-    }
-    #[cfg(not(target_endian = "little"))]
-    {
-        for vec in vectors {
-            for &val in vec {
-                buf_writer.write_all(&val.to_le_bytes())
-                    .map_err(|e| anyhow::anyhow!("Failed to write vectors.bin: {}", e))?;
-            }
-        }
-    }
+    buf_writer.write_all(vectors.as_bytes())
+        .map_err(|e| anyhow::anyhow!("Failed to write vectors.bin: {}", e))?;
     buf_writer.flush()
         .map_err(|e| anyhow::anyhow!("Failed to flush vectors.bin: {}", e))?;
 
@@ -88,15 +73,20 @@ pub fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
         );
     }
 
-    let mut vectors: Vec<Vec<f32>> = Vec::with_capacity(header.chunk_count);
-    for chunk in raw_bytes.chunks_exact(header.embedding_dims * 4) {
-        let mut vec: Vec<f32> = Vec::with_capacity(header.embedding_dims);
-        for window in chunk.chunks_exact(4) {
-            let arr: [u8; 4] = window.try_into().unwrap();
-            vec.push(f32::from_le_bytes(arr));
+    let vectors = if raw_bytes.is_empty() {
+        VectorStore {
+            data: vec![],
+            dims: 0,
+            count: 0,
         }
-        vectors.push(vec);
-    }
+    } else {
+        let flat: &[f32] = bytemuck::cast_slice(&raw_bytes);
+        VectorStore {
+            data: flat.to_vec(),
+            dims: header.embedding_dims,
+            count: header.chunk_count,
+        }
+    };
 
     let metadata_path = path.join("metadata.json");
     let metadata_bytes = std::fs::read(&metadata_path)
@@ -122,7 +112,7 @@ pub fn write_index_to(
     persist_path: &Path,
     subdir: &str,
     header: &IndexHeader,
-    vectors: &[Vec<f32>],
+    vectors: &VectorStore,
     metadata: &[StoredChunkMetadata],
 ) -> anyhow::Result<()> {
     write_index(&persist_path.join(subdir), header, vectors, metadata)
@@ -157,17 +147,22 @@ mod tests {
         }
     }
 
+    fn make_vectors() -> Vec<Vec<f32>> {
+        vec![
+            vec![1.0, 2.0, 3.0, 4.0],
+            vec![5.0, 6.0, 7.0, 8.0],
+            vec![9.0, 10.0, 11.0, 12.0],
+        ]
+    }
+
     #[test]
     fn test_write_read_roundtrip() {
         let temp_dir = std::env::temp_dir().join("docent_test_roundtrip");
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = matching_header();
-        let vectors = vec![
-            vec![1.0, 2.0, 3.0, 4.0],
-            vec![5.0, 6.0, 7.0, 8.0],
-            vec![9.0, 10.0, 11.0, 12.0],
-        ];
+        let raw = make_vectors();
+        let vector_store = VectorStore::from_vec_vec(raw.clone()).unwrap();
         let metadata = vec![
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -210,14 +205,14 @@ mod tests {
             },
         ];
 
-        write_index(&temp_dir, &header, &vectors, &metadata).unwrap();
+        write_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
 
         let vectors_meta = std::fs::metadata(temp_dir.join("vectors.bin")).unwrap();
         assert_eq!(vectors_meta.len(), 3 * 4 * 4);
 
         let stored = read_index(&temp_dir).unwrap();
         assert_eq!(stored.header, header);
-        assert_eq!(stored.vectors, vectors);
+        assert_eq!(stored.vectors, vector_store);
         assert_eq!(stored.metadata, metadata);
 
         let _ = std::fs::remove_dir_all(&temp_dir);
@@ -229,11 +224,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = matching_header();
-        let vectors = vec![
-            vec![1.0, 2.0, 3.0, 4.0],
-            vec![5.0, 6.0, 7.0, 8.0],
-            vec![9.0, 10.0, 11.0, 12.0],
-        ];
+        let raw = make_vectors();
+        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
         let metadata = vec![
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -276,7 +268,7 @@ mod tests {
             },
         ];
 
-        write_index(&temp_dir, &header, &vectors, &metadata).unwrap();
+        write_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
 
         let expected_bytes = header.chunk_count * header.embedding_dims * 4;
         let actual_bytes = std::fs::metadata(temp_dir.join("vectors.bin"))
@@ -447,11 +439,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = matching_header();
-        let vectors = vec![
-            vec![1.0, 2.0, 3.0, 4.0],
-            vec![5.0, 6.0, 7.0, 8.0],
-            vec![9.0, 10.0, 11.0, 12.0],
-        ];
+        let raw = make_vectors();
+        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
         let metadata = vec![
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -481,7 +470,7 @@ mod tests {
             },
         ];
 
-        write_index(&temp_dir, &header, &vectors, &metadata).unwrap();
+        write_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
 
         let result = read_index(&temp_dir);
         assert!(result.is_err());
@@ -586,23 +575,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = matching_header();
-        let vectors: Vec<Vec<f32>> = vec![
-            vec![1.0, 2.0, 3.0, 4.0],
-            vec![5.0, 6.0, 7.0, 8.0],
-            vec![9.0, 10.0, 11.0, 12.0],
-        ];
+        let raw = make_vectors();
+        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
 
         std::fs::create_dir_all(&temp_dir).unwrap();
         let header_json = serde_json::to_string_pretty(&header).unwrap();
         std::fs::write(temp_dir.join("header.json"), &header_json).unwrap();
 
-        let mut buf: Vec<u8> = Vec::new();
-        for v in &vectors {
-            for val in v.iter().copied() {
-                buf.extend_from_slice(&val.to_le_bytes());
-            }
-        }
-        std::fs::write(temp_dir.join("vectors.bin"), &buf).unwrap();
+        // Write vectors.bin manually
+        std::fs::write(temp_dir.join("vectors.bin"), vector_store.as_bytes()).unwrap();
 
         let result = read_index(&temp_dir);
         assert!(result.is_err());
@@ -690,10 +671,10 @@ mod tests {
             chunk_count: 0,
             last_indexed_commit: None,
         };
-        let vectors: Vec<Vec<f32>> = vec![];
+        let vector_store = VectorStore::from_vec_vec(vec![]).unwrap();
         let metadata: Vec<StoredChunkMetadata> = vec![];
 
-        write_index(&temp_dir, &header, &vectors, &metadata).unwrap();
+        write_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
 
         let stored = read_index(&temp_dir).unwrap();
         assert_eq!(stored.header, header);
@@ -737,7 +718,8 @@ mod tests {
             chunk_count: 1,
             last_indexed_commit: None,
         };
-        let vectors = vec![vec![1.0, 2.0, 3.0, 4.0]];
+        let raw = vec![vec![1.0, 2.0, 3.0, 4.0]];
+        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
         let metadata = vec![StoredChunkMetadata {
             source_path: "doc.md".to_string(),
             source_revision: "abc".to_string(),
@@ -752,7 +734,7 @@ mod tests {
             is_fresh: None,
         }];
 
-        write_index(&nested_path, &header, &vectors, &metadata).unwrap();
+        write_index(&nested_path, &header, &vector_store, &metadata).unwrap();
 
         assert!(nested_path.exists());
         assert!(nested_path.join("header.json").exists());
@@ -778,7 +760,8 @@ mod tests {
             chunk_count: 1,
             last_indexed_commit: None,
         };
-        let vectors = vec![vec![1.0, 2.0, 3.0, 4.0]];
+        let raw = vec![vec![1.0, 2.0, 3.0, 4.0]];
+        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
         let metadata = vec![StoredChunkMetadata {
             source_path: "doc.md".to_string(),
             source_revision: "abc".to_string(),
@@ -793,12 +776,12 @@ mod tests {
             is_fresh: None,
         }];
 
-        write_index_to(&temp_dir, "file", &header, &vectors, &metadata).unwrap();
+        write_index_to(&temp_dir, "file", &header, &vector_store, &metadata).unwrap();
         assert!(temp_dir.join("file").join("header.json").exists());
 
         let stored = read_subdir(&temp_dir, "file").unwrap();
         assert_eq!(stored.header, header);
-        assert_eq!(stored.vectors, vectors);
+        assert_eq!(stored.vectors, vector_store);
         assert_eq!(stored.metadata, metadata);
 
         let _ = std::fs::remove_dir_all(&temp_dir);

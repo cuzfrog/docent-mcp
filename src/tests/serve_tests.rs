@@ -5,6 +5,7 @@ use crate::app::commands::serve::{
 };
 use crate::config::{Config, IndexConfig};
 use crate::embedder::{EmbedderFactory, EmbeddingService};
+use crate::index::VectorStore;
 use crate::index::{IndexRepository, IndexSizeInfo, MergedIndex, SourceIndexKind};
 use crate::tests::fixtures::{
     make_temp_dir, FakeEmbedder, FakeEmbedderFactory, RecordingUi,
@@ -64,7 +65,7 @@ impl ServeIndexAccess for FakeServeIndexAccess {
             Err(anyhow::anyhow!("mock load error"))
         } else {
             Ok(MergedIndex {
-                vectors: vec![],
+                vectors: VectorStore::from_vec_vec(vec![]).unwrap(),
                 metadata: vec![],
                 built_at: "2026-01-01T00:00:00Z".to_string(),
             })

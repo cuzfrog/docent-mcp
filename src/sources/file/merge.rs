@@ -1,4 +1,5 @@
 use crate::documents::ChunkMetadata;
+use crate::index::VectorStore;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -6,7 +7,7 @@ use std::path::PathBuf;
 #[allow(clippy::type_complexity)]
 pub(crate) fn extract_merge_state(
     metadata: &[ChunkMetadata],
-    vectors: &[Vec<f32>],
+    vectors: &VectorStore,
 ) -> (
     HashMap<String, String>,
     HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>>,
@@ -23,7 +24,7 @@ pub(crate) fn extract_merge_state(
         old_chunks_by_path
             .entry(meta.doc_ctx.source_path.to_string())
             .or_default()
-            .push((meta.clone(), vectors[i].clone()));
+            .push((meta.clone(), vectors.get(i).to_vec()));
     }
 
     (old_hashes, old_chunks_by_path)

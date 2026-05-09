@@ -2,13 +2,14 @@ use std::sync::{Arc, Mutex};
 
 use crate::documents::ChunkMetadata;
 use crate::embedder::EmbeddingService;
+use crate::index::VectorStore;
 
 use super::ranking::Ranker;
 use super::types::SearchResult;
 
 pub(crate) struct VectorSearchService {
     embedder: Arc<Mutex<dyn EmbeddingService>>,
-    vectors: Arc<Vec<Vec<f32>>>,
+    vectors: Arc<VectorStore>,
     metadata: Arc<Vec<ChunkMetadata>>,
     ranker: Arc<dyn Ranker>,
     index_time: String,
@@ -17,7 +18,7 @@ pub(crate) struct VectorSearchService {
 impl VectorSearchService {
     pub fn new(
         embedder: Arc<Mutex<dyn EmbeddingService>>,
-        vectors: Arc<Vec<Vec<f32>>>,
+        vectors: Arc<VectorStore>,
         metadata: Arc<Vec<ChunkMetadata>>,
         ranker: Arc<dyn Ranker>,
         index_time: String,

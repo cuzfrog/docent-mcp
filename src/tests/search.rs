@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::documents::{ChunkKind, ChunkMetadata, DocumentContext};
 use crate::embedder::EmbeddingService;
+use crate::index::VectorStore;
 use crate::search::{DecayRanker, VectorSearchService};
 use crate::tests::fixtures::FakeEmbedder;
 
@@ -40,6 +41,7 @@ fn build_search_service(
         .iter()
         .map(|t| embedder.embed(&[t]).unwrap().remove(0))
         .collect();
+    let vector_store = VectorStore::from_vec_vec(vectors).unwrap();
 
     let metadata: Vec<ChunkMetadata> = texts
         .iter()
@@ -57,7 +59,7 @@ fn build_search_service(
 
     VectorSearchService::new(
         embedder,
-        Arc::new(vectors),
+        Arc::new(vector_store),
         Arc::new(metadata),
         ranker,
         "2026-01-01T00:00:00Z".into(),
@@ -151,7 +153,7 @@ fn test_search_empty_index_returns_empty() {
     let ranker = Arc::new(DecayRanker::new(0.9));
     let svc = VectorSearchService::new(
         embedder,
-        Arc::new(vec![]),
+        Arc::new(VectorStore::from_vec_vec(vec![]).unwrap()),
         Arc::new(vec![]),
         ranker,
         "2026-01-01T00:00:00Z".into(),

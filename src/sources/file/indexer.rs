@@ -43,7 +43,7 @@ impl FileIndexer {
     #[allow(clippy::type_complexity)]
     pub(crate) fn extract_merge_state(
         metadata: &[ChunkMetadata],
-        vectors: &[Vec<f32>],
+        vectors: &crate::index::VectorStore,
     ) -> (
         HashMap<String, String>,
         HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>>,

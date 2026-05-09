@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use super::schema::build_header;
 use crate::config::IndexConfig;
 use crate::documents::ChunkMetadata;
-use crate::index::schema::{StoredChunkMetadata, StoredIndex};
+use crate::index::schema::{StoredChunkMetadata, StoredIndex, VectorStore};
 use crate::index::storage::{read_index, write_index};
 use crate::index::validate_header;
 use crate::support::fs::dir_size;
@@ -26,12 +26,12 @@ impl SourceIndexKind {
 /// Index loaded from disk with runtime (not persisted) metadata types.
 pub(crate) struct LoadedIndex {
     pub header: crate::index::schema::IndexHeader,
-    pub vectors: Vec<Vec<f32>>,
+    pub vectors: VectorStore,
     pub metadata: Vec<ChunkMetadata>,
 }
 
 pub(crate) struct MergedIndex {
-    pub vectors: Vec<Vec<f32>>,
+    pub vectors: VectorStore,
     pub metadata: Vec<ChunkMetadata>,
     pub built_at: String,
 }
@@ -91,10 +91,11 @@ impl IndexRepository {
         );
         let stored_metadata: Vec<StoredChunkMetadata> =
             metadata.into_iter().map(Into::into).collect();
+        let vector_store = VectorStore::from_vec_vec(vectors.to_vec())?;
         write_index(
             &self.persist_path.join(self.kind.subdir()),
             &header,
-            vectors,
+            &vector_store,
             &stored_metadata,
         )
     }
@@ -188,18 +189,12 @@ impl IndexRepository {
             None
         };
 
-        let all_vectors: Vec<Vec<f32>> = file_index
-            .as_ref()
-            .map(|s| s.vectors.clone())
-            .unwrap_or_default()
-            .into_iter()
-            .chain(
-                git_index
-                    .as_ref()
-                    .map(|s| s.vectors.clone())
-                    .unwrap_or_default(),
-            )
-            .collect();
+        let file_vectors: Option<&VectorStore> = file_index.as_ref().map(|s| &s.vectors);
+        let git_vectors: Option<&VectorStore> = git_index.as_ref().map(|s| &s.vectors);
+        let all_vectors = VectorStore::concat(
+            file_vectors.unwrap_or(&VectorStore::from_vec_vec(vec![]).unwrap()),
+            git_vectors.unwrap_or(&VectorStore::from_vec_vec(vec![]).unwrap()),
+        )?;
 
         let all_metadata: Vec<ChunkMetadata> = file_index
             .as_ref()

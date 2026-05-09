@@ -1,4 +1,5 @@
 use crate::documents::ChunkMetadata;
+use crate::index::VectorStore;
 
 use super::types::SearchResult;
 
@@ -14,7 +15,7 @@ pub(crate) trait Ranker: Send + Sync {
     fn rank(
         &self,
         query_vector: &[f32],
-        vectors: &[Vec<f32>],
+        vectors: &VectorStore,
         metadata: &[ChunkMetadata],
         limit: usize,
         index_time: &str,
@@ -48,7 +49,7 @@ impl Ranker for DecayRanker {
     fn rank(
         &self,
         query_vector: &[f32],
-        vectors: &[Vec<f32>],
+        vectors: &VectorStore,
         metadata: &[ChunkMetadata],
         limit: usize,
         index_time: &str,
@@ -97,7 +98,7 @@ fn apply_score_decay<'a>(
 
 fn rank_results(
     query_vector: &[f32],
-    vectors: &[Vec<f32>],
+    vectors: &VectorStore,
     metadata: &[ChunkMetadata],
     limit: usize,
     same_src_score_decay: f32,
@@ -109,10 +110,9 @@ fn rank_results(
         return vec![];
     }
 
-    let candidates: Vec<(f32, &ChunkMetadata)> = vectors
-        .iter()
+    let candidates: Vec<(f32, &ChunkMetadata)> = (0..vectors.len())
         .zip(metadata.iter())
-        .map(|(vec, meta)| (cosine_similarity(query_vector, vec), meta))
+        .map(|(i, meta)| (cosine_similarity(query_vector, vectors.get(i)), meta))
         .collect();
 
     let deduped = apply_score_decay(candidates, same_src_score_decay);

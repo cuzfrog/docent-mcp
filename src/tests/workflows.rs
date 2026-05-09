@@ -78,7 +78,7 @@ fn test_index_and_store_round_trip() {
     assert_eq!(header.embedding_dims, 4);
     assert_eq!(header.doc_count, 2);
     assert_eq!(vectors.len(), metadata.len());
-    assert_eq!(vectors[0].len(), 4);
+    assert_eq!(vectors.dims(), 4);
 
     let _ = std::fs::remove_dir_all(&base);
 }

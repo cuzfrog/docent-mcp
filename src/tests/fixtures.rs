@@ -4,6 +4,7 @@ use crate::chunking::TokenCounter;
 use crate::config::IndexConfig;
 use crate::documents::ChunkMetadata;
 use crate::embedder::{EmbedderFactory, EmbeddingService};
+use crate::index::VectorStore;
 use crate::index::{IndexRepository, SourceIndexKind};
 
 // ---------------------------------------------------------------------------
@@ -39,7 +40,7 @@ chunk_overlap = 64
 /// Read an index from disk, returning header, vectors, and metadata.
 pub fn read_index_at(
     path: &std::path::Path,
-) -> (crate::index::IndexHeader, Vec<Vec<f32>>, Vec<ChunkMetadata>) {
+) -> (crate::index::IndexHeader, VectorStore, Vec<ChunkMetadata>) {
     let repo = IndexRepository::new(path, SourceIndexKind::File, &IndexConfig::default());
     let stored = repo.load_one().unwrap();
     (stored.header, stored.vectors, stored.metadata)

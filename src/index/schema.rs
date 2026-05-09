@@ -8,11 +8,86 @@ use serde::{Deserialize, Serialize};
 /// in a backward-incompatible way.
 pub const SCHEMA_VERSION: u32 = 5;
 
+/// A flat memory-efficient store for fixed-dimension float vectors.
+///
+/// Stores all vectors in a single `Vec<f32>` allocation. Provides
+/// O(1) slice access via `get(i) -> &[f32]`. Improves cache locality
+/// during similarity search compared to `Vec<Vec<f32>>`.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct VectorStore {
+    pub(crate) data: Vec<f32>,
+    pub(crate) dims: usize,
+    pub(crate) count: usize,
+}
+
+impl VectorStore {
+    /// Build a `VectorStore` from a `Vec<Vec<f32>>`, consuming the input.
+    pub fn from_vec_vec(vecs: Vec<Vec<f32>>) -> anyhow::Result<Self> {
+        let count = vecs.len();
+        if count == 0 {
+            return Ok(Self { data: vec![], dims: 0, count: 0 });
+        }
+        let dims = vecs[0].len();
+        let mut data = Vec::with_capacity(count * dims);
+        for v in vecs {
+            anyhow::ensure!(v.len() == dims, "inconsistent vector dimensions");
+            data.extend_from_slice(&v);
+        }
+        Ok(Self { data, dims, count })
+    }
+
+    /// Return a slice of the vector at index `i`.
+    pub fn get(&self, i: usize) -> &[f32] {
+        let start = i * self.dims;
+        &self.data[start..start + self.dims]
+    }
+
+    /// Number of vectors stored.
+    pub fn len(&self) -> usize {
+        self.count
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
+    /// Embedding dimensionality.
+    pub fn dims(&self) -> usize {
+        self.dims
+    }
+
+    /// Raw byte slice of the flat data (for zero-copy write).
+    pub fn as_bytes(&self) -> &[u8] {
+        if self.data.is_empty() {
+            return &[];
+        }
+        bytemuck::cast_slice(&self.data)
+    }
+
+    /// Concatenate two `VectorStore`s into one.
+    ///
+    /// Both stores must have the same dimensionality, unless one is empty
+    /// (in which case the non-empty store's `dims` is used).
+    pub fn concat(a: &VectorStore, b: &VectorStore) -> anyhow::Result<Self> {
+        anyhow::ensure!(
+            a.dims == b.dims || a.is_empty() || b.is_empty(),
+            "dimension mismatch: {} vs {}",
+            a.dims(),
+            b.dims()
+        );
+        let dims = if a.is_empty() { b.dims() } else { a.dims() };
+        let mut data = Vec::with_capacity((a.count + b.count) * dims);
+        data.extend_from_slice(&a.data);
+        data.extend_from_slice(&b.data);
+        Ok(Self { data, dims, count: a.count + b.count })
+    }
+}
+
 /// In-memory representation of an index loaded from disk.
 #[derive(Debug)]
 pub(crate) struct StoredIndex {
     pub header: IndexHeader,
-    pub vectors: Vec<Vec<f32>>,
+    pub vectors: VectorStore,
     pub metadata: Vec<StoredChunkMetadata>,
 }
 
