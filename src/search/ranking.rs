@@ -29,10 +29,12 @@ pub(crate) trait Ranker: Send + Sync {
 /// A ranker that scores candidates by cosine similarity, then applies
 /// exponential decay to subsequent chunks from the same source document
 /// to reduce redundancy in results.
+#[cfg(test)]
 pub(crate) struct DecayRanker {
     same_src_score_decay: f32,
 }
 
+#[cfg(test)]
 impl DecayRanker {
     /// Create a new ranker with the given decay factor.
     ///
@@ -40,12 +42,12 @@ impl DecayRanker {
     /// successive chunk from the same `(source_path, source_revision)`
     /// pair. A value of `1.0` means no decay; `0.0` means only the
     /// highest-scoring chunk per source survives.
-    #[allow(dead_code)]
     pub(crate) fn new(same_src_score_decay: f32) -> Self {
         Self { same_src_score_decay }
     }
 }
 
+#[cfg(test)]
 impl Ranker for DecayRanker {
     fn rank(
         &self,
