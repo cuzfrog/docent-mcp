@@ -46,7 +46,9 @@ describe('parseSearchResponse', () => {
             title: 'Test DDR',
             source_path: '/path/to/doc.md',
             matched_content: 'some content',
-            score: 0.95,
+            total_score: 0.85,
+            semantic_score: 0.95,
+            bm25_score: 0.75,
             line_start: 10,
             line_end: 20,
             section_heading: 'Introduction',
@@ -66,7 +68,9 @@ describe('parseSearchResponse', () => {
     assert.equal(res.title, 'Test DDR');
     assert.equal(res.sourcePath, '/path/to/doc.md');
     assert.equal(res.matchedContent, 'some content');
-    assert.equal(res.score, 0.95);
+    assert.equal(res.total_score, 0.85);
+    assert.equal(res.semantic_score, 0.95);
+    assert.equal(res.bm25_score, 0.75);
     assert.equal(res.lineStart, 10);
     assert.equal(res.lineEnd, 20);
     assert.equal(res.sectionHeading, 'Introduction');
@@ -86,7 +90,9 @@ describe('parseSearchResponse', () => {
             title: 'Minimal DDR',
             source_path: '/path/doc.md',
             matched_content: 'content',
-            score: 0.5,
+            total_score: 0.5,
+            semantic_score: 0.7,
+            bm25_score: 0.3,
             line_start: 1,
             line_end: 1,
             section_heading: null,
@@ -112,8 +118,8 @@ describe('parseSearchResponse', () => {
         content: [{
           type: 'text',
           text: JSON.stringify([
-            { title: '', source_path: '/a.md', matched_content: 'c', score: 0.5, line_start: 1, line_end: 1, section_heading: null, modified_at: null, kind: 'git', source_revision: 'abc123', is_fresh: true, index_time: '2026-01-01T00:00:00Z' },
-            { title: 'Valid', source_path: '/b.md', matched_content: 'c', score: 0.5, line_start: 1, line_end: 1, section_heading: null, modified_at: null, kind: 'file', source_revision: '', is_fresh: false, index_time: null },
+            { title: '', source_path: '/a.md', matched_content: 'c', total_score: 0.5, semantic_score: 0.7, bm25_score: 0.3, line_start: 1, line_end: 1, section_heading: null, modified_at: null, kind: 'git', source_revision: 'abc123', is_fresh: true, index_time: '2026-01-01T00:00:00Z' },
+            { title: 'Valid', source_path: '/b.md', matched_content: 'c', total_score: 0.5, semantic_score: 0.7, bm25_score: 0.3, line_start: 1, line_end: 1, section_heading: null, modified_at: null, kind: 'file', source_revision: '', is_fresh: false, index_time: null },
           ]),
         }],
       },

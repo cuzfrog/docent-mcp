@@ -5,7 +5,9 @@
  * @property {string} title
  * @property {string} sourcePath
  * @property {string} matchedContent
- * @property {number} score
+ * @property {number} total_score
+ * @property {number} semantic_score
+ * @property {number} bm25_score
  * @property {number} lineStart
  * @property {number} lineEnd
  * @property {string|null} sectionHeading
@@ -73,7 +75,9 @@ export function parseSearchResponse(raw) {
       title: item.title,
       sourcePath: item.source_path || '',
       matchedContent: item.matched_content || '',
-      score: typeof item.score === 'number' ? item.score : 0,
+      total_score: typeof item.total_score === 'number' ? item.total_score : 0,
+      semantic_score: typeof item.semantic_score === 'number' ? item.semantic_score : 0,
+      bm25_score: typeof item.bm25_score === 'number' ? item.bm25_score : 0,
       lineStart: typeof item.line_start === 'number' ? item.line_start : 0,
       lineEnd: typeof item.line_end === 'number' ? item.line_end : 0,
       sectionHeading: item.section_heading ?? null,

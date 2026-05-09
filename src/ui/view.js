@@ -121,7 +121,12 @@ export class View {
         }
       }
 
-      setText('.result-score', `${(result.score * 100).toFixed(1)}% match`);
+      const { display, tooltip } = this.formatScore(result);
+      const scoreEl = clone.querySelector('.result-score');
+      if (scoreEl) {
+        scoreEl.textContent = display;
+        scoreEl.title = tooltip;
+      }
       if (result.sectionHeading) {
         setText('.result-section', result.sectionHeading);
       }
@@ -222,6 +227,23 @@ export class View {
       button.textContent = originalText;
     }, 1500);
     return () => clearTimeout(timeoutId);
+  }
+
+  /**
+   * Format score display with breakdown tooltip.
+   * @param {import('./search_api.js').NormalizedResult} result
+   * @returns {{display: string, tooltip: string}}
+   */
+  formatScore(result) {
+    const total = result.total_score;
+    const sem = result.semantic_score.toFixed(2);
+    const bm25 = result.bm25_score.toFixed(2);
+    // Normalize rank-based RRF score (0-1 range) to percentage
+    const pct = Math.round(total * 100);
+    return {
+      display: `${pct}% match`,
+      tooltip: `semantic: ${sem}, bm25: ${bm25}`,
+    };
   }
 
   /**
