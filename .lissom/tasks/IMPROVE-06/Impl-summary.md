@@ -58,6 +58,26 @@ Refactored hard-to-test orchestration code to improve test coverage without chan
 - `cargo test`: 172 tests pass
 - `cargo clippy`: no new warnings (only 3 pre-existing)
 
+## Fix Cycle 1
+
+### Fix-1-Issue-1: Restore elapsed-timing output in `run_git_index` (SHA: 014348b)
+- Added `walk_secs` and `embed_secs` fields to `GitIndexOutcome::Indexed`
+- Captured timing in `run_git_rebuild` and `run_git_incremental` using `Instant::now()`
+- Restored user-facing format strings replacing `"..."` placeholders with real `{:.1}s` values
+- **Files**: `src/workflows/git_index.rs`, `src/tests/git_index_tests.rs`
+
+### Fix-2-Issue-2: Extract shared `check_git_size` helper (SHA: 9f455b9)
+- Extracted duplicated size-check-and-confirm logic into a shared `check_git_size` helper
+- Helper returns `Option<usize>` — `Some(count)` to continue, `None` to abort
+- Eliminated duplicate `estimate_commit_count` calls from both rebuild and incremental paths
+- **Files**: `src/workflows/git_index.rs`
+
+### Fix-3-Issue-3: Remove `#[allow(dead_code)]` on `persist_path` (SHA: 1cf53c2)
+- Removed unused `persist_path` field from `PreparedServe` struct
+- Removed `#[allow(dead_code)]` annotation
+- Updated `run_serve` startup message to show index path from config
+- **Files**: `src/app/commands/serve.rs`
+
 ## Test coverage improvements
 
 | File | Before | After |
@@ -76,3 +96,10 @@ Refactored hard-to-test orchestration code to improve test coverage without chan
 - Real `IndexRepository` and temp directories in tests (no mock for storage)
 - Minimal public surface — everything is `pub(crate)` unless necessary
 - No changes to CLI flags, config format, or index format
+
+## Fix Cycle 1 Validation
+- `cargo test`: 172 tests pass (same count as before — no tests removed)
+- `cargo clippy`: no warnings
+- No `#[allow(dead_code)]` remaining in `src/app/commands/serve.rs`
+- Timing output restored with `{:.1}s` format matching original behavior
+- Duplicate `estimate_commit_count` calls eliminated from both rebuild and incremental paths
