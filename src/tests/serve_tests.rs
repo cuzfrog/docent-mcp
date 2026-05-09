@@ -97,6 +97,8 @@ fn serve_config(persist_path: &Path) -> Config {
             chunk_size: 256,
             chunk_overlap: 32,
             max_size_mb: 512,
+            bm25_k1: 1.2,
+            bm25_b: 0.75,
         },
         server: crate::config::ServerConfig {
             port: 9999,
@@ -242,6 +244,8 @@ fn create_minimal_file_index(persist_path: &Path) {
         chunk_size: 256,
         chunk_overlap: 32,
         max_size_mb: 512,
+        bm25_k1: 1.2,
+        bm25_b: 0.75,
     };
 
     let repo = IndexRepository::new(persist_path, SourceIndexKind::File, &config);

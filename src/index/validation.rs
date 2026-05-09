@@ -45,6 +45,8 @@ mod tests {
             chunk_size: 256,
             chunk_overlap: 32,
             max_size_mb: 512,
+            bm25_k1: 1.2,
+            bm25_b: 0.75,
         }
     }
 

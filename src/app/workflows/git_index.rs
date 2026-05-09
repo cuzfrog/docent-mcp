@@ -320,6 +320,8 @@ mod tests {
                 chunk_size: 512,
                 chunk_overlap: 64,
                 max_size_mb: 512,
+                bm25_k1: 1.2,
+                bm25_b: 0.75,
             },
             server: crate::config::ServerConfig {
                 port: 0,
@@ -347,6 +349,8 @@ mod tests {
                 chunk_size: 512,
                 chunk_overlap: 64,
                 max_size_mb: 512,
+                bm25_k1: 1.2,
+                bm25_b: 0.75,
             },
             server: crate::config::ServerConfig {
                 port: 0,

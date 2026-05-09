@@ -27,6 +27,10 @@ pub struct IndexConfig {
     pub chunk_overlap: usize,
     #[serde(default = "super::defaults::default_max_size_mb")]
     pub max_size_mb: u64,
+    #[serde(default = "super::defaults::default_bm25_k1")]
+    pub bm25_k1: f32,
+    #[serde(default = "super::defaults::default_bm25_b")]
+    pub bm25_b: f32,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -81,6 +85,8 @@ impl Default for IndexConfig {
             chunk_size: super::defaults::default_chunk_size(),
             chunk_overlap: super::defaults::default_chunk_overlap(),
             max_size_mb: super::defaults::default_max_size_mb(),
+            bm25_k1: super::defaults::default_bm25_k1(),
+            bm25_b: super::defaults::default_bm25_b(),
         }
     }
 }
