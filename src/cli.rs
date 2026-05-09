@@ -23,6 +23,10 @@ pub enum Commands {
     Serve(ServeArgs),
     /// List all supported embedding models.
     ListModels,
+    /// Generate a default docent.toml in the current directory.
+    Init,
+    /// Index files and/or git history based on config.
+    Index(IndexCommandArgs),
 }
 
 /// Shared fields for `index-file` and `index-git` subcommands.
@@ -53,6 +57,25 @@ pub struct ServeArgs {
     /// Path to config file (default: ./docent.toml).
     #[arg(long, default_value = "./docent.toml")]
     pub config: PathBuf,
+}
+
+/// Arguments for the `index` subcommand.
+#[derive(clap::Args)]
+pub struct IndexCommandArgs {
+    /// Directory to index (default: current directory).
+    pub dir: Option<PathBuf>,
+
+    /// Path to config file (default: ./docent.toml).
+    #[arg(long, default_value = "./docent.toml")]
+    pub config: PathBuf,
+
+    /// Re-index from scratch (instead of incremental).
+    #[arg(long)]
+    pub rebuild: bool,
+
+    /// Show detailed progress output.
+    #[arg(long)]
+    pub verbose: bool,
 }
 
 #[cfg(test)]
@@ -221,6 +244,79 @@ mod tests {
         match cli.command {
             Commands::ListModels => {}
             _ => panic!("expected ListModels command"),
+        }
+    }
+
+    #[test]
+    fn test_init_subcommand() {
+        let cli = Cli::try_parse_from(["docent", "init"]);
+        assert!(cli.is_ok());
+        assert!(matches!(cli.unwrap().command, Commands::Init));
+    }
+
+    #[test]
+    fn test_index_default_dir() {
+        let cli = Cli::try_parse_from(["docent", "index"]);
+        assert!(cli.is_ok());
+        match cli.unwrap().command {
+            Commands::Index(args) => {
+                assert_eq!(args.dir, None);
+                assert_eq!(args.config, PathBuf::from("./docent.toml"));
+                assert!(!args.rebuild);
+                assert!(!args.verbose);
+            }
+            _ => panic!("expected Index command"),
+        }
+    }
+
+    #[test]
+    fn test_index_with_dir() {
+        let cli = Cli::try_parse_from(["docent", "index", "./my-project"]);
+        assert!(cli.is_ok());
+        match cli.unwrap().command {
+            Commands::Index(args) => {
+                assert_eq!(args.dir, Some(PathBuf::from("./my-project")));
+            }
+            _ => panic!("expected Index command"),
+        }
+    }
+
+    #[test]
+    fn test_index_with_rebuild() {
+        let cli = Cli::try_parse_from(["docent", "index", "--rebuild"]);
+        assert!(cli.is_ok());
+        match cli.unwrap().command {
+            Commands::Index(args) => assert!(args.rebuild),
+            _ => panic!("expected Index command"),
+        }
+    }
+
+    #[test]
+    fn test_index_with_verbose() {
+        let cli = Cli::try_parse_from(["docent", "index", "--verbose"]);
+        assert!(cli.is_ok());
+        match cli.unwrap().command {
+            Commands::Index(args) => assert!(args.verbose),
+            _ => panic!("expected Index command"),
+        }
+    }
+
+    #[test]
+    fn test_index_with_all_flags() {
+        let cli = Cli::try_parse_from([
+            "docent", "index", "./my-dir",
+            "--config", "custom.toml",
+            "--rebuild", "--verbose",
+        ]);
+        assert!(cli.is_ok());
+        match cli.unwrap().command {
+            Commands::Index(args) => {
+                assert_eq!(args.dir, Some(PathBuf::from("./my-dir")));
+                assert_eq!(args.config, PathBuf::from("custom.toml"));
+                assert!(args.rebuild);
+                assert!(args.verbose);
+            }
+            _ => panic!("expected Index command"),
         }
     }
 }
