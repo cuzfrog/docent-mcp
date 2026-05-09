@@ -236,10 +236,17 @@ header .subtitle {
   margin-bottom: 0.75rem;
 }
 
+.result-card .result-title-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: var(--space-xs);
+}
+
 .result-card .result-title {
+  flex: 1;
   font-size: 1rem;
   font-weight: 600;
-  margin-bottom: var(--space-xs);
 }
 
 .result-card .result-source-line {
@@ -247,6 +254,7 @@ header .subtitle {
   align-items: center;
   gap: 0.4rem;
   margin-bottom: 0.4rem;
+  flex-wrap: wrap;
 }
 
 .result-card .result-source {
@@ -254,6 +262,48 @@ header .subtitle {
   color: #666;
   font-family: var(--font-mono);
   word-break: break-all;
+}
+
+.result-kind-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+}
+
+.badge-file {
+  color: #6b21a8;
+  background: #f3e8ff;
+}
+
+.badge-git {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.result-freshness {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+}
+
+.badge-fresh {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.badge-stale {
+  color: #92400e;
+  background: #fef3c7;
 }
 
 .result-card .result-score {
@@ -264,6 +314,7 @@ header .subtitle {
   background: var(--color-primary-bg);
   padding: 0.15rem 0.5rem;
   border-radius: var(--radius-sm);
+  white-space: nowrap;
 }
 
 .result-card .result-lines {
@@ -291,7 +342,7 @@ header .subtitle {
   border-top: 1px solid var(--color-border-light);
 }
 
-.result-card .result-modified {
+.result-card .result-footer-text {
   font-size: 0.7rem;
   color: #aaa;
   font-family: var(--font-mono);

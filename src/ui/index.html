@@ -65,14 +65,18 @@
 
   <template id="result-card-template">
     <div class="result-card">
-      <div class="result-title"></div>
+      <div class="result-title-line">
+        <span class="result-kind-badge"></span>
+        <span class="result-title"></span>
+        <span class="result-score"></span>
+      </div>
       <div class="result-source-line">
         <span class="result-source"></span>
         <span class="result-lines"></span>
+        <span class="result-freshness"></span>
         <button class="copy-link-btn">Copy link</button>
       </div>
       <div class="result-meta">
-        <span class="result-score"></span>
         <span class="result-section"></span>
       </div>
       <div class="result-content-wrapper">
@@ -80,7 +84,7 @@
         <button class="copy-content-btn">Copy content</button>
       </div>
       <div class="result-footer">
-        <span class="result-modified"></span>
+        <span class="result-footer-text"></span>
       </div>
     </div>
   </template>

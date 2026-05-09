@@ -20,14 +20,18 @@ const HTML = `<!DOCTYPE html>
 <div id="results-section"></div>
 <template id="result-card-template">
   <div class="result-card">
-    <div class="result-title"></div>
+    <div class="result-title-line">
+      <span class="result-kind-badge"></span>
+      <span class="result-title"></span>
+      <span class="result-score"></span>
+    </div>
     <div class="result-source-line">
       <span class="result-source"></span>
       <span class="result-lines"></span>
+      <span class="result-freshness"></span>
       <button class="copy-link-btn">Copy link</button>
     </div>
     <div class="result-meta">
-      <span class="result-score"></span>
       <span class="result-section"></span>
     </div>
     <div class="result-content-wrapper">
@@ -35,7 +39,7 @@ const HTML = `<!DOCTYPE html>
       <button class="copy-content-btn">Copy content</button>
     </div>
     <div class="result-footer">
-      <span class="result-modified"></span>
+      <span class="result-footer-text"></span>
     </div>
   </div>
 </template>
@@ -83,7 +87,7 @@ describe('View', () => {
     assert.equal(resultsEl.children.length, 1);
   });
 
-  it('should render valid results as result cards', () => {
+  it('should render valid file results as result cards', () => {
     const view = new View(dom.window.document);
     const results = [
       {
@@ -95,6 +99,10 @@ describe('View', () => {
         lineEnd: 20,
         sectionHeading: 'Intro',
         modifiedAt: '2024-01-15T10:00:00Z',
+        kind: 'file',
+        sourceRevision: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
+        isFresh: false,
+        indexTime: '2026-05-06T12:00:00Z',
       },
     ];
     view.renderResults(results);
@@ -106,6 +114,52 @@ describe('View', () => {
     assert.match(card.querySelector('.result-score').textContent, /95/);
     assert.ok(card.querySelector('.result-lines'));
     assert.equal(card.querySelector('.result-section').textContent, 'Intro');
+    // Kind badge
+    const badge = card.querySelector('.result-kind-badge');
+    assert.equal(badge.textContent, 'File');
+    assert.ok(badge.classList.contains('badge-file'));
+    // Freshness badge not rendered for file kind
+    assert.ok(!card.querySelector('.result-freshness').textContent);
+    // Footer
+    const footer = card.querySelector('.result-footer-text');
+    assert.match(footer.textContent, /^Modified:/);
+    assert.match(footer.textContent, /SHA: a1b2c3d4e5f6/);
+  });
+
+  it('should render valid git results with freshness badge', () => {
+    const view = new View(dom.window.document);
+    const results = [
+      {
+        title: 'feat: add caching',
+        sourcePath: 'src/cache.rs',
+        matchedContent: '+ fn get() {}',
+        score: 0.85,
+        lineStart: 10,
+        lineEnd: 45,
+        sectionHeading: null,
+        modifiedAt: '2024-03-20T10:00:00Z',
+        kind: 'git',
+        sourceRevision: 'a1b2c3d7e8f9a1b2c3d7e8f9a1b2c3d7e8f9a1b2',
+        isFresh: true,
+        indexTime: '2026-05-06T12:00:00Z',
+      },
+    ];
+    view.renderResults(results);
+    const resultsEl = view.elements.results;
+    const card = resultsEl.querySelector('.result-card');
+    assert.ok(card);
+    // Kind badge
+    const badge = card.querySelector('.result-kind-badge');
+    assert.equal(badge.textContent, 'Git');
+    assert.ok(badge.classList.contains('badge-git'));
+    // Freshness badge
+    const freshness = card.querySelector('.result-freshness');
+    assert.equal(freshness.textContent, 'Fresh');
+    assert.ok(freshness.classList.contains('badge-fresh'));
+    // Footer
+    const footer = card.querySelector('.result-footer-text');
+    assert.match(footer.textContent, /^Committed:/);
+    assert.match(footer.textContent, /SHA: a1b2c3d7e8f9/);
   });
 
   it('should render error card with message', () => {
