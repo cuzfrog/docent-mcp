@@ -23,4 +23,4 @@ impl SourceIndexKind {
 
 pub(crate) use repository::{IndexRepository, IndexSizeInfo, MergedIndex};
 pub(crate) use validation::validate_header;
-pub(crate) use schema::{AnnIndex, IndexHeader, VectorStore, SCHEMA_VERSION};
+pub(crate) use schema::{IndexHeader, VectorStore, SCHEMA_VERSION};

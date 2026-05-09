@@ -51,17 +51,26 @@ impl VectorSearchService {
                 .next()
                 .ok_or_else(|| anyhow::anyhow!("Embedder returned no vectors for query"))?;
 
-            Ok(ranker.rank(
-                &query_vector,
-                &vectors,
-                &metadata,
-                limit,
-                &index_time,
-            ))
+            let scores: Vec<f32> = (0..vectors.len())
+                .map(|i| cosine_similarity(&query_vector, vectors.get(i)))
+                .collect();
+
+            Ok(ranker.rank(&scores, &metadata, limit, &index_time))
         })
         .await
         .map_err(|e| anyhow::anyhow!("Search task panicked: {}", e))?
     }
+}
+
+/// Compute cosine similarity between two vectors.
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
+    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm_a == 0.0 || norm_b == 0.0 {
+        return 0.0;
+    }
+    dot / (norm_a * norm_b)
 }
 
 #[cfg(test)]

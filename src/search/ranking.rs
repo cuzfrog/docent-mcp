@@ -1,5 +1,4 @@
 use crate::documents::ChunkMetadata;
-use crate::index::{AnnIndex, VectorStore};
 
 use super::types::SearchResult;
 
@@ -8,14 +7,13 @@ use super::types::SearchResult;
 // ---------------------------------------------------------------------------
 
 /// A strategy for ranking and selecting search results from a set of
-/// candidate vectors and metadata.
+/// pre-computed scores and metadata.
 pub(crate) trait Ranker: Send + Sync {
-    /// Rank candidates by similarity to `query_vector`, apply any
-    /// de-duplication or score decay, and return the top results.
+    /// Rank candidates by their scores, apply any de-duplication or score
+    /// decay, and return the top results.
     fn rank(
         &self,
-        query_vector: &[f32],
-        vectors: &VectorStore,
+        scores: &[f32],
         metadata: &[ChunkMetadata],
         limit: usize,
         index_time: &str,
@@ -26,15 +24,12 @@ pub(crate) trait Ranker: Send + Sync {
 // DecayRanker — concrete ranker with same-source score decay
 // ---------------------------------------------------------------------------
 
-/// A ranker that scores candidates by cosine similarity, then applies
-/// exponential decay to subsequent chunks from the same source document
-/// to reduce redundancy in results.
-#[cfg(test)]
+/// A ranker that applies exponential decay to subsequent chunks from the
+/// same source document to reduce redundancy in results.
 pub(crate) struct DecayRanker {
     same_src_score_decay: f32,
 }
 
-#[cfg(test)]
 impl DecayRanker {
     /// Create a new ranker with the given decay factor.
     ///
@@ -47,128 +42,21 @@ impl DecayRanker {
     }
 }
 
-#[cfg(test)]
 impl Ranker for DecayRanker {
     fn rank(
         &self,
-        query_vector: &[f32],
-        vectors: &VectorStore,
+        scores: &[f32],
         metadata: &[ChunkMetadata],
         limit: usize,
         index_time: &str,
     ) -> Vec<SearchResult> {
-        rank_results_brute_force(
-            query_vector,
-            vectors,
-            metadata,
-            limit,
-            self.same_src_score_decay,
-            index_time,
-        )
-    }
-}
-
-// ---------------------------------------------------------------------------
-// AnnRanker — ranker that uses ANN for large indexes, falls back to brute
-// force for small indexes.
-// ---------------------------------------------------------------------------
-
-/// A ranker that uses an approximate nearest neighbor index for fast
-/// candidate retrieval when the index is large (≥ 5 000 chunks), falling
-/// back to brute-force search otherwise.
-///
-/// Candidates retrieved by ANN are re-ranked with exact cosine similarity
-/// and the same source-document score decay as [`DecayRanker`].
-pub(crate) struct AnnRanker {
-    same_src_score_decay: f32,
-    ann_index: Option<AnnIndex>,
-}
-
-impl AnnRanker {
-    /// Create a new ranker with the given decay factor and optional ANN index.
-    pub fn new(same_src_score_decay: f32, ann_index: Option<AnnIndex>) -> Self {
-        Self {
-            same_src_score_decay,
-            ann_index,
-        }
-    }
-}
-
-impl Ranker for AnnRanker {
-    fn rank(
-        &self,
-        query_vector: &[f32],
-        vectors: &VectorStore,
-        metadata: &[ChunkMetadata],
-        limit: usize,
-        index_time: &str,
-    ) -> Vec<SearchResult> {
-        let limit = if limit == 0 { 3 } else { limit.clamp(1, 10) };
-
-        if vectors.is_empty() || vectors.len() != metadata.len() {
-            return vec![];
-        }
-
-        // Use ANN if available (oversample by 10×, then re-rank)
-        if let Some(ann) = self.ann_index.as_ref() {
-            let candidate_count = (limit * 10).min(vectors.len());
-            let indices = ann.search(query_vector, candidate_count);
-            let candidates: Vec<(f32, &ChunkMetadata)> = indices
-                .into_iter()
-                .map(|i| (cosine_similarity(query_vector, vectors.get(i)), &metadata[i]))
-                .collect();
-            let deduped = apply_score_decay(candidates, self.same_src_score_decay);
-            let top: Vec<(f32, &ChunkMetadata)> =
-                deduped.into_iter().take(limit).collect();
-            return top
-                .into_iter()
-                .map(|(score, meta)| SearchResult {
-                    kind: meta.doc_ctx.kind.clone(),
-                    title: meta.doc_ctx.title.to_string(),
-                    source_path: meta.doc_ctx.source_path.to_string(),
-                    source_revision: meta.doc_ctx.source_revision.to_string(),
-                    matched_content: meta.chunk_text.clone(),
-                    total_score: score,
-                    semantic_score: 0.0,
-                    bm25_score: 0.0,
-                    line_start: meta.line_start,
-                    line_end: meta.line_end,
-                    section_heading: meta.section_heading.clone(),
-                    modified_at: meta.doc_ctx
-                        .modified_at
-                        .as_ref()
-                        .map(|s| s.to_string()),
-                    is_fresh: meta.is_fresh.unwrap_or(false),
-                    index_time: index_time.to_string(),
-                })
-                .collect();
-        }
-
-        // Fall back to brute force
-        rank_results_brute_force(
-            query_vector,
-            vectors,
-            metadata,
-            limit,
-            self.same_src_score_decay,
-            index_time,
-        )
+        rank_results(scores, metadata, limit, self.same_src_score_decay, index_time)
     }
 }
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
-    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-    if norm_a == 0.0 || norm_b == 0.0 {
-        return 0.0;
-    }
-    dot / (norm_a * norm_b)
-}
 
 fn apply_score_decay<'a>(
     candidates: Vec<(f32, &'a ChunkMetadata)>,
@@ -194,9 +82,8 @@ fn apply_score_decay<'a>(
     results
 }
 
-pub(crate) fn rank_results_brute_force(
-    query_vector: &[f32],
-    vectors: &VectorStore,
+pub(crate) fn rank_results(
+    scores: &[f32],
     metadata: &[ChunkMetadata],
     limit: usize,
     same_src_score_decay: f32,
@@ -204,27 +91,28 @@ pub(crate) fn rank_results_brute_force(
 ) -> Vec<SearchResult> {
     let limit = if limit == 0 { 3 } else { limit.clamp(1, 10) };
 
-    if vectors.is_empty() || vectors.len() != metadata.len() {
+    if scores.is_empty() || scores.len() != metadata.len() {
         return vec![];
     }
 
-    let candidates: Vec<(f32, &ChunkMetadata)> = (0..vectors.len())
+    let candidates: Vec<(f32, &ChunkMetadata)> = scores
+        .iter()
+        .copied()
         .zip(metadata.iter())
-        .map(|(i, meta)| (cosine_similarity(query_vector, vectors.get(i)), meta))
         .collect();
 
     let deduped = apply_score_decay(candidates, same_src_score_decay);
 
-    let top: Vec<(f32, &ChunkMetadata)> = deduped.into_iter().take(limit).collect();
-
-    top.into_iter()
-        .map(|(score, meta)| SearchResult {
+    deduped
+        .into_iter()
+        .take(limit)
+        .map(|(total_score, meta)| SearchResult {
             kind: meta.doc_ctx.kind.clone(),
             title: meta.doc_ctx.title.to_string(),
             source_path: meta.doc_ctx.source_path.to_string(),
             source_revision: meta.doc_ctx.source_revision.to_string(),
             matched_content: meta.chunk_text.clone(),
-            total_score: score,
+            total_score,
             semantic_score: 0.0,
             bm25_score: 0.0,
             line_start: meta.line_start,
@@ -236,6 +124,10 @@ pub(crate) fn rank_results_brute_force(
         })
         .collect()
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -264,50 +156,6 @@ mod tests {
             line_end: 0,
             is_fresh: None,
         }
-    }
-
-    #[test]
-    fn test_cosine_similarity_identical_vectors() {
-        let a = vec![1.0, 2.0, 3.0];
-        let b = vec![1.0, 2.0, 3.0];
-        let sim = cosine_similarity(&a, &b);
-        assert!((sim - 1.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_cosine_similarity_orthogonal_vectors() {
-        let a = vec![1.0, 0.0];
-        let b = vec![0.0, 1.0];
-        let sim = cosine_similarity(&a, &b);
-        assert!(sim.abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_cosine_similarity_zero_norm() {
-        let a = vec![0.0, 0.0, 0.0];
-        let b = vec![1.0, 2.0, 3.0];
-        let sim = cosine_similarity(&a, &b);
-        assert_eq!(sim, 0.0);
-        let sim2 = cosine_similarity(&b, &a);
-        assert_eq!(sim2, 0.0);
-        let sim3 = cosine_similarity(&a, &a);
-        assert_eq!(sim3, 0.0);
-    }
-
-    #[test]
-    fn test_cosine_similarity_negative_values() {
-        let a = vec![1.0, -1.0];
-        let b = vec![-1.0, 1.0];
-        let sim = cosine_similarity(&a, &b);
-        assert!((sim - (-1.0)).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_cosine_similarity_same_direction() {
-        let a = vec![1.0, 2.0];
-        let b = vec![2.0, 4.0];
-        let sim = cosine_similarity(&a, &b);
-        assert!((sim - 1.0).abs() < 1e-6);
     }
 
     #[test]
@@ -345,5 +193,32 @@ mod tests {
         assert_eq!(results.len(), 2);
         assert!((results[0].0 - 0.9).abs() < 1e-6);
         assert!((results[1].0 - 0.45).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_rank_results_empty_scores() {
+        let results = rank_results(&[], &[], 5, 0.5, "now");
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_rank_results_mismatched_lengths() {
+        let meta = make_meta("doc.md", "Doc", "chunk 0", 0);
+        let results = rank_results(&[0.9], &[meta], 5, 0.5, "now");
+        // scores length matches metadata length, so it should work
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_rank_results_basic() {
+        let meta_a = make_meta("doc.md", "Doc", "chunk", 0);
+        let meta_b = make_meta("doc_b.md", "Doc B", "chunk", 0);
+        let scores = vec![0.9, 0.5];
+        let metadata = vec![meta_a, meta_b];
+        let results = rank_results(&scores, &metadata, 5, 1.0, "t0");
+        assert_eq!(results.len(), 2);
+        assert!((results[0].total_score - 0.9).abs() < 1e-6);
+        assert!((results[1].total_score - 0.5).abs() < 1e-6);
+        assert_eq!(results[0].index_time, "t0");
     }
 }
