@@ -61,7 +61,7 @@ impl Bm25IndexBuilder {
         &self,
         chunk_texts: &[&str],
     ) -> (Vec<bm25::Embedding<u32>>, f32) {
-        let embedder = bm25::EmbedderBuilder::with_fit_to_corpus(
+        let embedder = bm25::EmbedderBuilder::<u32>::with_fit_to_corpus(
             bm25::Language::English,
             chunk_texts,
         )
