@@ -6,6 +6,11 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 pub(crate) trait ProgressSink: Send {
     fn tick(&self);
+    fn tick_n(&self, n: u64) {
+        for _ in 0..n {
+            self.tick();
+        }
+    }
     fn tick_msg(&self, msg: &str);
     fn finish(&self);
 }
@@ -31,6 +36,10 @@ impl Progress {
         self.pb.inc(1);
     }
 
+    pub fn tick_n(&self, n: u64) {
+        self.pb.inc(n);
+    }
+
     pub fn tick_msg(&self, msg: impl std::fmt::Display) {
         if self.verbose {
             self.pb.println(msg.to_string());
@@ -46,6 +55,10 @@ impl Progress {
 impl ProgressSink for Progress {
     fn tick(&self) {
         self.tick()
+    }
+
+    fn tick_n(&self, n: u64) {
+        self.tick_n(n)
     }
 
     fn tick_msg(&self, msg: &str) {

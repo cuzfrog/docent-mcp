@@ -110,6 +110,7 @@ pub(crate) struct NoopProgress;
 
 impl crate::support::progress::ProgressSink for NoopProgress {
     fn tick(&self) {}
+    fn tick_n(&self, _n: u64) {}
     fn tick_msg(&self, _msg: &str) {}
     fn finish(&self) {}
 }
