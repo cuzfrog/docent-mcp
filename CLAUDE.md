@@ -82,7 +82,6 @@ src/
 ├── support/               # Utilities
 │   ├── fs.rs              #   Filesystem helpers (path_to_string, dir_size, sha256_hex)
 │   ├── progress.rs        #   Progress bar rendering
-│   ├── terminal.rs        #   Terminal I/O helpers
 │   ├── time.rs            #   Time helpers (unix_to_rfc3339)
 │   └── ui.rs              #   Abstract UI interfaces (ProgressSink, WorkflowUi)
 │

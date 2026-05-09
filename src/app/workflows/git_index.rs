@@ -93,7 +93,7 @@ impl<'a> GitIndexWorkflow<'a> {
 
         // Walk history
         let walk_start = Instant::now();
-        let pb1 = self
+        let pb_walk = self
             .ui
             .progress(total_est as u64, "Walking commits", request.verbose);
         let docs = GitIndexer::index_git_history(
@@ -102,22 +102,21 @@ impl<'a> GitIndexWorkflow<'a> {
             None,
             true,
             request.verbose,
-            Some(pb1.as_ref()),
+            Some(pb_walk.as_ref()),
         )?;
-        pb1.finish();
+        pb_walk.finish();
         let walk_secs = walk_start.elapsed().as_secs_f64();
 
         if docs.is_empty() {
             return Ok(GitIndexOutcome::NoDocuments);
         }
 
-        let head_commit =
-            GitIndexer::resolve_head_commit(&request.repo_path, &git_config.branch)?;
+        let head_commit = GitIndexer::resolve_head_commit(&request.repo_path, &git_config.branch)?;
         let total_docs = docs.len();
         let embed_start = Instant::now();
-        let pb2 = self
+        let pb_embed = self
             .ui
-            .progress(total_docs as u64, "Embedding documents", request.verbose);
+            .progress(total_docs as u64, "Embedding", request.verbose);
         let mut embedder = self
             .embedder_factory
             .create(&self.config.index.embedding_model)?;
@@ -128,15 +127,21 @@ impl<'a> GitIndexWorkflow<'a> {
             &indexable,
             &self.config.index,
             &mut *embedder,
-            Some(pb2.as_ref()),
+            Some(pb_embed.as_ref()),
         )?;
-        pb2.finish();
+        pb_embed.finish();
         let embed_secs = embed_start.elapsed().as_secs_f64();
 
         let repo = IndexRepository::new(persist_path, SourceIndexKind::Git, &self.config.index);
         let chunk_count = batch.metadata.len();
         let doc_count = unique_doc_count(&batch.metadata);
-        repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, Some(head_commit))?;
+        repo.store_index(
+            embedder.dims(),
+            &batch.vectors,
+            batch.metadata,
+            doc_count,
+            Some(head_commit),
+        )?;
 
         Ok(GitIndexOutcome::Indexed {
             rebuilt: true,
@@ -218,8 +223,7 @@ impl<'a> GitIndexWorkflow<'a> {
         pb2.finish();
         let embed_secs = embed_start.elapsed().as_secs_f64();
 
-        let head_commit =
-            GitIndexer::resolve_head_commit(&request.repo_path, &git_config.branch)?;
+        let head_commit = GitIndexer::resolve_head_commit(&request.repo_path, &git_config.branch)?;
 
         let merged = GitIndexer::merge_git_incremental(
             &old_metadata,
@@ -231,7 +235,13 @@ impl<'a> GitIndexWorkflow<'a> {
 
         let chunk_count = merged.metadata.len();
         let doc_count = unique_doc_count(&merged.metadata);
-        repo.store_index(embedder.dims(), &merged.vectors, merged.metadata, doc_count, Some(head_commit))?;
+        repo.store_index(
+            embedder.dims(),
+            &merged.vectors,
+            merged.metadata,
+            doc_count,
+            Some(head_commit),
+        )?;
 
         Ok(GitIndexOutcome::Indexed {
             rebuilt: false,
@@ -291,11 +301,11 @@ fn format_size_warning(estimated_mb: u64, max_size_mb: u64, advice: &str) -> Str
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
     use super::*;
     use crate::config::IndexConfig;
     use crate::sources::git::history::test_helpers::{commit_file, init_test_repo};
     use crate::tests::fixtures::{make_temp_dir, FakeEmbedderFactory, RecordingUi};
+    use std::path::Path;
 
     // ---------------------------------------------------------------------------
     // Helpers
@@ -412,7 +422,9 @@ mod tests {
         let ui = RecordingUi::always_confirm();
         let factory = FakeEmbedderFactory;
 
-        let outcome = GitIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
+        let outcome = GitIndexWorkflow::new(&config, &ui, &factory)
+            .run(request)
+            .unwrap();
         assert!(
             matches!(outcome, GitIndexOutcome::NoDocuments),
             "Expected NoDocuments, got {:?}",
@@ -439,7 +451,9 @@ mod tests {
         let ui = RecordingUi::always_confirm();
         let factory = FakeEmbedderFactory;
 
-        let outcome = GitIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
+        let outcome = GitIndexWorkflow::new(&config, &ui, &factory)
+            .run(request)
+            .unwrap();
         match outcome {
             GitIndexOutcome::Indexed {
                 rebuilt,
@@ -482,7 +496,9 @@ mod tests {
             };
             let ui = RecordingUi::always_confirm();
             let factory = FakeEmbedderFactory;
-            GitIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
+            GitIndexWorkflow::new(&config, &ui, &factory)
+                .run(request)
+                .unwrap();
         }
 
         // Now run incremental — no new commits
@@ -495,7 +511,9 @@ mod tests {
             };
             let ui = RecordingUi::always_confirm();
             let factory = FakeEmbedderFactory;
-            let outcome = GitIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
+            let outcome = GitIndexWorkflow::new(&config, &ui, &factory)
+                .run(request)
+                .unwrap();
             assert!(
                 matches!(outcome, GitIndexOutcome::UpToDate),
                 "Expected UpToDate, got {:?}",
@@ -523,7 +541,9 @@ mod tests {
             };
             let ui = RecordingUi::always_confirm();
             let factory = FakeEmbedderFactory;
-            GitIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
+            GitIndexWorkflow::new(&config, &ui, &factory)
+                .run(request)
+                .unwrap();
         }
 
         // Add a new file and commit
@@ -539,7 +559,9 @@ mod tests {
             };
             let ui = RecordingUi::always_confirm();
             let factory = FakeEmbedderFactory;
-            let outcome = GitIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
+            let outcome = GitIndexWorkflow::new(&config, &ui, &factory)
+                .run(request)
+                .unwrap();
             match outcome {
                 GitIndexOutcome::Indexed {
                     rebuilt,
