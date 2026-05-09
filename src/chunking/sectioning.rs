@@ -90,7 +90,8 @@ pub(crate) fn chunk_section(
     body_newlines: &[usize],
 ) -> Vec<Chunk> {
     let mut chunks = Vec::new();
-    let token_count = counter.count_tokens(section_text);
+    let (total_tokens, offsets) = counter.encode_with_offsets(section_text);
+    let token_count = total_tokens;
 
     let abs_offset = |byte_off: usize| -> usize {
         section_byte_offset + byte_off
@@ -118,8 +119,6 @@ pub(crate) fn chunk_section(
         });
         return chunks;
     }
-
-    let (total_tokens, offsets) = counter.encode_with_offsets(section_text);
     let step = config.chunk_size.saturating_sub(config.chunk_overlap);
     let mut chunk_idx = start_index;
 

@@ -4,6 +4,7 @@
 
 pub trait TokenCounter: Send + Sync {
     /// Return the number of tokens in `text`.
+    #[allow(dead_code)]
     fn count_tokens(&self, text: &str) -> usize;
 
     /// Encode `text` and return (total_token_count, Vec<(byte_start, byte_end)>).
