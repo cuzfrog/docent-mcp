@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::chunking::TokenCounter;
 use crate::config::IndexConfig;
 use crate::documents::ChunkMetadata;
-use crate::embedder::EmbeddingService;
+use crate::embedder::{EmbedderFactory, EmbeddingService};
 use crate::index::{IndexRepository, SourceIndexKind};
 
 // ---------------------------------------------------------------------------
@@ -87,5 +87,87 @@ impl EmbeddingService for FakeEmbedder {
 
     fn token_counter(&self) -> Box<dyn TokenCounter> {
         Box::new(crate::chunking::WhitespaceTokenCounter)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// FakeEmbedderFactory — returns FakeEmbedder for tests
+// ---------------------------------------------------------------------------
+
+pub(crate) struct FakeEmbedderFactory;
+
+impl EmbedderFactory for FakeEmbedderFactory {
+    fn create(&self, _model: &str) -> anyhow::Result<Box<dyn EmbeddingService>> {
+        Ok(Box::new(FakeEmbedder::new()))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// NoopProgress — does nothing, useful when test does not care about progress
+// ---------------------------------------------------------------------------
+
+pub(crate) struct NoopProgress;
+
+impl crate::support::ui::ProgressSink for NoopProgress {
+    fn tick(&self) {}
+    fn tick_msg(&self, _msg: &str) {}
+    fn finish(&self) {}
+}
+
+// ---------------------------------------------------------------------------
+// RecordingUi — records all interaction for test assertions
+// ---------------------------------------------------------------------------
+
+pub(crate) struct RecordingUi {
+    pub messages: std::sync::Mutex<Vec<String>>,
+    pub confirm_responses: std::sync::Mutex<Vec<bool>>,
+    pub progress_calls: std::sync::atomic::AtomicUsize,
+    confirm_index: std::sync::atomic::AtomicUsize,
+}
+
+impl RecordingUi {
+    pub fn new(responses: Vec<bool>) -> Self {
+        Self {
+            messages: std::sync::Mutex::new(Vec::new()),
+            confirm_responses: std::sync::Mutex::new(responses),
+            progress_calls: std::sync::atomic::AtomicUsize::new(0),
+            confirm_index: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+
+    pub fn always_confirm() -> Self {
+        Self::new(vec![true])
+    }
+
+    pub fn never_confirm() -> Self {
+        Self::new(vec![false])
+    }
+}
+
+impl crate::support::ui::WorkflowUi for RecordingUi {
+    fn info(&self, msg: &str) {
+        self.messages.lock().unwrap().push(format!("INFO: {}", msg));
+    }
+
+    fn warn(&self, msg: &str) {
+        self.messages.lock().unwrap().push(format!("WARN: {}", msg));
+    }
+
+    fn confirm(&self, prompt: &str) -> anyhow::Result<bool> {
+        self.messages
+            .lock()
+            .unwrap()
+            .push(format!("CONFIRM: {}", prompt));
+        let responses = self.confirm_responses.lock().unwrap();
+        let idx = self
+            .confirm_index
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(responses.get(idx).copied().unwrap_or(true))
+    }
+
+    fn progress(&self, _total: u64, _label: &str, _verbose: bool) -> Box<dyn crate::support::ui::ProgressSink> {
+        self.progress_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Box::new(NoopProgress)
     }
 }
