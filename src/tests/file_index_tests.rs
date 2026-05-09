@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::config::{Config, IndexConfig};
 use crate::documents::ChunkKind;
 use crate::embedder::EmbeddingService;
-use crate::index::{IndexHeader, IndexRepository, SourceIndexKind, SCHEMA_VERSION};
+use crate::index::{IndexRepository, SourceIndexKind};
 use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, FakeEmbedderFactory, RecordingUi};
 use crate::workflows::file_index::{run_file_index_with, FileIndexOutcome, FileIndexRequest};
 
