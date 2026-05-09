@@ -1,5 +1,5 @@
 use crate::config::GitConfig;
-use crate::support::progress::Progress;
+use crate::support::ui::ProgressSink;
 use std::path::Path;
 
 pub(crate) fn matches_any_pattern(path: &str, patterns: &[String]) -> bool {
@@ -38,7 +38,7 @@ pub fn index_git_history(
     last_indexed_commit: Option<&str>,
     rebuild: bool,
     verbose: bool,
-    progress: Option<&Progress>,
+    progress: Option<&dyn ProgressSink>,
 ) -> anyhow::Result<Vec<crate::sources::git::extract::GitDocument>> {
     let (repo, tip_oid) = open_repo_and_branch(repo_path, &git_config.branch)?;
     let mut revwalk = repo.revwalk()?;
@@ -74,7 +74,7 @@ pub fn index_git_history(
                 summary
             );
             if let Some(p) = progress {
-                p.tick_msg(msg);
+                p.tick_msg(&msg);
             } else {
                 println!("  {msg}");
             }

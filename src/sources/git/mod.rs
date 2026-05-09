@@ -1,7 +1,7 @@
 mod estimate;
 mod extract;
 mod freshness;
-mod history;
+pub(crate) mod history;
 mod merge;
 mod indexer;
 
