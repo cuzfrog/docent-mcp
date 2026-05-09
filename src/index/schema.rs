@@ -186,8 +186,6 @@ pub(crate) struct StoredIndex {
     pub header: IndexHeader,
     pub vectors: VectorStore,
     pub metadata: Vec<StoredChunkMetadata>,
-    #[allow(dead_code)]
-    pub ann_index: Option<AnnIndex>,
 }
 
 /// Persisted kind of source document for a chunk.

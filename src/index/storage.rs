@@ -1,4 +1,4 @@
-use crate::index::schema::{AnnIndex, IndexHeader, StoredChunkMetadata, StoredIndex, VectorStore};
+use crate::index::schema::{IndexHeader, StoredChunkMetadata, StoredIndex, VectorStore};
 use std::path::Path;
 
 /// Write the index directory: `header.json`, `vectors.bin`, and `metadata.json`.
@@ -116,14 +116,10 @@ pub fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
         );
     }
 
-    // Build ANN index for large indexes (≥ 5 000 chunks)
-    let ann_index = AnnIndex::build(&vectors)?;
-
     Ok(StoredIndex {
         header,
         vectors,
         metadata,
-        ann_index,
     })
 }
 
