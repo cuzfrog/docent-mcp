@@ -1,63 +1,51 @@
-# docent-mcp
+# docent
 
-A MCP server for Document & Code History indexing and querying.
-Agents and developers query it to understand *why* code looks the way it does.
+**Semantic + BM25 Document & Git history search for Design Decision Records** — an MCP server that indexes documents and git history, letting agents query *why* code looks the way it does.
 
-## Dev setup
-1. requires rustup and cargo
-2. requires python
-
-Set up env var and python .venv (this is only needed once per session):
-```sh
-. ./setenv
+```
+  files/git ──▼── index ──▶  MCP server  ◀──── query
+                 (cache)        (HTTP)
 ```
 
-## Build
+## Quick Start
 
 ```sh
-cargo build
+docent init              # generate docent.toml config
+docent index [path]      # index .md files + git history
+docent serve             # start MCP server on port 7878
 ```
 
-## Test
+Open [http://localhost:7878](http://localhost:7878) for the built-in Web UI.
 
-Unit test and integration tests:
-```sh
-cargo test
-```
+## Usage
 
-Web UI test:
-```sh
-cd src/ui && npm test
-```
+| Command | Description |
+|---|---|
+| `docent init` | Generate a `docent.toml` config file |
+| `docent index [dir]` | Index both file and git sources (default: current dir) |
+| `docent index-file <path>` | Index specific files/directories |
+| `docent index-git <repo>` | Index git history from a repository |
+| `docent serve` | Start the MCP server (streamable HTTP) |
+| `docent list-models` | List supported embedding models |
 
-E2E test:
-```sh
-cargo run -- serve # will pick up ./docent.toml
-pytest -v # e2e tests in the tests/ directory
-```
+Flags: `--config <path>` (default `./docent.toml`), `--rebuild` (full re-index), `--verbose`.
 
-- Run a single test: `cargo test test_name`
-- Coverage: `cargo llvm-cov --json --output-path target/llvm-cov/report.json`
-- Clippy: `cargo clippy -- -D warnings`
-- Format: `cargo fmt --check`
+## How It Works
 
-## Run
+1. **Sources** — Reads markdown files and git commit history
+2. **Section-aware chunking** — Splits documents into chunks, preserving heading structure
+3. **Embedding** — Converts chunks to vectors via `fastembed` (configurable model)
+4. **Index cache** — Persists vectors and metadata to disk
+5. **Semantic + BM25 search** — Hybrid scoring with configurable algorithm
+6. **MCP server** — Exposes `search_ddr` tool over streamable HTTP
 
-Index a directory of DDRs:
+## Install
 
-```sh
-cargo run -- index ./path/to/ddrs
-```
+TBC
 
-Start the MCP server:
+Or build from source — see [Development](doc/Development.md).
 
-```sh
-cargo run -- serve
-```
+## Documentation
 
-Use `--help` on any subcommand for full options:
+- [Development Guide](doc/Development.md)
 
-```sh
-cargo run -- index --help
-cargo run -- serve --help
-```
