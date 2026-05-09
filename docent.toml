@@ -8,7 +8,7 @@ max_size_mb     = 4                 # issue warning if total index size exceeds 
 
 [file]
 enabled          = true               # enable file indexing
-glob_patterns    = ["*.md"]           # file glob patterns to index
+glob_patterns    = ["doc/*.md", "./*.md", "!.*/**"]           # later elements take precedence
 file_size_limit_mb = 2                # skip files larger than this limit
 
 [git]

@@ -176,7 +176,7 @@ impl<'a> FileIndexWorkflow<'a> {
         let diff = FileIndexer::diff_files(&all_files, &old_hashes, &request.input_root)?;
 
         self.ui.info(&format!(
-            "Processing: {} new/changed, {} deleted, {} unchanged",
+            "Processing Files: {} new/changed, {} deleted, {} unchanged",
             diff.to_index.len(),
             diff.deleted_count,
             diff.unchanged_count
