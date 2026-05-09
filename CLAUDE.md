@@ -25,7 +25,7 @@ Tasks reside in `.lissom/tasks/<task_id>/Specs.md`. The user may ask for a spec 
 
 ### Implementation Hooks
 - When MCP schema changes, update Web UI accordingly.
-- When files/dirs are updated, update below `Architecture` section if necessary.
+- When files/dirs are updated, verify and keep below `Architecture` section in sync.
 
 ## Architecture
 
@@ -83,7 +83,8 @@ src/
 │   ├── fs.rs              #   Filesystem helpers (path_to_string, dir_size, sha256_hex)
 │   ├── progress.rs        #   Progress bar rendering
 │   ├── terminal.rs        #   Terminal I/O helpers
-│   └── time.rs            #   Time helpers (unix_to_rfc3339)
+│   ├── time.rs            #   Time helpers (unix_to_rfc3339)
+│   └── ui.rs              #   Abstract UI interfaces (ProgressSink, WorkflowUi)
 │
 ├── templates/             # Default template files (e.g., docent.toml)
 │
@@ -103,7 +104,7 @@ This applies to all dependencies, including python and javascript.
 
 - **Error handling:** Use `anyhow::Result` internally. At binary boundaries (CLI, MCP responses), convert to user-facing messages. No `.unwrap()` on fallible operations.
 - **No panics in library code.** Reserve `panic` for unreachable states only.
-- **Logging:** Do not use `eprintln!` for CLI user-facing messages, except for error. The MCP server uses HTTP.
+- **Logging:** Use UI abstraction in `src/support/ui.rs`. Do not use `eprintln!` for CLI user-facing messages, except for error. The MCP server uses HTTP.
 - **Tests:** Each module has unit tests in a `#[cfg(test)] mod tests` block. Integration-style tests are under `src/tests/` (compiled as crate unit tests, avoiding separate integration-test link overhead). E2E tests are in `e2e-tests/`. E2E tests assume the binary is built and available. No `#[ignore]` tests, test must be runable and provide coverage value.
 - **Naming:** Snake_case for files and functions. Types are PascalCase. Constants are UPPER_SNAKE_CASE.
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).

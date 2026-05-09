@@ -14,9 +14,12 @@ pub(crate) fn matches_any_pattern(path: &str, patterns: &[String]) -> bool {
     })
 }
 
-pub(crate) fn open_repo_and_branch(repo_path: &Path, branch: &str) -> anyhow::Result<(git2::Repository, git2::Oid)> {
-    let repo = git2::Repository::open(repo_path)
-        .map_err(|_| anyhow::anyhow!("not a Git repository"))?;
+pub(crate) fn open_repo_and_branch(
+    repo_path: &Path,
+    branch: &str,
+) -> anyhow::Result<(git2::Repository, git2::Oid)> {
+    let repo =
+        git2::Repository::open(repo_path).map_err(|_| anyhow::anyhow!("not a Git repository"))?;
     let oid = {
         let branch_obj = repo
             .find_branch(branch, git2::BranchType::Local)
@@ -89,11 +92,7 @@ pub fn index_git_history(
             None
         };
 
-        let diff = repo.diff_tree_to_tree(
-            parent_tree.as_ref(),
-            Some(&commit_tree),
-            None,
-        )?;
+        let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&commit_tree), None)?;
 
         let author_secs = commit.time().seconds();
         let author_date = crate::support::time::unix_to_rfc3339(author_secs, 0)
@@ -238,7 +237,11 @@ mod tests {
             !doc.author_date.is_empty(),
             "author_date should not be empty"
         );
-        assert_eq!(doc.commit_hash.len(), 40, "commit_hash should be 40-char hex");
+        assert_eq!(
+            doc.commit_hash.len(),
+            40,
+            "commit_hash should be 40-char hex"
+        );
     }
 
     #[test]
@@ -292,14 +295,26 @@ mod tests {
     #[test]
     fn test_matches_any_pattern_suffix() {
         assert!(super::matches_any_pattern("foo.rs", &["*.rs".to_string()]));
-        assert!(!super::matches_any_pattern("foo.txt", &["*.rs".to_string()]));
-        assert!(super::matches_any_pattern("bar/baz.md", &["*.md".to_string()]));
+        assert!(!super::matches_any_pattern(
+            "foo.txt",
+            &["*.rs".to_string()]
+        ));
+        assert!(super::matches_any_pattern(
+            "bar/baz.md",
+            &["*.md".to_string()]
+        ));
     }
 
     #[test]
     fn test_matches_any_pattern_exact() {
-        assert!(super::matches_any_pattern("Cargo.toml", &["Cargo.toml".to_string()]));
-        assert!(!super::matches_any_pattern("other.toml", &["Cargo.toml".to_string()]));
+        assert!(super::matches_any_pattern(
+            "Cargo.toml",
+            &["Cargo.toml".to_string()]
+        ));
+        assert!(!super::matches_any_pattern(
+            "other.toml",
+            &["Cargo.toml".to_string()]
+        ));
     }
 
     #[test]

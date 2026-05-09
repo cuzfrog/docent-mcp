@@ -60,7 +60,10 @@ pub fn prepare_files(
         let content = match std::fs::read_to_string(&full_path) {
             Ok(c) => c,
             Err(_) => {
-                eprintln!("WARNING: skipping binary/unreadable file '{}'", relative_path);
+                eprintln!(
+                    "WARNING: skipping binary/unreadable file '{}'",
+                    relative_path
+                );
                 continue;
             }
         };
@@ -115,7 +118,10 @@ mod tests {
     #[test]
     fn test_extract_title_h1() {
         let body = "# My Document\n\nSome content here.";
-        assert_eq!(extract_title_from_body(body).as_deref(), Some("My Document"));
+        assert_eq!(
+            extract_title_from_body(body).as_deref(),
+            Some("My Document")
+        );
     }
 
     #[test]
@@ -162,12 +168,18 @@ mod tests {
     #[test]
     fn test_extract_title_leading_whitespace() {
         let body = "  # Indented Title\n\ncontent";
-        assert_eq!(extract_title_from_body(body).as_deref(), Some("Indented Title"));
+        assert_eq!(
+            extract_title_from_body(body).as_deref(),
+            Some("Indented Title")
+        );
     }
 
     #[test]
     fn test_extract_title_empty_heading_skipped() {
         let body = "# \n\n## Real Heading\ncontent";
-        assert_eq!(extract_title_from_body(body).as_deref(), Some("Real Heading"));
+        assert_eq!(
+            extract_title_from_body(body).as_deref(),
+            Some("Real Heading")
+        );
     }
 }

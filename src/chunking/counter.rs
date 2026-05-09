@@ -60,7 +60,6 @@ impl HuggingFaceTokenCounter {
     pub fn from_tokenizer(tokenizer: tokenizers::Tokenizer) -> Self {
         Self { tokenizer }
     }
-
 }
 
 impl TokenCounter for HuggingFaceTokenCounter {

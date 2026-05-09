@@ -3,6 +3,7 @@ use std::path::Path;
 use crate::cli::IndexArgs;
 use crate::config::Config;
 use crate::app::workflows;
+use crate::support::ui::WorkflowUi;
 
 // ---------------------------------------------------------------------------
 // Public entry points
@@ -24,10 +25,10 @@ pub fn run_index_file(args: IndexArgs) -> anyhow::Result<()> {
 
     match outcome {
         workflows::file_index::FileIndexOutcome::Aborted => {
-            println!("Aborted.");
+            ui.info("Aborted.");
         }
         workflows::file_index::FileIndexOutcome::UpToDate => {
-            println!("No changes detected. Index is up to date.");
+            ui.info("No changes detected. Index is up to date.");
         }
         workflows::file_index::FileIndexOutcome::Indexed {
             rebuilt,
@@ -35,19 +36,19 @@ pub fn run_index_file(args: IndexArgs) -> anyhow::Result<()> {
             doc_count,
         } => {
             if rebuilt {
-                println!(
+                ui.info(&format!(
                     "File index written: {} chunks from {} docs",
                     chunk_count, doc_count
-                );
+                ));
             } else {
-                println!(
+                ui.info(&format!(
                     "File index updated: {} chunks from {} docs",
                     chunk_count, doc_count
-                );
+                ));
             }
         }
         workflows::file_index::FileIndexOutcome::NeedsRebuild { reason } => {
-            eprintln!("{}", reason);
+            ui.warn(&reason);
         }
     }
 
@@ -70,13 +71,13 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
 
     match outcome {
         workflows::git_index::GitIndexOutcome::Aborted => {
-            println!("Aborted.");
+            ui.info("Aborted.");
         }
         workflows::git_index::GitIndexOutcome::UpToDate => {
-            println!("Git index is up to date.");
+            ui.info("Git index is up to date.");
         }
         workflows::git_index::GitIndexOutcome::NoDocuments => {
-            println!("No git documents found.");
+            ui.info("No git documents found.");
         }
         workflows::git_index::GitIndexOutcome::Indexed {
             rebuilt,
@@ -87,15 +88,15 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
             embed_secs,
         } => {
             if rebuilt {
-                println!(
+                ui.info(&format!(
                     "Git index written: {} chunks from {} docs (walk: {:.1}s, embed: {:.1}s)",
                     chunk_count, doc_count, walk_secs, embed_secs
-                );
+                ));
             } else {
-                println!(
+                ui.info(&format!(
                     "Git index updated: {} chunks from {} docs ({} new commits, walk: {:.1}s, embed: {:.1}s)",
                     chunk_count, doc_count, new_commit_count, walk_secs, embed_secs
-                );
+                ));
             }
         }
     }
@@ -104,8 +105,9 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
 }
 
 pub fn list_models() {
+    let ui = crate::support::ui::ConsoleUi;
     for line in format_supported_models(&crate::embedder::list_supported_models()) {
-        println!("{}", line);
+        ui.info(&line);
     }
 }
 

@@ -7,7 +7,10 @@ use std::path::PathBuf;
 pub(crate) fn extract_merge_state(
     metadata: &[ChunkMetadata],
     vectors: &[Vec<f32>],
-) -> (HashMap<String, String>, HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>>) {
+) -> (
+    HashMap<String, String>,
+    HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>>,
+) {
     let mut old_hashes: HashMap<String, String> = HashMap::new();
     for meta in metadata {
         old_hashes
@@ -169,7 +172,11 @@ mod tests {
         assert_eq!(result.metadata.len(), 4);
         assert_eq!(result.vectors.len(), 4);
 
-        let source_paths: Vec<&str> = result.metadata.iter().map(|m| m.source_path.as_str()).collect();
+        let source_paths: Vec<&str> = result
+            .metadata
+            .iter()
+            .map(|m| m.source_path.as_str())
+            .collect();
         assert_eq!(source_paths, vec!["a.md", "b.md", "b.md", "c.md"]);
     }
 
@@ -269,7 +276,11 @@ mod tests {
         assert_eq!(result.metadata.len(), 3);
         assert_eq!(result.vectors.len(), 3);
 
-        let source_paths: Vec<&str> = result.metadata.iter().map(|m| m.source_path.as_str()).collect();
+        let source_paths: Vec<&str> = result
+            .metadata
+            .iter()
+            .map(|m| m.source_path.as_str())
+            .collect();
         assert_eq!(source_paths, vec!["a.md", "b.md", "b.md"]);
     }
 }

@@ -188,11 +188,11 @@ pub async fn run_serve(args: ServeArgs) -> anyhow::Result<()> {
     let local_addr = listener
         .local_addr()
         .context("Failed to get local address")?;
-    println!(
+    ui.info(&format!(
         "docent server listening on http://{} serving index at {} (open in browser for web UI)",
         local_addr,
         config.persist_path_buf().display(),
-    );
+    ));
 
     axum::serve(listener, prepared.router)
         .with_graceful_shutdown(shutdown_signal())
@@ -206,5 +206,6 @@ async fn shutdown_signal() {
     tokio::signal::ctrl_c()
         .await
         .expect("Failed to install Ctrl+C handler");
-    println!("Shutting down...");
+    let ui = crate::support::ui::ConsoleUi;
+    crate::support::ui::WorkflowUi::info(&ui, "Shutting down...");
 }
