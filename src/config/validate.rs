@@ -43,8 +43,13 @@ impl Config {
             if git.branch.is_empty() {
                 anyhow::bail!("git branch must not be empty");
             }
-            if git.file_patterns.is_empty() {
-                anyhow::bail!("git file_patterns must not be empty");
+            if git.glob_patterns.is_empty() {
+                anyhow::bail!("git glob_patterns must not be empty");
+            }
+        }
+        if let Some(file) = &self.file {
+            if file.glob_patterns.is_empty() {
+                anyhow::bail!("file glob_patterns must not be empty");
             }
         }
         Ok(())
@@ -187,7 +192,8 @@ mod tests {
             git: Some(GitConfig {
                 depth_limit: -2,
                 branch: "main".to_string(),
-                file_patterns: vec!["*.rs".to_string()],
+                glob_patterns: vec!["*.rs".to_string()],
+                enabled: true,
             }),
             ..Config::default()
         };
@@ -205,7 +211,8 @@ mod tests {
             git: Some(GitConfig {
                 depth_limit: 10,
                 branch: "".to_string(),
-                file_patterns: vec!["*.rs".to_string()],
+                glob_patterns: vec!["*.rs".to_string()],
+                enabled: true,
             }),
             ..Config::default()
         };
@@ -214,7 +221,7 @@ mod tests {
     }
 
     #[test]
-    fn test_git_empty_file_patterns_validation_error() {
+    fn test_git_empty_glob_patterns_validation_error() {
         let config = Config {
             index: IndexConfig {
                 embedding_model: "BGESmallENV15Q".to_string(),
@@ -223,12 +230,13 @@ mod tests {
             git: Some(GitConfig {
                 depth_limit: 10,
                 branch: "main".to_string(),
-                file_patterns: vec![],
+                glob_patterns: vec![],
+                enabled: true,
             }),
             ..Config::default()
         };
         let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("git file_patterns must not be empty"));
+        assert!(err.to_string().contains("git glob_patterns must not be empty"));
     }
 
     #[test]
@@ -241,7 +249,8 @@ mod tests {
             git: Some(GitConfig {
                 depth_limit: -1,
                 branch: "main".to_string(),
-                file_patterns: vec!["*.rs".to_string()],
+                glob_patterns: vec!["*.rs".to_string()],
+                enabled: true,
             }),
             ..Config::default()
         };

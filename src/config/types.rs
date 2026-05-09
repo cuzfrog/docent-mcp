@@ -10,6 +10,8 @@ pub struct Config {
     pub server: ServerConfig,
     #[serde(default)]
     pub search: SearchConfig,
+    #[serde(default)]
+    pub file: Option<FileConfig>,
     pub git: Option<GitConfig>,
 }
 
@@ -42,11 +44,23 @@ pub struct SearchConfig {
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
+pub struct FileConfig {
+    #[serde(default = "super::defaults::default_file_enabled")]
+    pub enabled: bool,
+    #[serde(default = "super::defaults::default_file_glob_patterns")]
+    pub glob_patterns: Vec<String>,
+    #[serde(default = "super::defaults::default_file_size_limit_mb")]
+    pub file_size_limit_mb: u64,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct GitConfig {
     pub depth_limit: i64,
     #[serde(default = "super::defaults::default_git_branch")]
     pub branch: String,
-    pub file_patterns: Vec<String>,
+    #[serde(default = "super::defaults::default_git_enabled")]
+    pub enabled: bool,
+    pub glob_patterns: Vec<String>,
 }
 
 impl Default for IndexConfig {

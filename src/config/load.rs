@@ -85,7 +85,15 @@ same_src_score_decay = 0.95
         let git = config.git.expect("git section should be present");
         assert_eq!(git.depth_limit, 1000);
         assert_eq!(git.branch, "main");
-        assert_eq!(git.file_patterns, vec!["*.*".to_string()]);
+        assert_eq!(
+            git.glob_patterns,
+            vec!["*.rs".to_string(), "*.java".to_string(), "*.py".to_string(), "*.js".to_string(), "*.ts".to_string(), "*.go".to_string()]
+        );
+
+        let file = config.file.expect("file section should be present");
+        assert!(file.enabled);
+        assert_eq!(file.glob_patterns, vec!["*.md".to_string()]);
+        assert_eq!(file.file_size_limit_mb, 2);
 
         assert!((config.search.same_src_score_decay - 0.9).abs() < f32::EPSILON);
 

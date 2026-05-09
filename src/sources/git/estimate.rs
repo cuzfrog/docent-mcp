@@ -56,7 +56,8 @@ mod tests {
         let git_config = GitConfig {
             depth_limit: -1,
             branch: branch_name,
-            file_patterns: vec!["*".to_string()],
+            glob_patterns: vec!["*".to_string()],
+            enabled: true,
         };
 
         let count = estimate_commit_count(tmp.path(), &git_config, None)
@@ -79,7 +80,8 @@ mod tests {
         let git_config = GitConfig {
             depth_limit: 3,
             branch: branch_name,
-            file_patterns: vec!["*".to_string()],
+            glob_patterns: vec!["*".to_string()],
+            enabled: true,
         };
 
         let count = estimate_commit_count(tmp.path(), &git_config, None)
@@ -93,7 +95,8 @@ mod tests {
         let git_config = GitConfig {
             depth_limit: -1,
             branch: "main".to_string(),
-            file_patterns: vec!["*".to_string()],
+            glob_patterns: vec!["*".to_string()],
+            enabled: true,
         };
         let result = estimate_commit_count(tmp.path(), &git_config, None);
         assert!(result.is_err());

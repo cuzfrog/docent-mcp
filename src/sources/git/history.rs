@@ -1,18 +1,7 @@
 use crate::config::GitConfig;
+use crate::support::glob::matches_any_pattern;
 use crate::support::progress::ProgressSink;
 use std::path::Path;
-
-pub(crate) fn matches_any_pattern(path: &str, patterns: &[String]) -> bool {
-    patterns.iter().any(|p| {
-        if p == "*" || p == "*.*" {
-            return true;
-        }
-        if let Some(suffix) = p.strip_prefix('*') {
-            return path.ends_with(suffix);
-        }
-        path == p
-    })
-}
 
 pub(crate) fn open_repo_and_branch(
     repo_path: &Path,
@@ -106,7 +95,7 @@ pub fn index_git_history(
                 None => continue,
             };
 
-            if !matches_any_pattern(&file_path, &git_config.file_patterns) {
+            if !matches_any_pattern(&file_path, &git_config.glob_patterns) {
                 continue;
             }
 
@@ -217,7 +206,8 @@ mod tests {
         let git_config = GitConfig {
             depth_limit: -1,
             branch: branch_name,
-            file_patterns: vec!["*.md".to_string()],
+            glob_patterns: vec!["*.md".to_string()],
+            enabled: true,
         };
 
         let docs = super::index_git_history(tmp.path(), &git_config, None, true, false, None)
@@ -254,7 +244,8 @@ mod tests {
         let git_config = GitConfig {
             depth_limit: -1,
             branch: branch_name,
-            file_patterns: vec!["*.md".to_string()],
+            glob_patterns: vec!["*.md".to_string()],
+            enabled: true,
         };
 
         let docs = super::index_git_history(tmp.path(), &git_config, None, true, false, None)
@@ -271,7 +262,8 @@ mod tests {
         let git_config = GitConfig {
             depth_limit: -1,
             branch: "main".to_string(),
-            file_patterns: vec!["*".to_string()],
+            glob_patterns: vec!["*".to_string()],
+            enabled: true,
         };
 
         let result = super::index_git_history(tmp.path(), &git_config, None, true, false, None);
@@ -285,43 +277,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_matches_any_pattern_wildcard() {
-        assert!(super::matches_any_pattern("foo.rs", &["*".to_string()]));
-        assert!(super::matches_any_pattern("foo.rs", &["*.*".to_string()]));
-        assert!(super::matches_any_pattern("foo", &["*".to_string()]));
-    }
-
-    #[test]
-    fn test_matches_any_pattern_suffix() {
-        assert!(super::matches_any_pattern("foo.rs", &["*.rs".to_string()]));
-        assert!(!super::matches_any_pattern(
-            "foo.txt",
-            &["*.rs".to_string()]
-        ));
-        assert!(super::matches_any_pattern(
-            "bar/baz.md",
-            &["*.md".to_string()]
-        ));
-    }
-
-    #[test]
-    fn test_matches_any_pattern_exact() {
-        assert!(super::matches_any_pattern(
-            "Cargo.toml",
-            &["Cargo.toml".to_string()]
-        ));
-        assert!(!super::matches_any_pattern(
-            "other.toml",
-            &["Cargo.toml".to_string()]
-        ));
-    }
-
-    #[test]
-    fn test_matches_any_pattern_multiple() {
-        let patterns = vec!["*.rs".to_string(), "*.md".to_string()];
-        assert!(super::matches_any_pattern("lib.rs", &patterns));
-        assert!(super::matches_any_pattern("readme.md", &patterns));
-        assert!(!super::matches_any_pattern("docent.toml", &patterns));
-    }
 }

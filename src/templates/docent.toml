@@ -1,19 +1,25 @@
 # For E2E tests
 [index]
-embedding_model = "BGESmallENV15Q"
-persist_path    = "./.docent-index"
-chunk_size      = 512
-chunk_overlap   = 64
-max_size_mb     = 512 # issue warning if total index size exceeds this limit
+embedding_model = "BGESmallENV15Q"    # embedding model to use for vector generation
+persist_path    = "./.docent-index"   # directory to persist the index
+chunk_size      = 512                 # max tokens per chunk
+chunk_overlap   = 64                  # overlap between consecutive chunks
+max_size_mb     = 512                 # issue warning if total index size exceeds this limit
+
+[file]
+enabled          = true               # enable file indexing
+glob_patterns    = ["*.md"]           # later elements take precedence
+file_size_limit_mb = 2                # skip files larger than this limit
 
 [git]
-depth_limit   = 1000    # -1 = no limit (all history)
-branch        = "main"
-file_patterns = ["*.*"]
+enabled          = true               # enable git history indexing
+depth_limit      = 1000               # -1 = no limit (all history)
+branch           = "main"
+glob_patterns    = ["*.rs", "*.java", "*.py", "*.js", "*.ts", "*.go"]
 
 [search]
-same_src_score_decay = 0.9  # score multiplier for subsequent chunks from same source
+same_src_score_decay = 0.9            # score multiplier for subsequent chunks from same source
 
 [server]
-log_level = "debug"    # debug | info | warn | error
-port      = 7878       # default 0 = random available port
+log_level = "debug"                   # debug | info | warn | error
+port      = 7878                      # default 0 = random available port

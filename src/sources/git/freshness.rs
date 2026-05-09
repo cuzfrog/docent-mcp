@@ -38,7 +38,8 @@ mod tests {
         let git_config = GitConfig {
             depth_limit: -1,
             branch: branch_name,
-            file_patterns: vec!["*.rs".to_string()],
+            glob_patterns: vec!["*.rs".to_string()],
+            enabled: true,
         };
 
         let docs = crate::sources::git::history::index_git_history(

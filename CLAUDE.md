@@ -4,7 +4,7 @@ Language: English
 
 ## Project
 
-`docent-mcp` — A read-only MCP server that lets agents find Design Decision Records explaining why code looks the way it does. Single Rust binary (`docent`) with two subcommands: `index` and `serve`.
+`docent-mcp` — A MCP server that lets agents find Design Decision Records explaining why code looks the way it does. Single Rust binary (`docent`) with two main commands: `index` and `serve`.
 
 ## Build & Run & Dev Setup
 
@@ -37,7 +37,9 @@ src/
 │
 ├── app/                   # Application layer: wires CLI → workflows
 │   ├── commands/
-│   │   ├── index.rs       #   run_index_file / run_index_git entry points
+│   │   ├── init.rs        #   run_init: config file generation & merge
+│   │   ├── index.rs       #   run_index / run_index_file / run_index_git entry points
+│   │   ├── list_models.rs #   list_models command
 │   │   └── serve.rs       #   run_serve: server bootstrap
 │   └── workflows/         #   High-level orchestration (struct-based)
 │       ├── file_index.rs  #     File indexing workflow (discover → extract → index)
