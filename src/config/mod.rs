@@ -1,4 +1,4 @@
-mod defaults;
+pub(crate) mod defaults;
 mod types;
 mod validate;
 mod load;

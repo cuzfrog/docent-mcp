@@ -1,7 +1,10 @@
 use std::path::Path;
+use std::path::PathBuf;
 
 use crate::cli::IndexArgs;
+use crate::cli::IndexCommandArgs;
 use crate::config::Config;
+use crate::config::defaults::DEFAULT_TEMPLATE;
 use crate::app::workflows;
 use crate::support::ui::WorkflowUi;
 
@@ -9,18 +12,79 @@ use crate::support::ui::WorkflowUi;
 // Public entry points
 // ---------------------------------------------------------------------------
 
+/// Generate a default `docent.toml` in the current directory.
+/// If one already exists, merge in any new keys from the template.
+pub fn run_init() -> anyhow::Result<()> {
+    let target = PathBuf::from("./docent.toml");
+    if target.exists() {
+        let existing = std::fs::read_to_string(&target)?;
+        let merged = merge_toml(DEFAULT_TEMPLATE, &existing)?;
+        std::fs::write(&target, merged)?;
+    } else {
+        std::fs::write(&target, DEFAULT_TEMPLATE)?;
+    }
+    Ok(())
+}
+
+/// Index files and/or git history based on config.
+/// Runs file indexing first, then git indexing, respecting the `enabled` flags.
+pub fn run_index(args: IndexCommandArgs) -> anyhow::Result<()> {
+    let config = Config::load(&args.config)?;
+    let dir = args.dir.clone().unwrap_or_else(|| PathBuf::from("."));
+    let dir = dir.canonicalize()?;
+
+    // File indexing
+    let file_enabled = config.file.as_ref().map(|f| f.enabled).unwrap_or(true);
+    if file_enabled {
+        run_file_index_workflow(&config, dir.clone(), args.rebuild, args.verbose)?;
+    }
+
+    // Git indexing
+    let git_enabled = config.git.as_ref().map(|g| g.enabled).unwrap_or(false);
+    if git_enabled {
+        run_git_index_workflow(&config, dir, args.rebuild, args.verbose)?;
+    }
+
+    Ok(())
+}
+
 pub fn run_index_file(args: IndexArgs) -> anyhow::Result<()> {
     let config = Config::load(&args.config)?;
     let input_root = resolve_input_root(&args.file)?;
+    run_file_index_workflow(&config, input_root, args.rebuild, args.verbose)
+}
+
+pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
+    let config = Config::load(&args.config)?;
+    let repo_path = resolve_repo_path(&args.file)?;
+    run_git_index_workflow(&config, repo_path, args.rebuild, args.verbose)
+}
+
+pub fn list_models() {
+    let ui = crate::support::ui::ConsoleUi;
+    for line in format_supported_models(&crate::embedder::list_supported_models()) {
+        ui.info(&line);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Shared workflow helpers
+// ---------------------------------------------------------------------------
+
+fn run_file_index_workflow(
+    config: &Config,
+    input_root: PathBuf,
+    rebuild: bool,
+    verbose: bool,
+) -> anyhow::Result<()> {
     let request = workflows::file_index::FileIndexRequest {
         input_root,
-        rebuild: args.rebuild,
-        verbose: args.verbose,
+        rebuild,
+        verbose,
     };
-
     let ui = crate::support::ui::ConsoleUi;
     let factory = crate::embedder::RealEmbedderFactory;
-    let workflow = workflows::file_index::FileIndexWorkflow::new(&config, &ui, &factory);
+    let workflow = workflows::file_index::FileIndexWorkflow::new(config, &ui, &factory);
     let outcome = workflow.run(request)?;
 
     match outcome {
@@ -51,22 +115,23 @@ pub fn run_index_file(args: IndexArgs) -> anyhow::Result<()> {
             ui.warn(&reason);
         }
     }
-
     Ok(())
 }
 
-pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
-    let config = Config::load(&args.config)?;
-    let repo_path = resolve_repo_path(&args.file)?;
+fn run_git_index_workflow(
+    config: &Config,
+    repo_path: PathBuf,
+    rebuild: bool,
+    verbose: bool,
+) -> anyhow::Result<()> {
     let request = workflows::git_index::GitIndexRequest {
         repo_path,
-        rebuild: args.rebuild,
-        verbose: args.verbose,
+        rebuild,
+        verbose,
     };
-
     let ui = crate::support::ui::ConsoleUi;
     let factory = crate::embedder::RealEmbedderFactory;
-    let workflow = workflows::git_index::GitIndexWorkflow::new(&config, &ui, &factory);
+    let workflow = workflows::git_index::GitIndexWorkflow::new(config, &ui, &factory);
     let outcome = workflow.run(request)?;
 
     match outcome {
@@ -100,20 +165,42 @@ pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
             }
         }
     }
-
     Ok(())
-}
-
-pub fn list_models() {
-    let ui = crate::support::ui::ConsoleUi;
-    for line in format_supported_models(&crate::embedder::list_supported_models()) {
-        ui.info(&line);
-    }
 }
 
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
+
+/// Merge two TOML strings. Existing values take priority; template keys not present
+/// in existing are added. Operates at the `toml::Value` level.
+fn merge_toml(template: &str, existing: &str) -> anyhow::Result<String> {
+    let template_root: toml::Value = toml::from_str(template)
+        .map_err(|e| anyhow::anyhow!("Failed to parse template: {}", e))?;
+    let existing_root: toml::Value = toml::from_str(existing)
+        .map_err(|e| anyhow::anyhow!("Failed to parse existing config: {}", e))?;
+    let merged = deep_merge(template_root, existing_root);
+    toml::to_string(&merged)
+        .map_err(|e| anyhow::anyhow!("Failed to serialize merged config: {}", e))
+}
+
+/// Recursively merge two TOML Values. `overrides` takes priority over `base`.
+/// For tables, recurse into matching keys; for all other types, `overrides` wins.
+fn deep_merge(base: toml::Value, overrides: toml::Value) -> toml::Value {
+    match (base, overrides) {
+        (toml::Value::Table(mut base_t), toml::Value::Table(over_t)) => {
+            for (key, over_val) in over_t {
+                if let Some(base_val) = base_t.remove(&key) {
+                    base_t.insert(key, deep_merge(base_val, over_val));
+                } else {
+                    base_t.insert(key, over_val);
+                }
+            }
+            toml::Value::Table(base_t)
+        }
+        (_, overrides) => overrides,
+    }
+}
 
 /// Given a path to a file or directory, return the input root directory.
 /// - If the path is a file, returns its parent directory.
@@ -153,6 +240,13 @@ fn format_supported_models(models: &[(String, usize)]) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::tests::fixtures::make_temp_dir;
+    use std::sync::{Mutex, OnceLock};
+
+    /// Global lock to serialize init tests that rely on `set_current_dir`.
+    fn init_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     #[test]
     fn resolve_input_root_with_file_returns_parent() {
@@ -216,5 +310,49 @@ mod tests {
     fn format_supported_models_empty() {
         let formatted = format_supported_models(&[]);
         assert!(formatted.is_empty());
+    }
+
+    #[test]
+    fn run_init_creates_file_when_not_exists() {
+        let _guard = init_lock().lock().unwrap();
+        let dir = make_temp_dir("init_create");
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&dir).unwrap();
+
+        // Init should create docent.toml
+        assert!(!dir.join("docent.toml").exists());
+        run_init().unwrap();
+        assert!(dir.join("docent.toml").exists());
+
+        // Verify it parses as valid config
+        let config = Config::load(&dir.join("docent.toml")).unwrap();
+        assert_eq!(config.index.embedding_model, "BGESmallENV15Q");
+
+        std::env::set_current_dir(original_dir).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn run_init_merges_with_existing() {
+        let _guard = init_lock().lock().unwrap();
+        let dir = make_temp_dir("init_merge");
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&dir).unwrap();
+
+        // Create an existing config with a custom value
+        let existing_content = r#"
+[index]
+embedding_model = "custom-model"
+"#;
+        std::fs::write(dir.join("docent.toml"), existing_content).unwrap();
+
+        // Init should merge: existing value wins, but template adds new sections
+        run_init().unwrap();
+        let config = Config::load(&dir.join("docent.toml")).unwrap();
+        assert_eq!(config.index.embedding_model, "custom-model"); // existing wins
+        assert!(config.file.is_some()); // new section from template
+
+        std::env::set_current_dir(original_dir).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
