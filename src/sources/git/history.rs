@@ -206,7 +206,8 @@ mod tests {
         let git_config = GitConfig {
             depth_limit: -1,
             branch: branch_name,
-            file_patterns: vec!["*.md".to_string()],
+            glob_patterns: vec!["*.md".to_string()],
+            enabled: true,
         };
 
         let docs = super::index_git_history(tmp.path(), &git_config, None, true, false, None)
@@ -243,7 +244,8 @@ mod tests {
         let git_config = GitConfig {
             depth_limit: -1,
             branch: branch_name,
-            file_patterns: vec!["*.md".to_string()],
+            glob_patterns: vec!["*.md".to_string()],
+            enabled: true,
         };
 
         let docs = super::index_git_history(tmp.path(), &git_config, None, true, false, None)
@@ -260,7 +262,8 @@ mod tests {
         let git_config = GitConfig {
             depth_limit: -1,
             branch: "main".to_string(),
-            file_patterns: vec!["*".to_string()],
+            glob_patterns: vec!["*".to_string()],
+            enabled: true,
         };
 
         let result = super::index_git_history(tmp.path(), &git_config, None, true, false, None);
