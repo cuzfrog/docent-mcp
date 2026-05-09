@@ -2,8 +2,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::documents::{ChunkKind, ChunkMetadata, DocumentContext};
 use crate::embedder::EmbeddingService;
-use crate::index::VectorStore;
-use crate::search::{DecayRanker, VectorSearchService};
+use crate::search::{
+    create_fusion, DecayRanker, HybridSearchService, ScoreBackend, VectorScoreBackend,
+};
 use crate::tests::fixtures::FakeEmbedder;
 
 // ---------------------------------------------------------------------------
@@ -35,13 +36,12 @@ fn make_meta(
 
 fn build_search_service(
     texts: &[&str],
-) -> VectorSearchService {
+) -> HybridSearchService {
     let mut embedder = FakeEmbedder::new();
     let vectors: Vec<Vec<f32>> = texts
         .iter()
         .map(|t| embedder.embed(&[t]).unwrap().remove(0))
         .collect();
-    let vector_store = VectorStore::from_vec_vec(vectors).unwrap();
 
     let metadata: Vec<ChunkMetadata> = texts
         .iter()
@@ -55,13 +55,27 @@ fn build_search_service(
 
     let embedder: Arc<Mutex<dyn EmbeddingService>> =
         Arc::new(Mutex::new(FakeEmbedder::new()));
+
+    let semantic_backend =
+        Arc::new(VectorScoreBackend::new(embedder, Arc::new(vectors)));
+
+    struct ZeroBackend(usize);
+    impl ScoreBackend for ZeroBackend {
+        fn score(&self, _query: &str) -> anyhow::Result<Vec<f32>> {
+            Ok(vec![0.0; self.0])
+        }
+    }
+    let bm25_backend: Arc<dyn ScoreBackend> = Arc::new(ZeroBackend(metadata.len()));
+
+    let fusion = Arc::from(create_fusion("rrf", 60.0, 0.7));
     let ranker = Arc::new(DecayRanker::new(0.9));
 
-    VectorSearchService::new(
-        embedder,
-        Arc::new(vector_store),
-        Arc::new(metadata),
+    HybridSearchService::new(
+        semantic_backend,
+        bm25_backend,
+        fusion,
         ranker,
+        Arc::new(metadata),
         "2026-01-01T00:00:00Z".into(),
     )
 }
@@ -150,12 +164,27 @@ fn test_search_empty_index_returns_empty() {
     // No vectors in the service = empty index
     let embedder: Arc<Mutex<dyn EmbeddingService>> =
         Arc::new(Mutex::new(FakeEmbedder::new()));
+
+    let semantic_backend =
+        Arc::new(VectorScoreBackend::new(embedder, Arc::new(vec![])));
+
+    struct ZeroBackend(usize);
+    impl ScoreBackend for ZeroBackend {
+        fn score(&self, _query: &str) -> anyhow::Result<Vec<f32>> {
+            Ok(vec![0.0; self.0])
+        }
+    }
+    let bm25_backend: Arc<dyn ScoreBackend> = Arc::new(ZeroBackend(0));
+
+    let fusion = Arc::from(create_fusion("rrf", 60.0, 0.7));
     let ranker = Arc::new(DecayRanker::new(0.9));
-    let svc = VectorSearchService::new(
-        embedder,
-        Arc::new(VectorStore::from_vec_vec(vec![]).unwrap()),
-        Arc::new(vec![]),
+
+    let svc = HybridSearchService::new(
+        semantic_backend,
+        bm25_backend,
+        fusion,
         ranker,
+        Arc::new(vec![]),
         "2026-01-01T00:00:00Z".into(),
     );
 

@@ -8,7 +8,7 @@ use rmcp::ServerHandler;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::search::VectorSearchService;
+use crate::search::HybridSearchService;
 
 use super::search_tool;
 
@@ -25,7 +25,7 @@ fn default_limit() -> u8 {
 
 #[derive(Clone)]
 pub struct DocentMcpServer {
-    pub search_service: Arc<VectorSearchService>,
+    pub search_service: Arc<HybridSearchService>,
 }
 
 #[tool_router]

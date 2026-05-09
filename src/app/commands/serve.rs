@@ -11,7 +11,8 @@ use crate::config::{Config, IndexConfig};
 use crate::embedder::{EmbedderFactory, EmbeddingService};
 use crate::index::{IndexRepository, IndexSizeInfo, MergedIndex};
 use crate::interfaces::mcp::DocentMcpServer;
-use crate::search::VectorSearchService;
+use crate::search::{build_bm25_backend, create_fusion, ScoreBackend, VectorScoreBackend};
+use crate::search::HybridSearchService;
 use crate::support::ui::WorkflowUi;
 
 /// Wrapper that bridges `Box<dyn EmbeddingService>` (the factory output) into
@@ -139,15 +140,52 @@ pub(crate) fn prepare_serve(
             .with_context(|| "Failed to initialize embedding model — cannot start server".to_string())?,
     )));
 
-    // 4. Build search service
+    // 4. Build hybrid search service with vector + BM25 backends
     let ranker = Arc::new(crate::search::DecayRanker::new(
         config.search.same_src_score_decay,
     ));
-    let search_service = Arc::new(VectorSearchService::new(
-        embedder,
-        Arc::new(merged.vectors),
-        Arc::new(merged.metadata),
+
+    let vectors = merged.vectors.into_vec_vec();
+    let semantic_backend =
+        Arc::new(VectorScoreBackend::new(embedder, Arc::new(vectors)));
+
+    let bm25_backend: Arc<dyn ScoreBackend> = match merged.bm25_embeddings {
+        Some(ref bm25_embs) => {
+            let header = merged
+                .bm25_header
+                .as_ref()
+                .expect("bm25_header must be present when bm25_embeddings is present");
+            Arc::new(build_bm25_backend(
+                bm25_embs,
+                header.k1,
+                header.b,
+                header.avgdl,
+            ))
+        }
+        None => {
+            // No BM25 index available — return all zeros.
+            struct ZeroBackend(usize);
+            impl ScoreBackend for ZeroBackend {
+                fn score(&self, _query: &str) -> anyhow::Result<Vec<f32>> {
+                    Ok(vec![0.0; self.0])
+                }
+            }
+            Arc::new(ZeroBackend(merged.metadata.len()))
+        }
+    };
+
+    let fusion = Arc::from(create_fusion(
+        &config.search.fusion_strategy,
+        config.search.rrf_k,
+        config.search.semantic_weight,
+    ));
+
+    let search_service = Arc::new(HybridSearchService::new(
+        semantic_backend,
+        bm25_backend,
+        fusion,
         ranker,
+        Arc::new(merged.metadata),
         merged.built_at,
     ));
 

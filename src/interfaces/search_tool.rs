@@ -1,4 +1,4 @@
-use crate::search::VectorSearchService;
+use crate::search::HybridSearchService;
 
 // ---------------------------------------------------------------------------
 // Parameter validation
@@ -36,7 +36,7 @@ pub(crate) fn validate_search_params(
 /// This is the core logic extracted from the MCP handler so that
 /// `DocentMcpServer::search_ddr` becomes a thin adapter.
 pub(crate) async fn search_ddr_tool(
-    search_service: &VectorSearchService,
+    search_service: &HybridSearchService,
     query: &str,
     limit: u8,
 ) -> Result<String, rmcp::ErrorData> {
