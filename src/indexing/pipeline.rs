@@ -55,19 +55,16 @@ pub(crate) fn index_documents(
     let mut batch_metadata: Vec<ChunkMetadata> = Vec::with_capacity(all_chunks.len());
     let mut chunk_offset = 0;
     for (doc, &num_chunks) in docs.iter().zip(&doc_chunk_counts) {
+        let doc_ctx = doc.doc_context();
         for i in 0..num_chunks {
             let chunk = &all_chunks[chunk_offset + i];
             batch_metadata.push(ChunkMetadata {
-                source_path: doc.source_path.clone(),
-                source_revision: doc.source_revision.clone(),
-                title: doc.title.clone(),
+                doc_ctx: doc_ctx.clone(), // cheap Arc clone
                 chunk_text: chunk.text.clone(),
                 section_heading: chunk.section_heading.clone(),
                 chunk_index: chunk.chunk_index,
                 line_start: chunk.line_start,
                 line_end: chunk.line_end,
-                modified_at: doc.modified_at.clone(),
-                kind: doc.kind.clone(),
                 is_fresh: doc.is_fresh,
             });
         }

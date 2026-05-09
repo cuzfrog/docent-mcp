@@ -66,36 +66,39 @@ impl VectorSearchService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::documents::ChunkKind;
+    use crate::documents::{ChunkKind, DocumentContext};
 
     #[test]
     fn test_search_result_fields() {
         use crate::search::SearchResult;
+        use std::sync::Arc;
         let meta = ChunkMetadata {
-            source_path: "doc.md".to_string(),
-            source_revision: "abc123".to_string(),
-            title: "Doc".to_string(),
+            doc_ctx: DocumentContext {
+                source_path: Arc::from("doc.md"),
+                source_revision: Arc::from("abc123"),
+                title: Arc::from("Doc"),
+                modified_at: Some(Arc::from("2026-01-01T00:00:00Z")),
+                kind: ChunkKind::File,
+            },
             chunk_text: "Content".to_string(),
             section_heading: Some("Intro".to_string()),
             chunk_index: 0,
             line_start: 1,
             line_end: 5,
-            modified_at: Some("2026-01-01T00:00:00Z".to_string()),
-            kind: ChunkKind::File,
             is_fresh: None,
         };
 
         let result = SearchResult {
-            kind: meta.kind.clone(),
-            title: meta.title.clone(),
-            source_path: meta.source_path.clone(),
-            source_revision: meta.source_revision.clone(),
+            kind: meta.doc_ctx.kind.clone(),
+            title: meta.doc_ctx.title.to_string(),
+            source_path: meta.doc_ctx.source_path.to_string(),
+            source_revision: meta.doc_ctx.source_revision.to_string(),
             matched_content: meta.chunk_text.clone(),
             score: 0.95,
             line_start: meta.line_start,
             line_end: meta.line_end,
             section_heading: meta.section_heading.clone(),
-            modified_at: meta.modified_at.clone(),
+            modified_at: meta.doc_ctx.modified_at.as_ref().map(|s| s.to_string()),
             is_fresh: meta.is_fresh.unwrap_or(false),
             index_time: "2026-05-06T12:00:00Z".to_string(),
         };

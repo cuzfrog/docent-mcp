@@ -14,14 +14,14 @@ pub(crate) fn extract_merge_state(
     let mut old_hashes: HashMap<String, String> = HashMap::new();
     for meta in metadata {
         old_hashes
-            .entry(meta.source_path.clone())
-            .or_insert_with(|| meta.source_revision.clone());
+            .entry(meta.doc_ctx.source_path.to_string())
+            .or_insert_with(|| meta.doc_ctx.source_revision.to_string());
     }
 
     let mut old_chunks_by_path: HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>> = HashMap::new();
     for (i, meta) in metadata.iter().enumerate() {
         old_chunks_by_path
-            .entry(meta.source_path.clone())
+            .entry(meta.doc_ctx.source_path.to_string())
             .or_default()
             .push((meta.clone(), vectors[i].clone()));
     }
@@ -38,14 +38,14 @@ pub fn merge_incremental(
     let mut fresh_map: HashMap<String, (usize, usize)> = HashMap::new();
     let mut i = 0;
     while i < fresh_metadata.len() {
-        let path = &fresh_metadata[i].source_path;
+        let path = fresh_metadata[i].doc_ctx.source_path.to_string();
         let start = i;
         let mut count = 0;
-        while i < fresh_metadata.len() && fresh_metadata[i].source_path == *path {
+        while i < fresh_metadata.len() && fresh_metadata[i].doc_ctx.source_path.as_ref() == path.as_str() {
             count += 1;
             i += 1;
         }
-        fresh_map.insert(path.clone(), (start, count));
+        fresh_map.insert(path, (start, count));
     }
 
     let mut all_vectors: Vec<Vec<f32>> = Vec::new();
@@ -90,6 +90,32 @@ pub fn merge_incremental(
 mod tests {
     use super::*;
     use crate::documents::ChunkKind;
+    use crate::documents::DocumentContext;
+    use std::sync::Arc;
+
+    fn make_meta(
+        source_path: &str,
+        source_revision: &str,
+        title: &str,
+        chunk_text: &str,
+        chunk_index: usize,
+    ) -> ChunkMetadata {
+        ChunkMetadata {
+            doc_ctx: DocumentContext {
+                source_path: Arc::from(source_path),
+                source_revision: Arc::from(source_revision),
+                title: Arc::from(title),
+                modified_at: None,
+                kind: ChunkKind::File,
+            },
+            chunk_text: chunk_text.to_string(),
+            section_heading: None,
+            chunk_index,
+            line_start: 0,
+            line_end: 0,
+            is_fresh: None,
+        }
+    }
 
     #[test]
     fn test_merge_incremental_basic() {
@@ -99,34 +125,10 @@ mod tests {
             PathBuf::from("c.md"),
         ];
 
-        let meta_a = ChunkMetadata {
-            source_path: "a.md".to_string(),
-            source_revision: "hash_a".to_string(),
-            title: "A".to_string(),
-            chunk_text: "chunk text".to_string(),
-            section_heading: None,
-            chunk_index: 0,
-            line_start: 0,
-            line_end: 0,
-            modified_at: None,
-            kind: ChunkKind::File,
-            is_fresh: None,
-        };
+        let meta_a = make_meta("a.md", "hash_a", "A", "chunk text", 0);
         let vec_a: Vec<f32> = vec![1.0];
 
-        let meta_c = ChunkMetadata {
-            source_path: "c.md".to_string(),
-            source_revision: "hash_c".to_string(),
-            title: "C".to_string(),
-            chunk_text: "chunk text".to_string(),
-            section_heading: None,
-            chunk_index: 0,
-            line_start: 0,
-            line_end: 0,
-            modified_at: None,
-            kind: ChunkKind::File,
-            is_fresh: None,
-        };
+        let meta_c = make_meta("c.md", "hash_c", "C", "chunk text", 0);
         let vec_c: Vec<f32> = vec![3.0];
 
         let mut unchanged_map: HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>> = HashMap::new();
@@ -134,29 +136,33 @@ mod tests {
         unchanged_map.insert("c.md".to_string(), vec![(meta_c.clone(), vec_c.clone())]);
 
         let meta_b1 = ChunkMetadata {
-            source_path: "b.md".to_string(),
-            source_revision: "hash_b_new".to_string(),
-            title: "B".to_string(),
+            doc_ctx: DocumentContext {
+                source_path: Arc::from("b.md"),
+                source_revision: Arc::from("hash_b_new"),
+                title: Arc::from("B"),
+                modified_at: None,
+                kind: ChunkKind::File,
+            },
             chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
             line_start: 0,
             line_end: 0,
-            modified_at: None,
-            kind: ChunkKind::File,
             is_fresh: None,
         };
         let meta_b2 = ChunkMetadata {
-            source_path: "b.md".to_string(),
-            source_revision: "hash_b_new".to_string(),
-            title: "B".to_string(),
+            doc_ctx: DocumentContext {
+                source_path: Arc::from("b.md"),
+                source_revision: Arc::from("hash_b_new"),
+                title: Arc::from("B"),
+                modified_at: None,
+                kind: ChunkKind::File,
+            },
             chunk_text: "chunk text".to_string(),
             section_heading: Some("Section".to_string()),
             chunk_index: 1,
             line_start: 0,
             line_end: 0,
-            modified_at: None,
-            kind: ChunkKind::File,
             is_fresh: None,
         };
         let fresh_metadata = vec![meta_b1.clone(), meta_b2.clone()];
@@ -175,7 +181,7 @@ mod tests {
         let source_paths: Vec<&str> = result
             .metadata
             .iter()
-            .map(|m| m.source_path.as_str())
+            .map(|m| &*m.doc_ctx.source_path)
             .collect();
         assert_eq!(source_paths, vec!["a.md", "b.md", "b.md", "c.md"]);
     }
@@ -184,19 +190,7 @@ mod tests {
     fn test_merge_incremental_empty_fresh() {
         let sorted_files = vec![PathBuf::from("a.md"), PathBuf::from("b.md")];
 
-        let meta_a = ChunkMetadata {
-            source_path: "a.md".to_string(),
-            source_revision: "hash_a".to_string(),
-            title: "A".to_string(),
-            chunk_text: "chunk text".to_string(),
-            section_heading: None,
-            chunk_index: 0,
-            line_start: 0,
-            line_end: 0,
-            modified_at: None,
-            kind: ChunkKind::File,
-            is_fresh: None,
-        };
+        let meta_a = make_meta("a.md", "hash_a", "A", "chunk text", 0);
         let vec_a: Vec<f32> = vec![1.0];
 
         let mut unchanged_map: HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>> = HashMap::new();
@@ -214,7 +208,7 @@ mod tests {
 
         assert_eq!(result.metadata.len(), 1);
         assert_eq!(result.vectors.len(), 1);
-        assert_eq!(result.metadata[0].source_path, "a.md");
+        assert_eq!(&*result.metadata[0].doc_ctx.source_path, "a.md");
     }
 
     #[test]
@@ -223,43 +217,35 @@ mod tests {
 
         let unchanged_map: HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>> = HashMap::new();
 
-        let meta_a = ChunkMetadata {
-            source_path: "a.md".to_string(),
-            source_revision: "hash_a".to_string(),
-            title: "A".to_string(),
-            chunk_text: "chunk text".to_string(),
-            section_heading: None,
-            chunk_index: 0,
-            line_start: 0,
-            line_end: 0,
-            modified_at: None,
-            kind: ChunkKind::File,
-            is_fresh: None,
-        };
+        let meta_a = make_meta("a.md", "hash_a", "A", "chunk text", 0);
         let meta_b1 = ChunkMetadata {
-            source_path: "b.md".to_string(),
-            source_revision: "hash_b".to_string(),
-            title: "B".to_string(),
+            doc_ctx: DocumentContext {
+                source_path: Arc::from("b.md"),
+                source_revision: Arc::from("hash_b"),
+                title: Arc::from("B"),
+                modified_at: None,
+                kind: ChunkKind::File,
+            },
             chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
             line_start: 0,
             line_end: 0,
-            modified_at: None,
-            kind: ChunkKind::File,
             is_fresh: None,
         };
         let meta_b2 = ChunkMetadata {
-            source_path: "b.md".to_string(),
-            source_revision: "hash_b".to_string(),
-            title: "B".to_string(),
+            doc_ctx: DocumentContext {
+                source_path: Arc::from("b.md"),
+                source_revision: Arc::from("hash_b"),
+                title: Arc::from("B"),
+                modified_at: None,
+                kind: ChunkKind::File,
+            },
             chunk_text: "chunk text".to_string(),
             section_heading: Some("Section".to_string()),
             chunk_index: 1,
             line_start: 0,
             line_end: 0,
-            modified_at: None,
-            kind: ChunkKind::File,
             is_fresh: None,
         };
 
@@ -279,7 +265,7 @@ mod tests {
         let source_paths: Vec<&str> = result
             .metadata
             .iter()
-            .map(|m| m.source_path.as_str())
+            .map(|m| &*m.doc_ctx.source_path)
             .collect();
         assert_eq!(source_paths, vec!["a.md", "b.md", "b.md"]);
     }

@@ -16,8 +16,8 @@ pub fn merge_git_incremental(
         pairs.push((doc.file_path.as_str(), doc.commit_hash.as_str()));
     }
     for m in old_metadata {
-        if m.kind == ChunkKind::Git {
-            pairs.push((m.source_path.as_str(), m.source_revision.as_str()));
+        if m.doc_ctx.kind == ChunkKind::Git {
+            pairs.push((m.doc_ctx.source_path.as_ref(), m.doc_ctx.source_revision.as_ref()));
         }
     }
 
@@ -35,9 +35,9 @@ pub fn merge_git_incremental(
     combined_metadata.extend(new_metadata.iter().cloned());
 
     for m in &mut combined_metadata {
-        if m.kind == ChunkKind::Git {
+        if m.doc_ctx.kind == ChunkKind::Git {
             m.is_fresh = fresh_map
-                .get(&(m.source_path.as_str(), m.source_revision.as_str()))
+                .get(&(m.doc_ctx.source_path.as_ref(), m.doc_ctx.source_revision.as_ref()))
                 .copied();
         }
     }

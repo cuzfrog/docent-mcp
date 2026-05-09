@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
 // Runtime document types — used by search, indexing, and workflows.
@@ -13,32 +14,48 @@ pub(crate) enum ChunkKind {
     Git,
 }
 
+/// Shared document-level context shared across all chunks of the same document.
+/// Uses `Arc<str>` so that cloning is cheap (ref-count increment only).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct DocumentContext {
+    pub source_path: Arc<str>,
+    pub source_revision: Arc<str>,
+    pub title: Arc<str>,
+    pub modified_at: Option<Arc<str>>,
+    pub kind: ChunkKind,
+}
+
+impl Default for DocumentContext {
+    fn default() -> Self {
+        Self {
+            source_path: Arc::from(""),
+            source_revision: Arc::from(""),
+            title: Arc::from(""),
+            modified_at: None,
+            kind: ChunkKind::File,
+        }
+    }
+}
+
 /// Per-chunk source provenance for runtime use.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) struct ChunkMetadata {
-    pub source_path: String, // relative path to source file
-    /// For file documents: SHA-256 hex of the file content.
-    /// For git documents: commit hash.
-    pub source_revision: String,
-    pub title: String,       // highest-level markdown heading (filename fallback)
+    /// Shared document-level context.
+    #[serde(skip)]
+    pub doc_ctx: DocumentContext,
+
+    // --- Chunk-local fields ---
     #[serde(default)]
-    pub chunk_text: String, // the actual chunk text content
+    pub chunk_text: String,
     pub section_heading: Option<String>,
     pub chunk_index: usize,
     #[serde(default)]
     pub line_start: usize,
     #[serde(default)]
     pub line_end: usize,
-    /// ISO 8601 UTC timestamp of the source file's last modification time.
-    /// `None` if the mtime is unavailable (e.g., virtual filesystem).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub modified_at: Option<String>,
-
-    /// Kind of source document: file or git.
-    pub kind: ChunkKind,
 
     /// Whether this chunk is from a fresh/updated commit. Present only for git
-    /// documents (`kind == ChunkKind::Git`); `None` (absent from JSON) for file documents.
+    /// documents (`kind == ChunkKind::Git`); `None` for file documents.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub is_fresh: Option<bool>,
 }

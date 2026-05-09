@@ -151,13 +151,13 @@ fn test_index_preserves_metadata_fields() {
     let (_header, _vectors, metadata) = read_index_at(&index_dir);
 
     // Verify metadata fields are preserved
-    let a_meta: Vec<&ChunkMetadata> = metadata.iter().filter(|m| m.source_path == "a.md").collect();
+    let a_meta: Vec<&ChunkMetadata> = metadata.iter().filter(|m| &*m.doc_ctx.source_path == "a.md").collect();
     assert!(!a_meta.is_empty(), "Doc A should have metadata entries");
-    assert_eq!(a_meta[0].source_revision, "hash1");
+    assert_eq!(&*a_meta[0].doc_ctx.source_revision, "hash1");
 
-    let b_meta: Vec<&ChunkMetadata> = metadata.iter().filter(|m| m.source_path == "b.md").collect();
+    let b_meta: Vec<&ChunkMetadata> = metadata.iter().filter(|m| &*m.doc_ctx.source_path == "b.md").collect();
     assert!(!b_meta.is_empty(), "Doc B should have metadata entries");
-    assert_eq!(b_meta[0].source_revision, "hash2");
+    assert_eq!(&*b_meta[0].doc_ctx.source_revision, "hash2");
 
     let _ = std::fs::remove_dir_all(&base);
 }
