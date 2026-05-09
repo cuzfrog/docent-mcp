@@ -251,6 +251,7 @@ fn create_minimal_file_index(persist_path: &Path) {
     };
 
     let batch = crate::indexing::index_documents(&[doc], &config, &mut embedder, None).unwrap();
-    repo.store_index(embedder.dims(), &batch.vectors, &batch.metadata, None)
+    let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
+    repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, None)
         .unwrap();
 }

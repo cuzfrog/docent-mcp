@@ -25,14 +25,29 @@ pub fn write_index(
     std::fs::write(path.join("header.json"), &header_json)
         .map_err(|e| anyhow::anyhow!("Failed to write header.json: {}", e))?;
 
-    let mut buf: Vec<u8> = Vec::with_capacity(vectors.len() * header.embedding_dims * 4);
-    for vec in vectors {
-        for &val in vec {
-            buf.extend_from_slice(&val.to_le_bytes());
+    use std::io::Write;
+    let vectors_file = std::fs::File::create(path.join("vectors.bin"))
+        .map_err(|e| anyhow::anyhow!("Failed to create vectors.bin: {}", e))?;
+    let mut buf_writer = std::io::BufWriter::new(vectors_file);
+
+    #[cfg(target_endian = "little")]
+    {
+        for vec in vectors {
+            buf_writer.write_all(bytemuck::cast_slice(vec))
+                .map_err(|e| anyhow::anyhow!("Failed to write vectors.bin: {}", e))?;
         }
     }
-    std::fs::write(path.join("vectors.bin"), &buf)
-        .map_err(|e| anyhow::anyhow!("Failed to write vectors.bin: {}", e))?;
+    #[cfg(not(target_endian = "little"))]
+    {
+        for vec in vectors {
+            for &val in vec {
+                buf_writer.write_all(&val.to_le_bytes())
+                    .map_err(|e| anyhow::anyhow!("Failed to write vectors.bin: {}", e))?;
+            }
+        }
+    }
+    buf_writer.flush()
+        .map_err(|e| anyhow::anyhow!("Failed to flush vectors.bin: {}", e))?;
 
     let metadata_json = serde_json::to_vec(metadata)
         .map_err(|e| anyhow::anyhow!("Failed to serialize metadata: {}", e))?;

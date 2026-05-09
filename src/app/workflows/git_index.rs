@@ -134,12 +134,13 @@ impl<'a> GitIndexWorkflow<'a> {
         let embed_secs = embed_start.elapsed().as_secs_f64();
 
         let repo = IndexRepository::new(persist_path, SourceIndexKind::Git, &self.config.index);
-        repo.store_index(embedder.dims(), &batch.vectors, &batch.metadata, Some(head_commit))?;
+        let chunk_count = batch.metadata.len();
         let doc_count = unique_doc_count(&batch.metadata);
+        repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, Some(head_commit))?;
 
         Ok(GitIndexOutcome::Indexed {
             rebuilt: true,
-            chunk_count: batch.metadata.len(),
+            chunk_count,
             doc_count,
             new_commit_count: docs.len(),
             walk_secs,
@@ -228,12 +229,13 @@ impl<'a> GitIndexWorkflow<'a> {
             &batch.vectors,
         );
 
-        repo.store_index(embedder.dims(), &merged.vectors, &merged.metadata, Some(head_commit))?;
+        let chunk_count = merged.metadata.len();
         let doc_count = unique_doc_count(&merged.metadata);
+        repo.store_index(embedder.dims(), &merged.vectors, merged.metadata, doc_count, Some(head_commit))?;
 
         Ok(GitIndexOutcome::Indexed {
             rebuilt: false,
-            chunk_count: merged.metadata.len(),
+            chunk_count,
             doc_count,
             new_commit_count: new_docs.len(),
             walk_secs,

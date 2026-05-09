@@ -113,12 +113,13 @@ impl<'a> FileIndexWorkflow<'a> {
         )?;
         pb.finish();
 
-        repo.store_index(embedder.dims(), &batch.vectors, &batch.metadata, None)?;
+        let chunk_count = batch.metadata.len();
         let doc_count = unique_doc_count(&batch.metadata);
+        repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, None)?;
 
         Ok(FileIndexOutcome::Indexed {
             rebuilt: true,
-            chunk_count: batch.metadata.len(),
+            chunk_count,
             doc_count,
         })
     }
@@ -197,12 +198,13 @@ impl<'a> FileIndexWorkflow<'a> {
             &batch.vectors,
         );
 
-        repo.store_index(embedder.dims(), &merged.vectors, &merged.metadata, None)?;
+        let chunk_count = merged.metadata.len();
         let doc_count = unique_doc_count(&merged.metadata);
+        repo.store_index(embedder.dims(), &merged.vectors, merged.metadata, doc_count, None)?;
 
         Ok(FileIndexOutcome::Indexed {
             rebuilt: false,
-            chunk_count: merged.metadata.len(),
+            chunk_count,
             doc_count,
         })
     }
@@ -264,7 +266,8 @@ mod tests {
         };
         let batch =
             crate::indexing::index_documents(&[doc], config, &mut embedder, None).unwrap();
-        repo.store_index(embedder.dims(), &batch.vectors, &batch.metadata, None)
+        let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
+        repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, None)
             .unwrap();
     }
 
@@ -434,7 +437,8 @@ mod tests {
             };
             let batch = crate::indexing::index_documents(&[doc], &altered_config, &mut embedder, None)
                 .unwrap();
-            repo.store_index(embedder.dims(), &batch.vectors, &batch.metadata, None)
+            let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
+            repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, None)
                 .unwrap();
         }
 
@@ -484,7 +488,8 @@ mod tests {
             let batch =
                 crate::indexing::index_documents(&[doc], &config.index, &mut embedder, None).unwrap();
             let repo = IndexRepository::new(&persist, SourceIndexKind::File, &config.index);
-            repo.store_index(embedder.dims(), &batch.vectors, &batch.metadata, None)
+            let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
+            repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, None)
                 .unwrap();
             // Truncate vectors.bin to corrupt it
             let vectors_path = persist.join("file").join("vectors.bin");

@@ -245,12 +245,8 @@ pub(crate) fn build_header(
     embedding_dims: usize,
     metadata: &[ChunkMetadata],
     last_indexed_commit: Option<String>,
+    doc_count: usize,
 ) -> IndexHeader {
-    let doc_count = metadata
-        .iter()
-        .map(|m| &m.source_path)
-        .collect::<std::collections::HashSet<&String>>()
-        .len();
     IndexHeader {
         schema_version: SCHEMA_VERSION,
         embedding_model: config.embedding_model.clone(),

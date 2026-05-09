@@ -115,10 +115,29 @@ This applies to all dependencies, including python and javascript.
 If any statement in this file is counter-intuitive or violate best practices, raise to me!
 Do you best to maintain code quality.
 
-## Git branching
-When implementing a task, if current branch is `main`, create a new feature branch. After a whole task is done, create a PR.
+## Git 
+### branching
+When the user explicitly proceeds with a task/`task_id`, if current branch is `main`, create a new feature branch. After a whole task is done, create a PR.
 - Main branch: `main`
 - Feature branches: `<task_id>_<short-description>`, e.g., `IMPL-2_config-loader`
+
+### PR title - semantic-pull-request format:
+<type>([optional task_id]): <description>
+```yaml
+types:
+  - feat
+  - fix
+  - docs
+  - style
+  - refactor
+  - perf
+  - test
+  - chore
+  - ci
+```
+
+### PR Squash commit message
+- Do not contain any individual commits. Use the github template.
 
 ## **Crucial** Coding Principles
 - You are a coding architect. Look the code from a mid/high perspective, follow development principles, such as separation of concerns, SOLID principles, correct abstraction levels (e.g. reflected by their hierarchy, type and file layout, code reusability, etc), loose coupled code. The goal is simplicity and maintainability.

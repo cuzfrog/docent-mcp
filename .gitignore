@@ -2,6 +2,7 @@
 .lissom/
 .opencode/
 .claude/
+.devin/
 target/
 .venv/
 __pycache__

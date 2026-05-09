@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 
+use super::schema::build_header;
 use crate::config::IndexConfig;
 use crate::documents::ChunkMetadata;
 use crate::index::schema::{StoredChunkMetadata, StoredIndex};
 use crate::index::storage::{read_index, write_index};
-use crate::support::fs::dir_size;
 use crate::index::validate_header;
-use super::schema::build_header;
+use crate::support::fs::dir_size;
 
 #[derive(Clone, Copy)]
 pub(crate) enum SourceIndexKind {
@@ -62,7 +62,11 @@ impl IndexRepository {
         Ok(LoadedIndex {
             header: stored.header,
             vectors: stored.vectors,
-            metadata: stored.metadata.into_iter().map(ChunkMetadata::from).collect(),
+            metadata: stored
+                .metadata
+                .into_iter()
+                .map(ChunkMetadata::from)
+                .collect(),
         })
     }
 
@@ -74,19 +78,38 @@ impl IndexRepository {
         &self,
         embedding_dims: usize,
         vectors: &[Vec<f32>],
-        metadata: &[ChunkMetadata],
+        metadata: Vec<ChunkMetadata>,
+        doc_count: usize,
         last_indexed_commit: Option<String>,
     ) -> anyhow::Result<()> {
-        let stored_metadata: Vec<StoredChunkMetadata> = metadata.iter().cloned().map(Into::into).collect();
-        let header = build_header(&self.config, embedding_dims, metadata, last_indexed_commit);
-        write_index(&self.persist_path.join(self.kind.subdir()), &header, vectors, &stored_metadata)
+        let header = build_header(
+            &self.config,
+            embedding_dims,
+            &metadata,
+            last_indexed_commit,
+            doc_count,
+        );
+        let stored_metadata: Vec<StoredChunkMetadata> =
+            metadata.into_iter().map(Into::into).collect();
+        write_index(
+            &self.persist_path.join(self.kind.subdir()),
+            &header,
+            vectors,
+            &stored_metadata,
+        )
     }
 
     pub fn exists(persist_path: &Path, kind: SourceIndexKind) -> bool {
-        persist_path.join(kind.subdir()).join("header.json").exists()
+        persist_path
+            .join(kind.subdir())
+            .join("header.json")
+            .exists()
     }
 
-    pub fn check_size(persist_path: &Path, max_size_mb: u64) -> anyhow::Result<Option<IndexSizeInfo>> {
+    pub fn check_size(
+        persist_path: &Path,
+        max_size_mb: u64,
+    ) -> anyhow::Result<Option<IndexSizeInfo>> {
         let total_size = dir_size(persist_path);
         let max_bytes = max_size_mb * 1024 * 1024;
         if total_size > max_bytes {
@@ -100,7 +123,11 @@ impl IndexRepository {
             } else {
                 0
             };
-            Ok(Some(IndexSizeInfo { total_bytes: total_size, file_bytes, git_bytes }))
+            Ok(Some(IndexSizeInfo {
+                total_bytes: total_size,
+                file_bytes,
+                git_bytes,
+            }))
         } else {
             Ok(None)
         }
@@ -199,6 +226,4 @@ impl IndexRepository {
             built_at,
         })
     }
-
-
 }
