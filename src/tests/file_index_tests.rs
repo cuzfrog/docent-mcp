@@ -5,7 +5,7 @@ use crate::documents::ChunkKind;
 use crate::embedder::EmbeddingService;
 use crate::index::{IndexRepository, SourceIndexKind};
 use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, FakeEmbedderFactory, RecordingUi};
-use crate::workflows::file_index::{run_file_index_with, FileIndexOutcome, FileIndexRequest};
+use crate::workflows::file_index::{FileIndexOutcome, FileIndexRequest, FileIndexWorkflow};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -76,7 +76,7 @@ fn rebuild_aborts_when_index_exists_and_confirmation_false() {
     let ui = RecordingUi::never_confirm();
     let factory = FakeEmbedderFactory;
 
-    let outcome = run_file_index_with(request, &config, &ui, &factory).unwrap();
+    let outcome = FileIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
     assert!(
         matches!(outcome, FileIndexOutcome::Aborted),
         "Expected Aborted, got {:?}",
@@ -107,7 +107,7 @@ fn rebuild_deletes_and_rewrites_when_confirmed() {
     let ui = RecordingUi::always_confirm();
     let factory = FakeEmbedderFactory;
 
-    let outcome = run_file_index_with(request, &config, &ui, &factory).unwrap();
+    let outcome = FileIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
     match outcome {
         FileIndexOutcome::Indexed {
             rebuilt,
@@ -148,7 +148,7 @@ fn incremental_returns_uptodate_when_no_changes() {
         };
         let ui = RecordingUi::always_confirm();
         let factory = FakeEmbedderFactory;
-        run_file_index_with(request, &config, &ui, &factory).unwrap();
+        FileIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
     }
 
     // Now run incremental — no changes were made
@@ -159,7 +159,7 @@ fn incremental_returns_uptodate_when_no_changes() {
     };
     let ui = RecordingUi::always_confirm();
     let factory = FakeEmbedderFactory;
-    let outcome = run_file_index_with(request, &config, &ui, &factory).unwrap();
+    let outcome = FileIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
     assert!(
         matches!(outcome, FileIndexOutcome::UpToDate),
         "Expected UpToDate, got {:?}",
@@ -185,7 +185,7 @@ fn incremental_behaves_like_first_time_when_no_index() {
     let ui = RecordingUi::always_confirm();
     let factory = FakeEmbedderFactory;
 
-    let outcome = run_file_index_with(request, &config, &ui, &factory).unwrap();
+    let outcome = FileIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
     match outcome {
         FileIndexOutcome::Indexed {
             rebuilt,
@@ -239,7 +239,7 @@ fn incremental_returns_needs_rebuild_on_header_mismatch() {
     let ui = RecordingUi::always_confirm();
     let factory = FakeEmbedderFactory;
 
-    let outcome = run_file_index_with(request, &config, &ui, &factory).unwrap();
+    let outcome = FileIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
     match outcome {
         FileIndexOutcome::NeedsRebuild { reason } => {
             assert!(
@@ -292,7 +292,7 @@ fn incremental_returns_error_on_corrupted_index() {
     let ui = RecordingUi::always_confirm();
     let factory = FakeEmbedderFactory;
 
-    let result = run_file_index_with(request, &config, &ui, &factory);
+    let result = FileIndexWorkflow::new(&config, &ui, &factory).run(request);
     assert!(result.is_err(), "Expected error on corrupted index");
     let err = result.unwrap_err().to_string();
     assert!(
@@ -321,7 +321,7 @@ fn indexed_outcome_reports_correct_counts() {
     let ui = RecordingUi::always_confirm();
     let factory = FakeEmbedderFactory;
 
-    let outcome = run_file_index_with(request, &config, &ui, &factory).unwrap();
+    let outcome = FileIndexWorkflow::new(&config, &ui, &factory).run(request).unwrap();
     match outcome {
         FileIndexOutcome::Indexed {
             chunk_count,

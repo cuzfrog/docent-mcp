@@ -43,7 +43,41 @@ pub fn run_index_file(args: IndexArgs) -> anyhow::Result<()> {
         verbose: args.verbose,
     };
 
-    workflows::file_index::run_file_index(request, &config)
+    let ui = crate::support::ui::ConsoleUi;
+    let factory = crate::embedder::RealEmbedderFactory;
+    let workflow = workflows::file_index::FileIndexWorkflow::new(&config, &ui, &factory);
+    let outcome = workflow.run(request)?;
+
+    match outcome {
+        workflows::file_index::FileIndexOutcome::Aborted => {
+            println!("Aborted.");
+        }
+        workflows::file_index::FileIndexOutcome::UpToDate => {
+            println!("No changes detected. Index is up to date.");
+        }
+        workflows::file_index::FileIndexOutcome::Indexed {
+            rebuilt,
+            chunk_count,
+            doc_count,
+        } => {
+            if rebuilt {
+                println!(
+                    "File index written: {} chunks from {} docs",
+                    chunk_count, doc_count
+                );
+            } else {
+                println!(
+                    "File index updated: {} chunks from {} docs",
+                    chunk_count, doc_count
+                );
+            }
+        }
+        workflows::file_index::FileIndexOutcome::NeedsRebuild { reason } => {
+            eprintln!("{}", reason);
+        }
+    }
+
+    Ok(())
 }
 
 pub fn run_index_git(args: IndexArgs) -> anyhow::Result<()> {
