@@ -1,5 +1,6 @@
 mod schema;
 mod bm25_schema;
+mod bm25_storage;
 mod storage;
 mod validation;
 mod repository;
