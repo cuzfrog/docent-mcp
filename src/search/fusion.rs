@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 // ---------------------------------------------------------------------------
 // ScoreFusion trait — combines two score vectors into one
 // ---------------------------------------------------------------------------
@@ -147,12 +149,12 @@ pub(crate) fn create_fusion(
     strategy: &str,
     rrf_k: f32,
     semantic_weight: f32,
-) -> Box<dyn ScoreFusion> {
+) -> Arc<dyn ScoreFusion> {
     match strategy {
-        "rrf" => Box::new(RrfFusion { k: rrf_k }),
-        "weighted_sum" => Box::new(WeightedSumFusion { semantic_weight }),
-        "comb_sum" => Box::new(CombSumFusion),
-        "comb_mnz" => Box::new(CombMnzFusion),
+        "rrf" => Arc::new(RrfFusion { k: rrf_k }),
+        "weighted_sum" => Arc::new(WeightedSumFusion { semantic_weight }),
+        "comb_sum" => Arc::new(CombSumFusion),
+        "comb_mnz" => Arc::new(CombMnzFusion),
         other => panic!("Unknown fusion strategy: {}", other), // validated at config load
     }
 }

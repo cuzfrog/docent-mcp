@@ -1,7 +1,7 @@
 mod types;
 mod ranking;
 mod fusion;
-mod backend;
+pub(crate) mod backend;
 mod orchestrator;
 #[cfg(test)]
 pub(crate) use types::*;
