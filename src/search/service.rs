@@ -95,7 +95,9 @@ mod tests {
             source_path: meta.doc_ctx.source_path.to_string(),
             source_revision: meta.doc_ctx.source_revision.to_string(),
             matched_content: meta.chunk_text.clone(),
-            score: 0.95,
+            total_score: 0.95,
+            semantic_score: 0.0,
+            bm25_score: 0.0,
             line_start: meta.line_start,
             line_end: meta.line_end,
             section_heading: meta.section_heading.clone(),
@@ -114,5 +116,9 @@ mod tests {
         assert!(json.contains("\"source_revision\":\"abc123\""));
         assert!(json.contains("\"is_fresh\":false"));
         assert!(json.contains("\"index_time\":\"2026-05-06T12:00:00Z\""));
+        assert!(json.contains("\"total_score\""));
+        assert!(json.contains("\"semantic_score\""));
+        assert!(json.contains("\"bm25_score\""));
+        assert!(!json.contains("\"score\":"));
     }
 }

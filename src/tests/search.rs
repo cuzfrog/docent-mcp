@@ -84,7 +84,7 @@ fn test_search_returns_results_sorted_by_score() {
     assert!(!results.is_empty(), "Should return at least one result");
     for i in 1..results.len() {
         assert!(
-            results[i - 1].score >= results[i].score,
+            results[i - 1].total_score >= results[i].total_score,
             "Results should be sorted by score descending"
         );
     }
@@ -142,7 +142,7 @@ fn test_search_result_has_required_fields() {
     assert!(!result.source_revision.is_empty(), "source_revision should be populated");
     assert!(!result.index_time.is_empty(), "index_time should be populated");
     assert!(!result.matched_content.is_empty(), "matched_content should be populated");
-    assert!(result.score >= 0.0, "score should be non-negative");
+    assert!(result.total_score >= 0.0, "total_score should be non-negative");
 }
 
 #[test]
