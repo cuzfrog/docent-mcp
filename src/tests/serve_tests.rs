@@ -105,6 +105,7 @@ fn serve_config(persist_path: &Path) -> Config {
             same_src_score_decay: 0.9,
         },
         git: None,
+        file: None,
     }
 }
 

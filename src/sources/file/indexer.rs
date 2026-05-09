@@ -13,17 +13,21 @@ use super::diff::FileDiff;
 pub(crate) struct FileIndexer;
 
 impl FileIndexer {
-    /// Discover all indexable files under `root`.
-    pub(crate) fn discover_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
-        super::discover::discover_files(root)
+    /// Discover all indexable files under `root` matching the given glob patterns.
+    pub(crate) fn discover_files(
+        root: &Path,
+        glob_patterns: &[String],
+    ) -> anyhow::Result<Vec<PathBuf>> {
+        super::discover::discover_files(root, glob_patterns)
     }
 
     /// Prepare `IndexableDocument` values from the given file list.
     pub(crate) fn prepare_files(
         files: &[PathBuf],
         input_root: &Path,
+        file_size_limit_mb: u64,
     ) -> anyhow::Result<Vec<IndexableDocument>> {
-        super::extract::prepare_files(files, input_root)
+        super::extract::prepare_files(files, input_root, file_size_limit_mb)
     }
 
     /// Compute the diff between the current file set and previously indexed state.
@@ -64,7 +68,7 @@ mod tests {
 
     #[test]
     fn test_discover_nonexistent_path() {
-        let result = FileIndexer::discover_files(Path::new("/nonexistent/path"));
+        let result = FileIndexer::discover_files(Path::new("/nonexistent/path"), &["*.md".to_string()]);
         assert!(result.is_err());
     }
 }

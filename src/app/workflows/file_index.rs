@@ -92,7 +92,8 @@ impl<'a> FileIndexWorkflow<'a> {
             }
         }
 
-        let all_files = FileIndexer::discover_files(&request.input_root)?;
+        let default_patterns = vec!["*.md".to_string(), "*.txt".to_string()];
+        let all_files = FileIndexer::discover_files(&request.input_root, &default_patterns)?;
         self.ui
             .info(&format!("Scanning: {} files found", all_files.len()));
 
@@ -103,7 +104,7 @@ impl<'a> FileIndexWorkflow<'a> {
             .ui
             .progress(all_files.len() as u64, "Indexing files", request.verbose);
 
-        let docs = FileIndexer::prepare_files(&all_files, &request.input_root)?;
+        let docs = FileIndexer::prepare_files(&all_files, &request.input_root, 0)?;
 
         let batch = indexing::index_documents(
             &docs,
@@ -162,7 +163,8 @@ impl<'a> FileIndexWorkflow<'a> {
             }
         };
 
-        let all_files = FileIndexer::discover_files(&request.input_root)?;
+        let default_patterns = vec!["*.md".to_string(), "*.txt".to_string()];
+        let all_files = FileIndexer::discover_files(&request.input_root, &default_patterns)?;
         let diff = FileIndexer::diff_files(&all_files, &old_hashes, &request.input_root)?;
 
         self.ui.info(&format!(
@@ -181,7 +183,7 @@ impl<'a> FileIndexWorkflow<'a> {
             "Indexing files",
             request.verbose,
         );
-        let docs = FileIndexer::prepare_files(&diff.to_index, &request.input_root)?;
+        let docs = FileIndexer::prepare_files(&diff.to_index, &request.input_root, 0)?;
 
         let batch = indexing::index_documents(
             &docs,
@@ -241,6 +243,7 @@ mod tests {
             search: crate::config::SearchConfig {
                 same_src_score_decay: 0.9,
             },
+            file: None,
             git: None,
         }
     }

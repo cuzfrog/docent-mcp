@@ -50,12 +50,35 @@ fn extract_title_from_body(body: &str) -> Option<String> {
 pub fn prepare_files(
     files: &[PathBuf],
     input_root: &Path,
+    file_size_limit_mb: u64,
 ) -> anyhow::Result<Vec<IndexableDocument>> {
     let mut docs = Vec::new();
 
     for file in files.iter() {
         let full_path = input_root.join(file);
         let relative_path = crate::support::fs::path_to_string(file);
+
+        // Check file size limit before reading
+        if file_size_limit_mb > 0 {
+            let meta = match std::fs::metadata(&full_path) {
+                Ok(m) => m,
+                Err(_) => {
+                    eprintln!(
+                        "WARNING: skipping unreadable file '{}'",
+                        relative_path
+                    );
+                    continue;
+                }
+            };
+            let limit_bytes = file_size_limit_mb * 1024 * 1024;
+            if meta.len() > limit_bytes {
+                eprintln!(
+                    "WARNING: skipping file '{}' ({} bytes exceeds {} MB limit)",
+                    relative_path, meta.len(), file_size_limit_mb
+                );
+                continue;
+            }
+        }
 
         let content = match std::fs::read_to_string(&full_path) {
             Ok(c) => c,
@@ -181,5 +204,27 @@ mod tests {
             extract_title_from_body(body).as_deref(),
             Some("Real Heading")
         );
+    }
+
+    #[test]
+    fn test_prepare_files_size_limit_skips_large_file() {
+        let dir = crate::tests::fixtures::make_temp_dir("size_limit_test");
+        let small_file = dir.join("small.md");
+        let large_file = dir.join("large.md");
+        std::fs::write(&small_file, "# Small\ncontent").unwrap();
+        // Write a file larger than 1 MB (create 2 MB of data)
+        let large_content = vec![b'x'; 2 * 1024 * 1024];
+        std::fs::write(&large_file, &large_content).unwrap();
+
+        let files = vec![
+            PathBuf::from("small.md"),
+            PathBuf::from("large.md"),
+        ];
+
+        let result = prepare_files(&files, &dir, 1).unwrap();
+        assert_eq!(result.len(), 1, "Only the small file should be present");
+        assert_eq!(result[0].source_path, "small.md");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
