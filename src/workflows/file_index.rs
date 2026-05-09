@@ -51,9 +51,9 @@ fn run_rebuild_file(config: &Config, input_root: &std::path::Path, verbose: bool
     let pb = Progress::new(all_files.len() as u64, "Indexing files", verbose);
 
     let docs = FileIndexer::prepare_files(&all_files, input_root)?;
-    pb.finish();
 
-    let batch = indexing::index_documents(&docs, &config.index, &mut *embedder, None)?;
+    let batch = indexing::index_documents(&docs, &config.index, &mut *embedder, Some(&pb))?;
+    pb.finish();
 
     IndexRepository::store_index(&persist_path, SourceIndexKind::File, &config.index, embedder.dims(), &batch.vectors, &batch.metadata, None)?;
     let doc_count = batch.metadata.iter().map(|m| &m.source_path[..]).collect::<std::collections::HashSet<_>>().len();
@@ -117,9 +117,9 @@ fn run_incremental_file(config: &Config, input_root: &std::path::Path, verbose: 
 
     let pb = Progress::new(diff.to_index.len() as u64, "Indexing files", verbose);
     let docs = FileIndexer::prepare_files(&diff.to_index, input_root)?;
-    pb.finish();
 
-    let batch = indexing::index_documents(&docs, &config.index, &mut *embedder, None)?;
+    let batch = indexing::index_documents(&docs, &config.index, &mut *embedder, Some(&pb))?;
+    pb.finish();
 
     let merged = FileIndexer::merge_incremental(
         &all_files,

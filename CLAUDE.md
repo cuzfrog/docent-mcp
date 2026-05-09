@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+Language: English
+
 ## Project
 
 `docent-mcp` — A read-only MCP server that lets agents find Design Decision Records explaining why code looks the way it does. Single Rust binary (`docent`) with two subcommands: `index` and `serve`.
