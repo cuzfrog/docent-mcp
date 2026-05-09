@@ -81,9 +81,9 @@ src/
 │
 ├── support/               # Utilities
 │   ├── fs.rs              #   Filesystem helpers (path_to_string, dir_size, sha256_hex)
-│   ├── progress.rs        #   Progress bar rendering
+│   ├── progress.rs        #   Progress bar rendering & ProgressSink trait
 │   ├── time.rs            #   Time helpers (unix_to_rfc3339)
-│   └── ui.rs              #   Abstract UI interfaces (ProgressSink, WorkflowUi)
+│   └── ui.rs              #   Abstract UI interfaces (WorkflowUi)
 │
 ├── templates/             # Default template files (e.g., docent.toml)
 │
@@ -105,7 +105,7 @@ This applies to all dependencies, including python and javascript.
 - **No panics in library code.** Reserve `panic` for unreachable states only.
 - **Logging:** Use UI abstraction in `src/support/ui.rs`. Do not use `eprintln!` for CLI user-facing messages, except for error. The MCP server uses HTTP.
 - **Tests:** Each module has unit tests in a `#[cfg(test)] mod tests` block. Integration-style tests are under `src/tests/` (compiled as crate unit tests, avoiding separate integration-test link overhead). E2E tests are in `e2e-tests/`. E2E tests assume the binary is built and available. No `#[ignore]` tests, test must be runable and provide coverage value.
-- **Naming:** Snake_case for files and functions. Types are PascalCase. Constants are UPPER_SNAKE_CASE.
+- **Naming:** Snake_case for files and functions. Types are PascalCase. Constants are UPPER_SNAKE_CASE. Variable naming should be specific to carry their function. E.g. `token_counter` should not be `counter`, which can be confusing.
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).
 - **No Dead Code** No `allow(dead_code)`. Remove unused code immediately to maintain codebase health.
 - **Module Interface at Top** Public types, contract, methods should be at the top of the files, private implementation details should be at the bottom.

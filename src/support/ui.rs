@@ -1,15 +1,6 @@
 use crate::support::progress::Progress;
+use crate::support::progress::ProgressSink;
 use std::io::Write;
-
-// ---------------------------------------------------------------------------
-// ProgressSink — abstract progress reporting (no concrete UI dependency)
-// ---------------------------------------------------------------------------
-
-pub(crate) trait ProgressSink: Send {
-    fn tick(&self);
-    fn tick_msg(&self, msg: &str);
-    fn finish(&self);
-}
 
 // ---------------------------------------------------------------------------
 // WorkflowUi — abstract user-interaction interface for workflows

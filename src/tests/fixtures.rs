@@ -108,7 +108,7 @@ impl EmbedderFactory for FakeEmbedderFactory {
 
 pub(crate) struct NoopProgress;
 
-impl crate::support::ui::ProgressSink for NoopProgress {
+impl crate::support::progress::ProgressSink for NoopProgress {
     fn tick(&self) {}
     fn tick_msg(&self, _msg: &str) {}
     fn finish(&self) {}
@@ -165,7 +165,7 @@ impl crate::support::ui::WorkflowUi for RecordingUi {
         Ok(responses.get(idx).copied().unwrap_or(true))
     }
 
-    fn progress(&self, _total: u64, _label: &str, _verbose: bool) -> Box<dyn crate::support::ui::ProgressSink> {
+    fn progress(&self, _total: u64, _label: &str, _verbose: bool) -> Box<dyn crate::support::progress::ProgressSink> {
         self.progress_calls
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Box::new(NoopProgress)

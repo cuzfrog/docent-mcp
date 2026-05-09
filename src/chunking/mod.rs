@@ -1,10 +1,10 @@
 mod counter;
-mod sectioning;
 mod engine;
+mod sectioning;
 
-pub(crate) use counter::{HuggingFaceTokenCounter, TokenCounter};
 #[cfg_attr(not(test), allow(unused_imports))]
 pub(crate) use counter::WhitespaceTokenCounter;
+pub(crate) use counter::{HuggingFaceTokenCounter, TokenCounter};
 pub(crate) use engine::{chunk_document, Chunk, ChunkingConfig};
 
 use crate::embedder::EmbeddingService;
@@ -18,6 +18,6 @@ pub(crate) fn chunk_document_with_embedder(
     config: &ChunkingConfig,
     embedder: &dyn EmbeddingService,
 ) -> Vec<Chunk> {
-    let counter = embedder.token_counter();
-    chunk_document(body, config, &*counter)
+    let token_counter = embedder.token_counter();
+    chunk_document(body, config, &*token_counter)
 }

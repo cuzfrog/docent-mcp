@@ -1,6 +1,14 @@
 use indicatif::{ProgressBar, ProgressStyle};
 
-use crate::support::ui::ProgressSink;
+// ---------------------------------------------------------------------------
+// ProgressSink — abstract progress reporting (no concrete UI dependency)
+// ---------------------------------------------------------------------------
+
+pub(crate) trait ProgressSink: Send {
+    fn tick(&self);
+    fn tick_msg(&self, msg: &str);
+    fn finish(&self);
+}
 
 pub struct Progress {
     pb: ProgressBar,

@@ -4,7 +4,7 @@ use crate::config::GitConfig;
 use crate::documents::ChunkMetadata;
 use crate::indexing::MergedBatch;
 use crate::sources::git::extract::GitDocument;
-use crate::support::ui::ProgressSink;
+use crate::support::progress::ProgressSink;
 
 /// Facade for git-source indexing operations.
 ///

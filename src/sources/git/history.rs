@@ -1,5 +1,5 @@
 use crate::config::GitConfig;
-use crate::support::ui::ProgressSink;
+use crate::support::progress::ProgressSink;
 use std::path::Path;
 
 pub(crate) fn matches_any_pattern(path: &str, patterns: &[String]) -> bool {
