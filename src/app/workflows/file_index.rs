@@ -5,7 +5,7 @@ use crate::config::Config;
 use crate::embedder::EmbedderFactory;
 use crate::index::{self, IndexRepository, SourceIndexKind};
 use crate::indexing;
-use crate::indexing::unique_doc_count;
+use crate::indexing::{unique_doc_count, IndexedBatch};
 use crate::sources::file::FileIndexer;
 use crate::support::ui::WorkflowUi;
 
@@ -82,9 +82,9 @@ impl<'a> FileIndexWorkflow<'a> {
 
     fn rebuild(&self, request: &FileIndexRequest) -> anyhow::Result<FileIndexOutcome> {
         let persist_path = self.config.persist_path_buf();
-        let repo = IndexRepository::new(&persist_path, SourceIndexKind::File, &self.config.index);
+        let repo = IndexRepository::new(&persist_path, &self.config.index);
 
-        match repo.load_one() {
+        match repo.load_one(SourceIndexKind::File) {
             Ok(_) => {
                 self.ui.warn(&format!(
                     "Warning: this will delete the existing index at '{}' and rebuild it from scratch.",
@@ -125,7 +125,7 @@ impl<'a> FileIndexWorkflow<'a> {
 
         let chunk_count = batch.metadata.len();
         let doc_count = unique_doc_count(&batch.metadata);
-        repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, None)?;
+        repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None)?;
 
         Ok(FileIndexOutcome::Indexed {
             rebuilt: true,
@@ -136,13 +136,13 @@ impl<'a> FileIndexWorkflow<'a> {
 
     fn incremental(&self, request: &FileIndexRequest) -> anyhow::Result<FileIndexOutcome> {
         let persist_path = self.config.persist_path_buf();
-        let repo = IndexRepository::new(&persist_path, SourceIndexKind::File, &self.config.index);
+        let repo = IndexRepository::new(&persist_path, &self.config.index);
 
         let mut embedder = self
             .embedder_factory
             .create(&self.config.index.embedding_model)?;
 
-        let (old_hashes, old_metadata, old_vectors, index_exists) = match repo.load_one() {
+        let (old_hashes, old_metadata, old_vectors, index_exists) = match repo.load_one(SourceIndexKind::File) {
             Ok(stored) => {
                 if let Err(e) = index::validate_header(&stored.header, &self.config.index) {
                     self.ui.warn(&format!("{}", e));
@@ -210,7 +210,15 @@ impl<'a> FileIndexWorkflow<'a> {
 
         let chunk_count = merged.metadata.len();
         let doc_count = unique_doc_count(&merged.metadata);
-        repo.store_index(embedder.dims(), &merged.vectors, merged.metadata, doc_count, None)?;
+        let store_batch = IndexedBatch {
+            vectors: merged.vectors,
+            metadata: merged.metadata,
+            bm25_embeddings: vec![],
+            bm25_k1: self.config.search.bm25_k1,
+            bm25_b: self.config.search.bm25_b,
+            bm25_avgdl: 0.0,
+        };
+        repo.store(SourceIndexKind::File, &store_batch, embedder.dims(), doc_count, None)?;
 
         Ok(FileIndexOutcome::Indexed {
             rebuilt: false,
@@ -271,7 +279,7 @@ mod tests {
     /// Create a file index in the given persist dir so that `load_one` succeeds.
     /// This simulates what a previous indexing run would have stored.
     fn create_index_at(persist: &Path, config: &IndexConfig) {
-        let repo = IndexRepository::new(persist, SourceIndexKind::File, config);
+        let repo = IndexRepository::new(persist, config);
         let mut embedder = FakeEmbedder::new();
         let doc = crate::indexing::IndexableDocument {
             source_path: "existing.md".to_string(),
@@ -285,7 +293,7 @@ mod tests {
         let batch =
             crate::indexing::index_documents(&[doc], config, &mut embedder, None).unwrap();
         let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
-        repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, None)
+        repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None)
             .unwrap();
     }
 
@@ -442,7 +450,7 @@ mod tests {
         {
             let mut altered_config = config.index.clone();
             altered_config.chunk_size = 999; // different from config's 512
-            let repo = IndexRepository::new(&persist, SourceIndexKind::File, &altered_config);
+            let repo = IndexRepository::new(&persist, &altered_config);
             let mut embedder = FakeEmbedder::new();
             let doc = crate::indexing::IndexableDocument {
                 source_path: "test.md".to_string(),
@@ -456,7 +464,7 @@ mod tests {
             let batch = crate::indexing::index_documents(&[doc], &altered_config, &mut embedder, None)
                 .unwrap();
             let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
-            repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, None)
+            repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None)
                 .unwrap();
         }
 
@@ -505,9 +513,9 @@ mod tests {
             };
             let batch =
                 crate::indexing::index_documents(&[doc], &config.index, &mut embedder, None).unwrap();
-            let repo = IndexRepository::new(&persist, SourceIndexKind::File, &config.index);
+            let repo = IndexRepository::new(&persist, &config.index);
             let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
-            repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, None)
+            repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None)
                 .unwrap();
             // Truncate vectors.bin to corrupt it
             let vectors_path = persist.join("file").join("vectors.bin");

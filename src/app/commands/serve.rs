@@ -7,7 +7,7 @@ use rmcp::transport::streamable_http_server::{
 };
 
 use crate::cli::ServeArgs;
-use crate::config::Config;
+use crate::config::{Config, IndexConfig};
 use crate::embedder::{EmbedderFactory, EmbeddingService};
 use crate::index::{IndexRepository, IndexSizeInfo, MergedIndex};
 use crate::interfaces::mcp::DocentMcpServer;
@@ -59,7 +59,9 @@ impl ServeIndexAccess for RealServeIndexAccess {
         persist_path: &Path,
         max_size_mb: u64,
     ) -> anyhow::Result<Option<IndexSizeInfo>> {
-        IndexRepository::check_size(persist_path, max_size_mb)
+        let config = IndexConfig::default();
+        let repo = IndexRepository::new(persist_path, &config);
+        repo.check_size(max_size_mb)
     }
 
     fn load_merged(
@@ -67,7 +69,8 @@ impl ServeIndexAccess for RealServeIndexAccess {
         persist_path: &Path,
         config: &crate::config::IndexConfig,
     ) -> anyhow::Result<MergedIndex> {
-        IndexRepository::load_merged_for_serve(persist_path, config)
+        let repo = IndexRepository::new(persist_path, config);
+        repo.load_merged()
     }
 }
 

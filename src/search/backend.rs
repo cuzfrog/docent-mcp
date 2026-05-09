@@ -150,9 +150,9 @@ mod tests {
         let embedder: Arc<Mutex<dyn EmbeddingService>> =
             Arc::new(Mutex::new(FakeEmbedder::new()));
         let vectors = Arc::new(vec![
-            vec![10.0, 1.0, 0.0, 1.0], // matches "long text" better
-            vec![1.0, 1.0, 0.0, 1.0],  // short text
-            vec![5.0, 2.0, 0.0, 1.0],  // medium
+            vec![9.0, 2.0, 0.0, 1.0],  // parallel to query embedding → cos = 1.0
+            vec![5.0, 2.0, 0.0, 1.0],  // moderate similarity
+            vec![1.0, 2.0, 0.0, 1.0],  // lowest similarity
         ]);
         let backend = VectorScoreBackend::new(embedder, vectors);
         let scores = backend.score("some text").unwrap();
@@ -182,7 +182,7 @@ mod tests {
         ];
 
         // Fit embedder to corpus to get realistic avgdl
-        let embedder =
+        let embedder: bm25::Embedder<u32> =
             bm25::EmbedderBuilder::with_fit_to_corpus(bm25::Language::English, &corpus).build();
 
         let avgdl = embedder.avgdl();

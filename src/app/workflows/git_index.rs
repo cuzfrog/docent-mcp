@@ -5,7 +5,7 @@ use crate::config::{Config, GitConfig};
 use crate::embedder::{Embedder, EmbedderFactory};
 use crate::index::{IndexRepository, SourceIndexKind};
 use crate::indexing;
-use crate::indexing::unique_doc_count;
+use crate::indexing::{unique_doc_count, IndexedBatch};
 use crate::sources::git::GitIndexer;
 use crate::support::ui::WorkflowUi;
 
@@ -67,7 +67,8 @@ impl<'a> GitIndexWorkflow<'a> {
         let persist_path = self.config.persist_path_buf();
         let dims = Embedder::dims_for_model(&self.config.index.embedding_model)?;
 
-        if request.rebuild || !IndexRepository::exists(&persist_path, SourceIndexKind::Git) {
+        let repo = IndexRepository::new(&persist_path, &self.config.index);
+        if request.rebuild || !repo.exists(SourceIndexKind::Git) {
             self.rebuild(&request, git_config, &persist_path, dims)
         } else {
             self.incremental(&request, git_config, &persist_path, dims)
@@ -132,13 +133,13 @@ impl<'a> GitIndexWorkflow<'a> {
         pb_embed.finish();
         let embed_secs = embed_start.elapsed().as_secs_f64();
 
-        let repo = IndexRepository::new(persist_path, SourceIndexKind::Git, &self.config.index);
+        let repo = IndexRepository::new(persist_path, &self.config.index);
         let chunk_count = batch.metadata.len();
         let doc_count = unique_doc_count(&batch.metadata);
-        repo.store_index(
+        repo.store(
+            SourceIndexKind::Git,
+            &batch,
             embedder.dims(),
-            &batch.vectors,
-            batch.metadata,
             doc_count,
             Some(head_commit),
         )?;
@@ -164,8 +165,8 @@ impl<'a> GitIndexWorkflow<'a> {
         persist_path: &Path,
         dims: usize,
     ) -> anyhow::Result<GitIndexOutcome> {
-        let repo = IndexRepository::new(persist_path, SourceIndexKind::Git, &self.config.index);
-        let stored = repo.load_one()?;
+        let repo = IndexRepository::new(persist_path, &self.config.index);
+        let stored = repo.load_one(SourceIndexKind::Git)?;
         let old_header = stored.header;
         let old_vectors = stored.vectors;
         let old_metadata = stored.metadata;
@@ -235,10 +236,18 @@ impl<'a> GitIndexWorkflow<'a> {
 
         let chunk_count = merged.metadata.len();
         let doc_count = unique_doc_count(&merged.metadata);
-        repo.store_index(
+        let store_batch = IndexedBatch {
+            vectors: merged.vectors,
+            metadata: merged.metadata,
+            bm25_embeddings: vec![],
+            bm25_k1: self.config.search.bm25_k1,
+            bm25_b: self.config.search.bm25_b,
+            bm25_avgdl: 0.0,
+        };
+        repo.store(
+            SourceIndexKind::Git,
+            &store_batch,
             embedder.dims(),
-            &merged.vectors,
-            merged.metadata,
             doc_count,
             Some(head_commit),
         )?;
