@@ -158,6 +158,7 @@ fn rebuild_writes_git_index_with_fake_embedder() {
             chunk_count,
             doc_count,
             new_commit_count,
+            ..
         } => {
             assert!(rebuilt, "Expected rebuilt = true");
             assert!(chunk_count > 0, "Expected at least 1 chunk");
@@ -257,6 +258,7 @@ fn incremental_merges_old_and_new_chunks() {
                 chunk_count,
                 doc_count,
                 new_commit_count,
+                ..
             } => {
                 assert!(!rebuilt, "Expected incremental (rebuilt = false)");
                 assert!(chunk_count > 0, "Expected at least 1 chunk");

@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use crate::config::{Config, GitConfig};
 use crate::embedder::{Embedder, EmbedderFactory};
@@ -28,6 +29,8 @@ pub(crate) enum GitIndexOutcome {
         chunk_count: usize,
         doc_count: usize,
         new_commit_count: usize,
+        walk_secs: f64,
+        embed_secs: f64,
     },
 }
 
@@ -96,6 +99,7 @@ fn run_git_rebuild(
     }
 
     // Walk history
+    let walk_start = Instant::now();
     let total_commits =
         GitIndexer::estimate_commit_count(&request.repo_path, git_config, None)?;
     let pb1 = ui.progress(total_commits as u64, "Walking commits", request.verbose);
@@ -108,6 +112,7 @@ fn run_git_rebuild(
         Some(pb1.as_ref()),
     )?;
     pb1.finish();
+    let walk_secs = walk_start.elapsed().as_secs_f64();
 
     if docs.is_empty() {
         return Ok(GitIndexOutcome::NoDocuments);
@@ -115,6 +120,7 @@ fn run_git_rebuild(
 
     let head_commit = GitIndexer::resolve_head_commit(&request.repo_path, &git_config.branch)?;
     let total_docs = docs.len();
+    let embed_start = Instant::now();
     let pb2 = ui.progress(total_docs as u64, "Embedding documents", request.verbose);
     let mut embedder = embedder_factory.create(&config.index.embedding_model)?;
 
@@ -122,6 +128,7 @@ fn run_git_rebuild(
     let indexable = GitIndexer::prepare_git_documents(&docs, &freshness);
     let batch = indexing::index_documents(&indexable, &config.index, &mut *embedder, Some(pb2.as_ref()))?;
     pb2.finish();
+    let embed_secs = embed_start.elapsed().as_secs_f64();
 
     let repo = IndexRepository::new(persist_path, SourceIndexKind::Git, &config.index);
     repo.store_index(embedder.dims(), &batch.vectors, &batch.metadata, Some(head_commit))?;
@@ -132,6 +139,8 @@ fn run_git_rebuild(
         chunk_count: batch.metadata.len(),
         doc_count,
         new_commit_count: docs.len(),
+        walk_secs,
+        embed_secs,
     })
 }
 
@@ -168,6 +177,7 @@ fn run_git_incremental(
     }
 
     // Walk new commits
+    let walk_start = Instant::now();
     let total_new_commits =
         GitIndexer::estimate_commit_count(&request.repo_path, git_config, last_commit.as_deref())?;
     let pb1 = ui.progress(total_new_commits as u64, "Walking commits", request.verbose);
@@ -180,18 +190,21 @@ fn run_git_incremental(
         Some(pb1.as_ref()),
     )?;
     pb1.finish();
+    let walk_secs = walk_start.elapsed().as_secs_f64();
 
     if new_docs.is_empty() {
         return Ok(GitIndexOutcome::UpToDate);
     }
 
     let total_new_docs = new_docs.len();
+    let embed_start = Instant::now();
     let pb2 = ui.progress(total_new_docs as u64, "Embedding documents", request.verbose);
     let mut embedder = embedder_factory.create(&config.index.embedding_model)?;
 
     let indexable = GitIndexer::prepare_git_documents(&new_docs, &vec![true; new_docs.len()]);
     let batch = indexing::index_documents(&indexable, &config.index, &mut *embedder, Some(pb2.as_ref()))?;
     pb2.finish();
+    let embed_secs = embed_start.elapsed().as_secs_f64();
 
     let head_commit = GitIndexer::resolve_head_commit(&request.repo_path, &git_config.branch)?;
 
@@ -207,6 +220,8 @@ fn run_git_incremental(
         chunk_count: merged.metadata.len(),
         doc_count,
         new_commit_count: new_docs.len(),
+        walk_secs,
+        embed_secs,
     })
 }
 
@@ -234,16 +249,18 @@ pub(crate) fn run_git_index(request: GitIndexRequest, config: &Config) -> anyhow
             chunk_count,
             doc_count,
             new_commit_count,
+            walk_secs,
+            embed_secs,
         } => {
             if rebuilt {
                 println!(
-                    "Git index written: {} chunks from {} docs (walk: ...)",
-                    chunk_count, doc_count
+                    "Git index written: {} chunks from {} docs (walk: {:.1}s, embed: {:.1}s)",
+                    chunk_count, doc_count, walk_secs, embed_secs
                 );
             } else {
                 println!(
-                    "Git index updated: {} chunks from {} docs ({} new commits, ...)",
-                    chunk_count, doc_count, new_commit_count
+                    "Git index updated: {} chunks from {} docs ({} new commits, walk: {:.1}s, embed: {:.1}s)",
+                    chunk_count, doc_count, new_commit_count, walk_secs, embed_secs
                 );
             }
         }
