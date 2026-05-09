@@ -1,6 +1,5 @@
 use crate::config::GitConfig;
-use crate::support::progress::Progress;
-use chrono::{DateTime, Utc};
+use crate::support::ui::ProgressSink;
 use std::path::Path;
 
 pub(crate) fn matches_any_pattern(path: &str, patterns: &[String]) -> bool {
@@ -39,7 +38,7 @@ pub fn index_git_history(
     last_indexed_commit: Option<&str>,
     rebuild: bool,
     verbose: bool,
-    progress: Option<&Progress>,
+    progress: Option<&dyn ProgressSink>,
 ) -> anyhow::Result<Vec<crate::sources::git::extract::GitDocument>> {
     let (repo, tip_oid) = open_repo_and_branch(repo_path, &git_config.branch)?;
     let mut revwalk = repo.revwalk()?;
@@ -75,7 +74,7 @@ pub fn index_git_history(
                 summary
             );
             if let Some(p) = progress {
-                p.tick_msg(msg);
+                p.tick_msg(&msg);
             } else {
                 println!("  {msg}");
             }
@@ -97,15 +96,14 @@ pub fn index_git_history(
         )?;
 
         let author_secs = commit.time().seconds();
-        let author_date = DateTime::<Utc>::from_timestamp(author_secs, 0)
-            .map(|dt| dt.to_rfc3339())
+        let author_date = crate::support::time::unix_to_rfc3339(author_secs, 0)
             .unwrap_or_else(|| "unknown".to_string());
 
         let title = commit.summary().unwrap_or("").to_string();
 
         for (i, delta) in diff.deltas().enumerate() {
             let file_path = match delta.new_file().path() {
-                Some(p) => p.to_string_lossy().to_string(),
+                Some(p) => crate::support::fs::path_to_string(p),
                 None => continue,
             };
 

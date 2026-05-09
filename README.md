@@ -37,6 +37,7 @@ pytest -v # e2e tests in the tests/ directory
 ```
 
 - Run a single test: `cargo test test_name`
+- Coverage: `cargo llvm-cov --json --output-path target/llvm-cov/report.json`
 - Clippy: `cargo clippy -- -D warnings`
 - Format: `cargo fmt --check`
 

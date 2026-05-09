@@ -1,5 +1,7 @@
 use indicatif::{ProgressBar, ProgressStyle};
 
+use crate::support::ui::ProgressSink;
+
 pub struct Progress {
     pb: ProgressBar,
     verbose: bool,
@@ -28,7 +30,21 @@ impl Progress {
         self.pb.inc(1);
     }
 
-    pub fn finish(self) {
+    pub fn finish(&self) {
         self.pb.finish_and_clear();
+    }
+}
+
+impl ProgressSink for Progress {
+    fn tick(&self) {
+        self.tick()
+    }
+
+    fn tick_msg(&self, msg: &str) {
+        self.tick_msg(msg)
+    }
+
+    fn finish(&self) {
+        self.finish()
     }
 }

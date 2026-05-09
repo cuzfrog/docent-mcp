@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, PartialEq, Default, Clone)]
@@ -73,5 +75,11 @@ impl Default for SearchConfig {
         Self {
             same_src_score_decay: super::defaults::default_same_src_score_decay(),
         }
+    }
+}
+
+impl Config {
+    pub(crate) fn persist_path_buf(&self) -> PathBuf {
+        PathBuf::from(&self.index.persist_path)
     }
 }

@@ -49,7 +49,7 @@ pub fn merge_incremental(
     let mut all_metadata: Vec<ChunkMetadata> = Vec::new();
 
     for file in sorted_files {
-        let source_path = file.to_string_lossy().to_string();
+        let source_path = crate::support::fs::path_to_string(file);
 
         let in_unchanged = unchanged_map.contains_key(&source_path);
         let in_fresh = fresh_map.contains_key(&source_path);

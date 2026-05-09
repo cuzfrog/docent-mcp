@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 use crate::config::IndexConfig;
 use crate::documents::ChunkMetadata;
 use crate::index::schema::{StoredChunkMetadata, StoredIndex};
-use crate::index::storage::{dir_size, read_index, write_index};
+use crate::index::storage::{read_index, write_index};
+use crate::support::fs::dir_size;
 use crate::index::validate_header;
 use super::schema::build_header;
 

@@ -4,7 +4,7 @@ use crate::config::GitConfig;
 use crate::documents::ChunkMetadata;
 use crate::indexing::MergedBatch;
 use crate::sources::git::extract::GitDocument;
-use crate::support::progress::Progress;
+use crate::support::ui::ProgressSink;
 
 /// Facade for git-source indexing operations.
 ///
@@ -34,7 +34,7 @@ impl GitIndexer {
         last_indexed_commit: Option<&str>,
         rebuild: bool,
         verbose: bool,
-        progress: Option<&Progress>,
+        progress: Option<&dyn ProgressSink>,
     ) -> anyhow::Result<Vec<GitDocument>> {
         super::history::index_git_history(
             repo_path,

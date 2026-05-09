@@ -1,6 +1,5 @@
 use crate::documents::ChunkKind;
 use crate::indexing::IndexableDocument;
-use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
 use super::diff::get_file_mtime;
@@ -56,7 +55,7 @@ pub fn prepare_files(
 
     for file in files.iter() {
         let full_path = input_root.join(file);
-        let relative_path = file.to_string_lossy().to_string();
+        let relative_path = crate::support::fs::path_to_string(file);
 
         let content = match std::fs::read_to_string(&full_path) {
             Ok(c) => c,
@@ -66,7 +65,7 @@ pub fn prepare_files(
             }
         };
 
-        let source_revision = format!("{:x}", Sha256::digest(content.as_bytes()));
+        let source_revision = crate::support::fs::sha256_hex(content.as_bytes());
         let title = extract_title_from_body(&content)
             .unwrap_or_else(|| title_from_path(Path::new(&relative_path)));
         let mtime = get_file_mtime(&full_path);

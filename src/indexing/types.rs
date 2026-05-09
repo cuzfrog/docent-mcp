@@ -1,4 +1,10 @@
+use std::collections::HashSet;
+
 use crate::documents::{ChunkKind, ChunkMetadata};
+
+pub(crate) fn unique_doc_count(metadata: &[ChunkMetadata]) -> usize {
+    metadata.iter().map(|m| &m.source_path[..]).collect::<HashSet<_>>().len()
+}
 
 pub(crate) struct IndexableDocument {
     pub kind: ChunkKind,

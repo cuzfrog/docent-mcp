@@ -1,5 +1,3 @@
-use chrono::DateTime;
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -21,7 +19,7 @@ pub fn diff_files(
     let mut discovered_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for file in all_files {
-        let source_path = file.to_string_lossy().to_string();
+        let source_path = crate::support::fs::path_to_string(file);
         discovered_paths.insert(source_path.clone());
 
         let full_path = input_root.join(file);
@@ -58,8 +56,7 @@ pub fn hash_file(path: &Path) -> anyhow::Result<String> {
     let bytes = std::fs::read(path)
         .map_err(|e| anyhow::anyhow!("Failed to read file '{}': {}", path.display(), e))?;
 
-    let digest = Sha256::digest(&bytes);
-    Ok(format!("{:x}", digest))
+    Ok(crate::support::fs::sha256_hex(&bytes))
 }
 
 pub fn get_file_mtime(path: &Path) -> Option<String> {
@@ -68,7 +65,7 @@ pub fn get_file_mtime(path: &Path) -> Option<String> {
     let duration = modified.duration_since(std::time::UNIX_EPOCH).ok()?;
     let secs = duration.as_secs() as i64;
     let nanos = duration.subsec_nanos();
-    DateTime::from_timestamp(secs, nanos).map(|dt| dt.to_rfc3339())
+    crate::support::time::unix_to_rfc3339(secs, nanos)
 }
 
 #[cfg(test)]

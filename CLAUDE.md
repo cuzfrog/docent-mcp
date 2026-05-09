@@ -36,13 +36,12 @@ src/
 ├── cli.rs                 # CLI argument definitions (clap subcommands/args)
 │
 ├── app/                   # Application layer: wires CLI → workflows
-│   └── commands/
-│       ├── index.rs       #   run_index_file / run_index_git entry points
-│       └── serve.rs       #   run_serve: server bootstrap
-│
-├── workflows/             # High-level orchestration
-│   ├── file_index.rs      #   File indexing workflow (discover → extract → index)
-│   └── git_index.rs       #   Git history indexing workflow
+│   ├── commands/
+│   │   ├── index.rs       #   run_index_file / run_index_git entry points
+│   │   └── serve.rs       #   run_serve: server bootstrap
+│   └── workflows/         #   High-level orchestration (struct-based)
+│       ├── file_index.rs  #     File indexing workflow (discover → extract → index)
+│       └── git_index.rs   #     Git history indexing workflow
 │
 ├── config/                # Configuration loading, types, validation, defaults
 │
@@ -81,8 +80,10 @@ src/
 ├── ui/                    # Web UI (axum routes for static assets)
 │
 ├── support/               # Utilities
+│   ├── fs.rs              #   Filesystem helpers (path_to_string, dir_size, sha256_hex)
 │   ├── progress.rs        #   Progress bar rendering
-│   └── terminal.rs        #   Terminal I/O helpers
+│   ├── terminal.rs        #   Terminal I/O helpers
+│   └── time.rs            #   Time helpers (unix_to_rfc3339)
 │
 ├── templates/             # Default template files (e.g., docent.toml)
 │
@@ -107,6 +108,9 @@ This applies to all dependencies, including python and javascript.
 - **Naming:** Snake_case for files and functions. Types are PascalCase. Constants are UPPER_SNAKE_CASE.
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).
 - **No Dead Code** No `allow(dead_code)`. Remove unused code immediately to maintain codebase health.
+- **Module Interface at Top** Public types, contract, methods should be at the top of the files, private implementation details should be at the bottom.
+- **Favor Object Oriented Design** Favor trait-based design over procedural design.
+
 
 If any statement in this file is counter-intuitive or violate best practices, raise to me!
 Do you best to maintain code quality.

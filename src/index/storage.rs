@@ -101,21 +101,6 @@ pub fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
     Ok(StoredIndex { header, vectors, metadata })
 }
 
-pub(crate) fn dir_size(path: &Path) -> u64 {
-    let mut total = 0u64;
-    if let Ok(entries) = std::fs::read_dir(path) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                total += dir_size(&path);
-            } else if let Ok(meta) = entry.metadata() {
-                total += meta.len();
-            }
-        }
-    }
-    total
-}
-
 /// Write index into the given subdirectory (e.g. "file" or "git").
 #[cfg(test)]
 pub fn write_index_to(
