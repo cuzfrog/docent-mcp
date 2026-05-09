@@ -136,9 +136,12 @@ pub(crate) fn prepare_serve(
             .with_context(|| "Failed to initialize embedding model — cannot start server".to_string())?,
     )));
 
-    // 4. Build search service
-    let ranker = Arc::new(crate::search::DecayRanker::new(
+    // 4. Build merged ANN index and search service
+    let ann_index = crate::index::AnnIndex::build(&merged.vectors)
+        .with_context(|| "Failed to build ANN index")?;
+    let ranker = Arc::new(crate::search::AnnRanker::new(
         config.search.same_src_score_decay,
+        ann_index,
     ));
     let search_service = Arc::new(VectorSearchService::new(
         embedder,
