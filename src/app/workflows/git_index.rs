@@ -329,6 +329,7 @@ mod tests {
                 same_src_score_decay: 0.9,
             },
             git: None,
+            file: None,
         }
     }
 
@@ -352,8 +353,10 @@ mod tests {
             git: Some(GitConfig {
                 depth_limit: -1,
                 branch: branch.to_string(),
-                file_patterns: vec!["*.md".to_string()],
+                glob_patterns: vec!["*.md".to_string()],
+                enabled: true,
             }),
+            file: None,
         }
     }
 
