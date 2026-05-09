@@ -70,6 +70,16 @@ impl<'a> FileIndexWorkflow<'a> {
 
     // -- private helpers ----------------------------------------------------
 
+    fn file_glob_patterns(&self) -> Vec<String> {
+        self.config.file.as_ref().map(|f| f.glob_patterns.clone()).unwrap_or_else(|| {
+            vec!["*.md".to_string(), "*.txt".to_string()]
+        })
+    }
+
+    fn file_size_limit_mb(&self) -> u64 {
+        self.config.file.as_ref().map(|f| f.file_size_limit_mb).unwrap_or(0)
+    }
+
     fn rebuild(&self, request: &FileIndexRequest) -> anyhow::Result<FileIndexOutcome> {
         let persist_path = self.config.persist_path_buf();
         let repo = IndexRepository::new(&persist_path, SourceIndexKind::File, &self.config.index);
@@ -92,8 +102,7 @@ impl<'a> FileIndexWorkflow<'a> {
             }
         }
 
-        let default_patterns = vec!["*.md".to_string(), "*.txt".to_string()];
-        let all_files = FileIndexer::discover_files(&request.input_root, &default_patterns)?;
+        let all_files = FileIndexer::discover_files(&request.input_root, &self.file_glob_patterns())?;
         self.ui
             .info(&format!("Scanning: {} files found", all_files.len()));
 
@@ -104,7 +113,7 @@ impl<'a> FileIndexWorkflow<'a> {
             .ui
             .progress(all_files.len() as u64, "Indexing files", request.verbose);
 
-        let docs = FileIndexer::prepare_files(&all_files, &request.input_root, 0)?;
+        let docs = FileIndexer::prepare_files(&all_files, &request.input_root, self.file_size_limit_mb())?;
 
         let batch = indexing::index_documents(
             &docs,
@@ -163,8 +172,7 @@ impl<'a> FileIndexWorkflow<'a> {
             }
         };
 
-        let default_patterns = vec!["*.md".to_string(), "*.txt".to_string()];
-        let all_files = FileIndexer::discover_files(&request.input_root, &default_patterns)?;
+        let all_files = FileIndexer::discover_files(&request.input_root, &self.file_glob_patterns())?;
         let diff = FileIndexer::diff_files(&all_files, &old_hashes, &request.input_root)?;
 
         self.ui.info(&format!(
@@ -183,7 +191,7 @@ impl<'a> FileIndexWorkflow<'a> {
             "Indexing files",
             request.verbose,
         );
-        let docs = FileIndexer::prepare_files(&diff.to_index, &request.input_root, 0)?;
+        let docs = FileIndexer::prepare_files(&diff.to_index, &request.input_root, self.file_size_limit_mb())?;
 
         let batch = indexing::index_documents(
             &docs,
