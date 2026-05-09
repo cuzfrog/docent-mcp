@@ -102,13 +102,13 @@ embedding_model = "BGESmallENV15Q"
 [git]
 depth_limit = 50
 branch = "develop"
-file_patterns = ["*.rs", "*.md"]
+glob_patterns = ["*.rs", "*.md"]
 "#;
         let config: Config = toml::from_str(toml_str).unwrap();
         let git = config.git.expect("git config should be present");
         assert_eq!(git.depth_limit, 50);
         assert_eq!(git.branch, "develop");
-        assert_eq!(git.file_patterns, vec!["*.rs".to_string(), "*.md".to_string()]);
+        assert_eq!(git.glob_patterns, vec!["*.rs".to_string(), "*.md".to_string()]);
     }
 
     #[test]
