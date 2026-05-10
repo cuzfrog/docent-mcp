@@ -304,25 +304,36 @@ fn test_file_hint_boost_only_affects_total_score() {
 
     assert_eq!(results_no_hint.len(), results_hint.len());
 
-    for i in 0..results_no_hint.len() {
-        // semantic_score and bm25_score must be identical with/without hint
-        assert!(
-            (results_no_hint[i].semantic_score - results_hint[i].semantic_score).abs() < 1e-6,
-            "semantic_score must be identical with/without file_hint at index {}",
-            i
-        );
-        assert!(
-            (results_no_hint[i].bm25_score - results_hint[i].bm25_score).abs() < 1e-6,
-            "bm25_score must be identical with/without file_hint at index {}",
-            i
-        );
-
-        // total_score may differ: hinted doc gets boosted
-        if results_hint[i].source_path == "doc0.md" {
+    // Verify semantic_score and bm25_score are identical with/without file_hint
+    // by matching on source_path (not position, since rank order changes)
+    for result_hint in &results_hint {
+        let no_hint_match = results_no_hint
+            .iter()
+            .find(|r| r.source_path == result_hint.source_path);
+        if let Some(result_no_hint) = no_hint_match {
             assert!(
-                results_hint[i].total_score >= results_no_hint[i].total_score,
-                "total_score for hinted doc should be >= non-hinted version"
+                (result_no_hint.semantic_score - result_hint.semantic_score).abs() < 1e-6,
+                "semantic_score differs for {}: {} vs {}",
+                result_hint.source_path,
+                result_no_hint.semantic_score,
+                result_hint.semantic_score
             );
+            assert!(
+                (result_no_hint.bm25_score - result_hint.bm25_score).abs() < 1e-6,
+                "bm25_score differs for {}: {} vs {}",
+                result_hint.source_path,
+                result_no_hint.bm25_score,
+                result_hint.bm25_score
+            );
+
+            // total_score may differ: hinted doc gets boosted
+            if result_hint.source_path == "doc0.md" {
+                assert!(
+                    result_hint.total_score >= result_no_hint.total_score,
+                    "total_score for hinted doc {} should be >= non-hinted version",
+                    result_hint.source_path
+                );
+            }
         }
     }
 
