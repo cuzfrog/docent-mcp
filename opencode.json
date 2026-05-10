@@ -18,5 +18,12 @@
     "build": {
       "temperature": 0.1
     }
+  },
+  "mcp": {
+    "windows-shutdown": {
+      "type": "remote",
+      "url": "http://192.168.1.6:18000/sse",
+      "enabled": true
+    }
   }
 }
