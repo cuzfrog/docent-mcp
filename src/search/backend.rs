@@ -9,7 +9,7 @@ use crate::index::VectorStore;
 
 /// A backend that produces one `f32` score per chunk for a given query string.
 /// The output vector has length equal to the number of chunks in the index.
-pub(crate) trait ScoreBackend: Send + Sync {
+pub trait ScoreBackend: Send + Sync {
     fn score(&self, query: &str) -> anyhow::Result<Vec<f32>>;
 }
 
@@ -17,13 +17,13 @@ pub(crate) trait ScoreBackend: Send + Sync {
 // VectorScoreBackend — cosine similarity against dense embeddings
 // ---------------------------------------------------------------------------
 
-pub(crate) struct VectorScoreBackend {
+pub struct VectorScoreBackend {
     embedder: Arc<Mutex<dyn EmbeddingService>>,
     vectors: Arc<VectorStore>,
 }
 
 impl VectorScoreBackend {
-    pub(crate) fn new(
+    pub fn new(
         embedder: Arc<Mutex<dyn EmbeddingService>>,
         vectors: Arc<VectorStore>,
     ) -> Self {

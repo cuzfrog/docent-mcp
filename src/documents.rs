@@ -9,7 +9,7 @@ use std::sync::Arc;
 /// Kind of source document for a chunk.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum ChunkKind {
+pub enum ChunkKind {
     File,
     Git,
 }
@@ -17,7 +17,7 @@ pub(crate) enum ChunkKind {
 /// Shared document-level context shared across all chunks of the same document.
 /// Uses `Arc<str>` so that cloning is cheap (ref-count increment only).
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct DocumentContext {
+pub struct DocumentContext {
     pub source_path: Arc<str>,
     pub source_revision: Arc<str>,
     pub title: Arc<str>,
@@ -39,7 +39,7 @@ impl Default for DocumentContext {
 
 /// Per-chunk source provenance for runtime use.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub(crate) struct ChunkMetadata {
+pub struct ChunkMetadata {
     /// Shared document-level context.
     #[serde(skip)]
     pub doc_ctx: DocumentContext,

@@ -11,7 +11,7 @@ use crate::chunking::TokenCounter;
 
 /// Abstraction over text embedding that can be backed by either a real model
 /// or a deterministic fake for tests.
-pub(crate) trait EmbeddingService: Send {
+pub trait EmbeddingService: Send {
     /// Embed a batch of texts. Returns one vector per input text.
     fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>>;
 

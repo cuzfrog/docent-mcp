@@ -7,7 +7,7 @@ mod repository;
 mod sub_index;
 
 #[derive(Clone, Copy)]
-pub(crate) enum SourceIndexKind {
+pub enum SourceIndexKind {
     File,
     Git,
 }
@@ -25,4 +25,5 @@ impl SourceIndexKind {
 pub(crate) use bm25_storage::read_bm25_index;
 pub(crate) use repository::{IndexRepository, IndexSizeInfo, MergedIndex};
 pub(crate) use validation::validate_header;
-pub(crate) use schema::{IndexHeader, VectorStore, SCHEMA_VERSION};
+pub use schema::{IndexHeader, StoredChunkKind, StoredChunkMetadata, StoredIndex, VectorStore, SCHEMA_VERSION};
+pub use storage::{read_index, write_index};

@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 const BATCH_SIZE: usize = 64;
 
-pub(crate) fn index_documents(
+pub fn index_documents(
     docs: &[IndexableDocument],
     config: &IndexConfig,
     embedder: &mut dyn EmbeddingService,

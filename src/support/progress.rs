@@ -4,7 +4,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 // ProgressSink — abstract progress reporting (no concrete UI dependency)
 // ---------------------------------------------------------------------------
 
-pub(crate) trait ProgressSink: Send {
+pub trait ProgressSink: Send {
     fn tick(&self);
     fn tick_n(&self, n: u64) {
         for _ in 0..n {
