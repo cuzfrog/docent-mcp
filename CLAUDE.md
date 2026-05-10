@@ -23,7 +23,7 @@ After major changes, run e2e tests by:
 ### Task Planning
 Tasks reside in `.lissom/tasks/<task_id>/Specs.md`. The user may ask for a spec refinement and subsequent implementation. Use Tool `question`/`AskUserQuestion` to interview the user if you have any questions or assumptions. The implementation should be done in a feature branch named `<task_id>_<short-description>`, e.g., `IMPL-2_config-loader` (the user may have already created it). After the task is complete, create a PR.
 
-### Implementation Hooks
+### Implementation Checklist
 - When MCP schema changes, update Web UI accordingly.
 - When files/dirs are updated, verify and keep below `Architecture` section in sync.
 
@@ -33,77 +33,70 @@ Tasks reside in `.lissom/tasks/<task_id>/Specs.md`. The user may ask for a spec 
 src/
 ├── main.rs               # Binary entry: parses CLI, dispatches to app commands
 ├── lib.rs                 # Crate root: declares modules, controls visibility
-├── cli.rs                 # CLI argument definitions (clap subcommands/args)
 │
-├── app/                   # Application layer: wires CLI → workflows
-│   ├── commands/
-│   │   ├── init.rs        #   run_init: config file generation & merge
-│   │   ├── index.rs       #   run_index / run_index_file / run_index_git entry points
-│   │   ├── list_models.rs #   list_models command
-│   │   └── serve.rs       #   run_serve: server bootstrap
-│   ├── serve/             #   Server preflight, search-service builder
-│   │   ├── mod.rs
-│   │   ├── builder.rs     #   build_embedder, build_hybrid_search_service
-│   │   └── preflight.rs   #   check_index_size, load_merged_index
-│   └── workflows/         #   High-level orchestration (struct-based)
-│       ├── file_index.rs  #     File indexing workflow (discover → extract → index)
-│       └── git_index.rs   #     Git history indexing workflow
+├── app/                   # Application layer + serve + index workflows
+│   ├── mod.rs             #   Application struct (orchestrates, resolves Config slices)
+│   ├── init.rs            #   Config file generation & TOML merge
+│   ├── index/             #   Indexing workflows (file + git)
+│   │   ├── mod.rs, runner.rs
+│   │   ├── file/          #     File indexing: discover, extract, diff, merge
+│   │   │   ├── mod.rs     #       FileIndexer trait + create_file_indexer() factory (FileIndexerImpl is pub(crate))
+│   │   │   ├── rebuild.rs, incremental.rs
+│   │   │   ├── discover.rs, extract.rs, diff.rs, merge.rs
+│   │   ├── git/           #     Git indexing: history, estimate, freshness
+│   │   │   ├── mod.rs     #       GitIndexer trait + create_git_indexer() factory (GitIndexerImpl is pub(crate))
+│   │   │   ├── rebuild.rs, incremental.rs, size_check.rs
+│   │   │   ├── extract.rs, history.rs, freshness.rs, estimate.rs, merge.rs
+│   │   ├── chunking/      #     Text splitting into embedding-sized chunks
+│   │   │   ├── engine.rs, sectioning.rs, counter.rs
+│   │   └── pipeline/      #     Indexing pipeline: types + engine
+│   │       ├── types.rs, engine.rs
+│   ├── serve/             #   HTTP server
+│       ├── mod.rs         #     ServeIndexAccess trait (pub(crate), internal to serve)
+│       ├── server.rs      #     Server trait + TokioHttpServer + create_server() factory + prepare_router
+│       ├── service_builder.rs
+│       └── bootstrap.rs   #     shutdown_signal
 │
 ├── config/                # Configuration loading, types, validation, defaults
 │
-├── sources/               # Document extraction from raw sources
-│   ├── file/              #   File-system: discover, extract, diff, merge, index
-│   └── git/               #   Git repos: extract, history, freshness, estimate, merge, index
-│
-├── documents.rs           # Common runtime types (ChunkMetadata, ChunkKind)
-│
-├── chunking/              # Text splitting into embedding-sized chunks
-│   ├── engine.rs          #   Core chunking algorithm
-│   ├── sectioning.rs      #   Section-aware heading splitter
-│   └── counter.rs         #   Token counters (HuggingFace, whitespace)
-│
-├── embedder.rs            # EmbeddingService trait + fastembed wrapper
-│
-├── indexing/              # Indexing pipeline: extract → chunk → embed → store
-│   ├── types.rs           #   Pipeline types
-│   └── pipeline.rs        #   Orchestration logic
+├── domain/                # Core domain types
+│   └── documents.rs       #   ChunkMetadata, ChunkKind, DocumentContext
 │
 ├── index/                 # Persistent index storage & retrieval
-│   ├── schema.rs          #   On-disk index header/schema, VectorStore
-│   ├── storage.rs         #   Vector storage (read/write)
-│   ├── repository.rs      #   IndexRepository + MergedIndex
-│   ├── sub_index.rs       #   SubIndex: per-source index load/store/repair
-│   ├── validation.rs      #   Index integrity checks
-│   ├── bm25_schema.rs     #   BM25 sub-index header types
-│   └── bm25_storage.rs    #   BM25 sub-index read/write
+│   ├── header.rs, storage.rs, vector_store.rs, stored_metadata.rs
+│   ├── repository.rs, sub_index.rs, merger.rs
+│   ├── bm25_schema.rs, bm25_storage.rs
+│   └── embedder.rs        #   Embedder trait + FastembedEmbedder + create_embedder
 │
-├── search/                # Hybrid (semantic + BM25) search
-│   ├── types.rs           #   SearchResult with three scores
-│   ├── backend.rs         #   ScoreBackend trait + VectorScoreBackend + Bm25ScoreBackend
-│   ├── fusion.rs          #   ScoreFusion strategies (RRF, weighted sum, comb)
-│   ├── orchestrator.rs    #   HybridSearchService: score → fuse → rank
-│   └── ranking.rs         #   DecayRanker: file_hint boost + same-source decay
-│
-├── interfaces/            # External protocol adapters
-│   ├── mcp.rs             #   MCP server (DocentMcpServer, tool handlers)
-│   └── search_tool.rs     #   Search tool parameter validation & execution
+├── mcp/                   # MCP protocol + hybrid search engine
+│   ├── mod.rs, mcp_handler.rs, search_tool.rs
+│   └── search/            #   Hybrid (semantic + BM25) search
+│       ├── types.rs, backend.rs, fusion.rs
+│       ├── orchestrator.rs, ranking.rs, builder.rs
 │
 ├── ui/                    # Web UI (axum routes for static assets)
 │
 ├── support/               # Utilities
-│   ├── fs.rs              #   Filesystem helpers (path_to_string, dir_size, sha256_hex)
-│   ├── progress.rs        #   Progress bar rendering & ProgressSink trait
-│   ├── time.rs            #   Time helpers (unix_to_rfc3339)
-│   └── ui.rs              #   Abstract UI interfaces (WorkflowUi)
+│   ├── progress.rs        #   ProgressSink trait (pub) + Progress struct (pub(crate))
+│   ├── ui.rs              #   Console trait + Terminal + create_console
+│   ├── fs.rs, glob.rs, time.rs
 │
 ├── templates/             # Default template files (e.g., docent.toml)
 │
 └── tests/                 # Integration-style tests (compiled as crate unit tests)
 ```
 
-**Data flow (index):** `sources/*/` extract documents/git-history → `chunking/` splits into chunks → `embedder.rs` embeds vectors → `indexing/pipeline.rs` coordinates → `index/storage.rs` persists
+**Data flow (index):** `main.rs` → `Application::run_index()` resolves `&IndexConfig`, `&FileConfig`/`&GitConfig`, and BM25 params → `app/index/{file,git}/` extract documents → `app/index/chunking/` splits into chunks → `index/embedder.rs` creates embedder via `create_embedder()` → `app/index/pipeline/engine.rs` coordinates → `index/storage.rs` persists
 
-**Data flow (search):** `interfaces/mcp.rs` receives query → `search/orchestrator.rs` scores (semantic + BM25) → `search/fusion.rs` fuses → `search/ranking.rs` ranks with decay + file_hint → response
+**Data flow (search):** `mcp/mcp_handler.rs` receives query → `mcp/search/orchestrator.rs` scores (semantic + BM25) → `mcp/search/fusion.rs` fuses → `mcp/search/ranking.rs` ranks with decay + file_hint → response
+
+### Boundary rules (post IMPROVE-09/13)
+
+- **Composition root** lives in `main.rs`. It only calls factory functions (`create_file_indexer`, `create_git_indexer`, `create_server`, `create_console`), never concrete struct constructors.
+- **`Application`** orchestrates and resolves `Config` slices, but does not construct dependencies (no `impl Default`).
+- **Leaf modules** (`file`, `git`) receive only the config slices they need, never the root `Config`.
+- **Visibility**: concrete impl structs (`FileIndexerImpl`, `GitIndexerImpl`, `Progress`) are `pub(crate)` or private; public surface consists of traits, request/response types, and factory functions.
+- **Config resolution** happens in `Application` before calling indexers, never in the leaf modules themselves.
 
 ## Dependencies
 
@@ -119,8 +112,9 @@ This applies to all dependencies, including python and javascript.
 - **Naming:** Snake_case for files and functions. Types are PascalCase. Constants are UPPER_SNAKE_CASE. Variable naming should be specific to carry their function. E.g. `token_counter` should not be `counter`, which can be confusing.
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).
 - **No Dead Code** No `allow(dead_code)`. Remove unused code immediately to maintain codebase health.
-- **Module Interface at Top** Public types, contract, methods should be at the top of the files, private implementation details should be at the bottom.
+- **Module Interface at Top** Public types, contract, methods should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers.
 - **Favor Object Oriented Design** Favor trait-based design over procedural design.
+- **Use imports** Avoid long module path in the code. E.g. `crate::app::index::xxxx::bbbb::new`
 
 
 If any statement in this file is counter-intuitive or violate best practices, raise to me!

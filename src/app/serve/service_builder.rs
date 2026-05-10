@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex};
 
 use crate::config::SearchConfig;
-use crate::embedder::{EmbedderFactory, EmbeddingService};
+use crate::index::embedder::{Embedder, create_embedder};
 use crate::index::MergedIndex;
-use crate::search::{
+use crate::mcp::search::{
     build_bm25_backend, create_fusion, builder::HybridSearchServiceBuilder, DecayRanker,
     HybridSearchService, ScoreBackend, VectorScoreBackend, ZeroScoreBackend,
 };
@@ -13,11 +13,9 @@ pub(crate) struct HybridServiceBuilder;
 impl HybridServiceBuilder {
     pub(crate) fn build_embedder(
         &self,
-        embedder_factory: &dyn EmbedderFactory,
         embedding_model: &str,
-    ) -> anyhow::Result<Arc<Mutex<dyn EmbeddingService>>> {
-        let inner = embedder_factory
-            .create(embedding_model)
+    ) -> anyhow::Result<Arc<Mutex<dyn Embedder>>> {
+        let inner = create_embedder(embedding_model)
             .map_err(|e| anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e))?;
 
         // TODO: The single Arc<Mutex<...>> serializes all search requests on the
@@ -29,7 +27,7 @@ impl HybridServiceBuilder {
     pub(crate) fn build(
         &self,
         merged: MergedIndex,
-        embedder: Arc<Mutex<dyn EmbeddingService>>,
+        embedder: Arc<Mutex<dyn Embedder>>,
         search_config: &SearchConfig,
     ) -> anyhow::Result<HybridSearchService> {
         let vector_store = Arc::new(merged.vectors);
@@ -78,39 +76,35 @@ impl HybridServiceBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
-    use crate::documents::{ChunkKind, ChunkMetadata, DocumentContext};
+    use crate::config::{SearchConfig, FusionConfig, RankingConfig, Bm25Config};
+    use crate::domain::{ChunkKind, ChunkMetadata, DocumentContext};
     use crate::index::MergedIndex;
     use crate::index::VectorStore;
-    use crate::search::SearchService;
+    use crate::mcp::search::SearchService;
     use crate::tests::fixtures::FakeEmbedder;
 
-    struct FakeEmbedderFactory;
-
-    impl EmbedderFactory for FakeEmbedderFactory {
-        fn create(&self, _model: &str) -> anyhow::Result<Box<dyn EmbeddingService>> {
-            Ok(Box::new(FakeEmbedder::new()))
+    fn default_search_config() -> SearchConfig {
+        SearchConfig {
+            ranking: RankingConfig {
+                same_src_score_decay: 0.9,
+                file_hint_boost: 1.5,
+            },
+            fusion: FusionConfig {
+                strategy: "rrf".to_string(),
+                rrf_k: 60.0,
+                semantic_weight: 0.7,
+            },
+            bm25: Bm25Config {
+                k1: 1.2,
+                b: 0.75,
+            },
         }
-    }
-
-    #[test]
-    fn test_build_embedder_ok() {
-        let factory = FakeEmbedderFactory;
-        let builder = HybridServiceBuilder;
-        let result = builder.build_embedder(&factory, "test-model");
-        assert!(result.is_ok());
     }
 
     #[test]
     fn test_build_embedder_error() {
-        struct FailingFactory;
-        impl EmbedderFactory for FailingFactory {
-            fn create(&self, _model: &str) -> anyhow::Result<Box<dyn EmbeddingService>> {
-                Err(anyhow::anyhow!("factory error"))
-            }
-        }
         let builder = HybridServiceBuilder;
-        let result = builder.build_embedder(&FailingFactory, "bad-model");
+        let result = builder.build_embedder("nonexistent/model");
         assert!(result.is_err());
         let err = result.err().unwrap();
         assert!(
@@ -129,14 +123,14 @@ mod tests {
             bm25_header: None,
             built_at: "now".to_string(),
         };
-        let embedder: Arc<Mutex<dyn EmbeddingService>> =
+        let embedder: Arc<Mutex<dyn Embedder>> =
             Arc::new(Mutex::new(FakeEmbedder::new()));
-        let config = Config::default();
+        let search_config = default_search_config();
         let builder = HybridServiceBuilder;
         let result = builder.build(
             merged,
             embedder,
-            &config.search,
+            &search_config,
         );
         assert!(result.is_ok());
     }
@@ -187,15 +181,15 @@ mod tests {
             built_at: "now".to_string(),
         };
 
-        let embedder: Arc<Mutex<dyn EmbeddingService>> =
+        let embedder: Arc<Mutex<dyn Embedder>> =
             Arc::new(Mutex::new(FakeEmbedder::new()));
-        let config = Config::default();
+        let search_config = default_search_config();
         let builder = HybridServiceBuilder;
 
         let search_service = builder.build(
             merged,
             embedder,
-            &config.search,
+            &search_config,
         )?;
 
         let results = search_service.search("apples", 5, "").await?;

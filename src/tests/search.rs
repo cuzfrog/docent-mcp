@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use crate::documents::{ChunkKind, ChunkMetadata, DocumentContext};
-use crate::search::{
+use crate::domain::{ChunkKind, ChunkMetadata, DocumentContext};
+use crate::mcp::search::{
     builder::HybridSearchServiceBuilder, create_fusion, DecayRanker, HybridSearchService,
     ScoreBackend, SearchService,
 };
@@ -175,7 +175,7 @@ fn test_search_empty_index_returns_empty() {
 #[test]
 fn test_search_service_trait_dispatch() {
     use std::sync::Arc;
-    use crate::search::SearchService;
+    use crate::mcp::search::SearchService;
 
     let svc = build_hybrid_service(vec![0.9], vec![0.1], &["test"]);
     let trait_obj: Arc<dyn SearchService> = Arc::new(svc);

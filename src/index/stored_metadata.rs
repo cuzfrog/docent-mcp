@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::documents::{ChunkKind, ChunkMetadata, DocumentContext};
+use crate::domain::{ChunkKind, ChunkMetadata, DocumentContext};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

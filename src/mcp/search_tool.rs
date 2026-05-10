@@ -1,0 +1,94 @@
+use std::sync::Arc;
+
+use crate::mcp::search::SearchService;
+
+#[derive(Clone)]
+pub(crate) struct SearchExecutor {
+    service: Arc<dyn SearchService>,
+}
+
+impl SearchExecutor {
+    pub fn new(service: Arc<dyn SearchService>) -> Self {
+        Self { service }
+    }
+
+    pub fn validate(query: &str, limit: u8) -> Result<(), rmcp::ErrorData> {
+        if query.trim().is_empty() {
+            return Err(rmcp::ErrorData::invalid_params(
+                "query is required",
+                Some(serde_json::json!({"field": "query", "reason": "required"})),
+            ));
+        }
+        if !(1..=10).contains(&limit) {
+            return Err(rmcp::ErrorData::invalid_params(
+                "limit must be between 1 and 10",
+                Some(serde_json::json!({"field": "limit", "reason": "must be between 1 and 10"})),
+            ));
+        }
+        Ok(())
+    }
+
+    pub async fn execute(
+        &self,
+        query: &str,
+        limit: u8,
+        file_hint: &str,
+    ) -> Result<String, rmcp::ErrorData> {
+        Self::validate(query, limit)?;
+
+        let results = self.service
+            .search(query, limit as usize, file_hint)
+            .await
+            .map_err(|e| {
+                rmcp::ErrorData::new(
+                    rmcp::model::ErrorCode::INTERNAL_ERROR,
+                    format!("Search failed: {}", e),
+                    Some(serde_json::json!({"reason": format!("Search failed: {}", e)})),
+                )
+            })?;
+
+        serde_json::to_string(&results).map_err(|e| {
+            rmcp::ErrorData::new(
+                rmcp::model::ErrorCode::INTERNAL_ERROR,
+                format!("Failed to serialize results: {}", e),
+                Some(serde_json::json!({"reason": format!("Failed to serialize results: {}", e)})),
+            )
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_empty_query() {
+        let err = SearchExecutor::validate("", 5).unwrap_err();
+        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn test_validate_blank_query() {
+        let err = SearchExecutor::validate("   ", 5).unwrap_err();
+        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn test_validate_limit_too_low() {
+        let err = SearchExecutor::validate("hello", 0).unwrap_err();
+        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn test_validate_limit_too_high() {
+        let err = SearchExecutor::validate("hello", 11).unwrap_err();
+        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn test_validate_limit_ok() {
+        assert!(SearchExecutor::validate("hello", 1).is_ok());
+        assert!(SearchExecutor::validate("hello", 5).is_ok());
+        assert!(SearchExecutor::validate("hello", 10).is_ok());
+    }
+}

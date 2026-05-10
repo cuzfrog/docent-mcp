@@ -2,24 +2,22 @@ use crate::support::progress::Progress;
 use crate::support::progress::ProgressSink;
 use std::io::Write;
 
-// ---------------------------------------------------------------------------
-// WorkflowUi — abstract user-interaction interface for workflows
-// ---------------------------------------------------------------------------
-
-pub(crate) trait WorkflowUi: Send + Sync {
+pub trait Console: Send + Sync {
     fn info(&self, msg: &str);
     fn warn(&self, msg: &str);
     fn confirm(&self, prompt: &str) -> anyhow::Result<bool>;
-    fn progress(&self, total: u64, label: &str, verbose: bool) -> Box<dyn ProgressSink>;
+    fn progress(&self, total: u64, label: &str) -> Box<dyn ProgressSink>;
 }
 
-// ---------------------------------------------------------------------------
-// ConsoleUi — production implementation that delegates to terminal/progress
-// ---------------------------------------------------------------------------
+pub fn create_console(verbose: bool) -> impl Console {
+    Terminal { verbose }
+}
 
-pub(crate) struct ConsoleUi;
+struct Terminal {
+    verbose: bool,
+}
 
-impl WorkflowUi for ConsoleUi {
+impl Console for Terminal {
     fn info(&self, msg: &str) {
         println!("{}", msg);
     }
@@ -32,15 +30,11 @@ impl WorkflowUi for ConsoleUi {
         confirm(prompt)
     }
 
-    fn progress(&self, total: u64, label: &str, verbose: bool) -> Box<dyn ProgressSink> {
-        Box::new(Progress::new(total, label, verbose))
+    fn progress(&self, total: u64, label: &str) -> Box<dyn ProgressSink> {
+        Box::new(Progress::new(total, label, self.verbose))
     }
 }
 
-/// Prompt the user for a yes/no confirmation.
-///
-/// Prints `prompt` to stderr, reads a line from stdin, and returns
-/// `true` only if the user typed `y` or `Y`.
 fn confirm(prompt: &str) -> anyhow::Result<bool> {
     eprint!("{} (y/N) ", prompt);
     std::io::stderr().flush()?;
