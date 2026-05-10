@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 
-use super::schema::build_header;
 use crate::config::IndexConfig;
 use crate::documents::ChunkMetadata;
 use crate::index::bm25_schema::Bm25IndexHeader;
-use crate::index::schema::VectorStore;
+use crate::index::header::IndexHeader;
+use crate::index::merger::IndexMerger;
 use crate::index::sub_index::SubIndex;
-use crate::index::validate_header;
+use crate::index::vector_store::VectorStore;
 use crate::index::SourceIndexKind;
 use crate::indexing::IndexedBatch;
 use crate::support::fs::dir_size;
@@ -51,7 +51,7 @@ impl IndexRepository {
         doc_count: usize,
         last_indexed_commit: Option<String>,
     ) -> anyhow::Result<()> {
-        let header = build_header(
+        let header = IndexHeader::from_config(
             &self.config,
             embedding_dims,
             &batch.metadata,
@@ -61,117 +61,67 @@ impl IndexRepository {
         SubIndex::store(&self.persist_path, kind, &header, batch, doc_count, last_indexed_commit)
     }
 
-    pub(crate) fn load_merged(&self, k1: f32, b: f32) -> anyhow::Result<LoadMergedResult> {
-        let file_exists = self.exists(SourceIndexKind::File);
-        let git_exists = self.exists(SourceIndexKind::Git);
+    fn load_and_repair_sub_index(
+        &self,
+        kind: SourceIndexKind,
+        k1: f32,
+        b: f32,
+        notices: &mut Vec<String>,
+    ) -> anyhow::Result<Option<SubIndex>> {
+        if !self.exists(kind) {
+            return Ok(None);
+        }
+        let mut sub = SubIndex::load(&self.persist_path, kind)?;
+        let other_kind = match kind {
+            SourceIndexKind::File => SourceIndexKind::Git,
+            SourceIndexKind::Git => SourceIndexKind::File,
+        };
+        if !self.exists(other_kind) {
+            sub.header.validate_against(&self.config)?;
+        }
+        if sub.bm25.is_none() && !sub.metadata.is_empty() {
+            let notice = sub.rebuild_bm25(&self.persist_path, kind, k1, b)?;
+            notices.push(notice);
+            sub = SubIndex::load(&self.persist_path, kind)?;
+        }
+        Ok(Some(sub))
+    }
 
-        if !file_exists && !git_exists {
+    pub(crate) fn load_merged(&self, k1: f32, b: f32) -> anyhow::Result<LoadMergedResult> {
+        let mut notices = Vec::new();
+        let file = self.load_and_repair_sub_index(SourceIndexKind::File, k1, b, &mut notices)?;
+        let git = self.load_and_repair_sub_index(SourceIndexKind::Git, k1, b, &mut notices)?;
+
+        if file.is_none() && git.is_none() {
             anyhow::bail!(
                 "No index found at '{}'. Run 'docent index-file' or 'docent index-git' first.",
                 self.persist_path.display()
             );
         }
 
-        let mut notices: Vec<String> = Vec::new();
 
-        let file_index = if file_exists {
-            let mut sub = SubIndex::load(&self.persist_path, SourceIndexKind::File)?;
-            validate_header(&sub.header, &self.config)?;
-            if sub.bm25.is_none() && !sub.metadata.is_empty() {
-                let notice = sub.rebuild_bm25(&self.persist_path, SourceIndexKind::File, k1, b)?;
-                notices.push(notice);
-                sub = SubIndex::load(&self.persist_path, SourceIndexKind::File)?;
+
+        if let (Some(ref f), Some(ref g)) = (&file, &git) {
+            if f.header.embedding_model != g.header.embedding_model {
+                anyhow::bail!(
+                    "embedding_model mismatch between file/ and git/ subdirs: '{}' vs '{}'",
+                    f.header.embedding_model,
+                    g.header.embedding_model
+                );
             }
-            Some(sub)
-        } else {
-            None
-        };
-
-        let git_index = if git_exists {
-            let mut sub = SubIndex::load(&self.persist_path, SourceIndexKind::Git)?;
-            if let Some(ref fh) = file_index {
-                if sub.header.embedding_model != fh.header.embedding_model {
-                    anyhow::bail!(
-                        "embedding_model mismatch between file/ and git/ subdirs: '{}' vs '{}'",
-                        sub.header.embedding_model,
-                        fh.header.embedding_model
-                    );
-                }
-                if sub.header.embedding_dims != fh.header.embedding_dims {
-                    anyhow::bail!(
-                        "embedding_dims mismatch between file/ and git/ subdirs: {} vs {}",
-                        sub.header.embedding_dims,
-                        fh.header.embedding_dims
-                    );
-                }
-            } else {
-                validate_header(&sub.header, &self.config)?;
+            if f.header.embedding_dims != g.header.embedding_dims {
+                anyhow::bail!(
+                    "embedding_dims mismatch between file/ and git/ subdirs: {} vs {}",
+                    f.header.embedding_dims,
+                    g.header.embedding_dims
+                );
             }
-            if sub.bm25.is_none() && !sub.metadata.is_empty() {
-                let notice = sub.rebuild_bm25(&self.persist_path, SourceIndexKind::Git, k1, b)?;
-                notices.push(notice);
-                sub = SubIndex::load(&self.persist_path, SourceIndexKind::Git)?;
-            }
-            Some(sub)
-        } else {
-            None
-        };
+        } else if let Some(s) = file.as_ref().or(git.as_ref()) {
+            s.header.validate_against(&self.config)?;
+        }
 
-        let file_vectors: Option<&VectorStore> = file_index.as_ref().map(|s| &s.vectors);
-        let git_vectors: Option<&VectorStore> = git_index.as_ref().map(|s| &s.vectors);
-        let all_vectors = VectorStore::concat(
-            file_vectors.unwrap_or(&VectorStore::from_vec_vec(vec![]).unwrap()),
-            git_vectors.unwrap_or(&VectorStore::from_vec_vec(vec![]).unwrap()),
-        )?;
-
-        let all_metadata: Vec<ChunkMetadata> = file_index
-            .as_ref()
-            .map(|s| s.metadata.clone())
-            .unwrap_or_default()
-            .into_iter()
-            .chain(
-                git_index
-                    .as_ref()
-                    .map(|s| s.metadata.clone())
-                    .unwrap_or_default(),
-            )
-            .collect();
-
-        let file_bm25 = file_index.as_ref().and_then(|s| s.bm25.as_ref());
-        let git_bm25 = git_index.as_ref().and_then(|s| s.bm25.as_ref());
-
-        let (bm25_embeddings, bm25_header) = match (file_bm25, git_bm25) {
-            (Some(f), Some(g)) => {
-                let mut combined = f.embeddings.clone();
-                combined.extend(g.embeddings.clone());
-                let header = if g.header.chunk_count > f.header.chunk_count {
-                    g.header.clone()
-                } else {
-                    f.header.clone()
-                };
-                (Some(combined), Some(header))
-            }
-            (Some(f), None) => (Some(f.embeddings.clone()), Some(f.header.clone())),
-            (None, Some(g)) => (Some(g.embeddings.clone()), Some(g.header.clone())),
-            (None, None) => (None, None),
-        };
-
-        let built_at = file_index
-            .as_ref()
-            .or(git_index.as_ref())
-            .map(|s| s.header.built_at.clone())
-            .unwrap_or_default();
-
-        Ok(LoadMergedResult {
-            merged: MergedIndex {
-                vectors: all_vectors,
-                metadata: all_metadata,
-                bm25_embeddings,
-                bm25_header,
-                built_at,
-            },
-            notices,
-        })
+        let merged = IndexMerger::merge(file, git)?;
+        Ok(LoadMergedResult { merged, notices })
     }
 
     pub(crate) fn check_size(&self, max_size_mb: u64) -> anyhow::Result<Option<IndexSizeInfo>> {

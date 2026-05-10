@@ -1,8 +1,7 @@
 use std::path::Path;
 
-use crate::app::commands::serve::{
-    prepare_serve, RealServeIndexAccess, ServeIndexAccess,
-};
+use crate::app::application::Application;
+use crate::app::serve::{RealServeIndexAccess, ServeIndexAccess};
 use crate::config::{Config, IndexConfig};
 use crate::embedder::{EmbedderFactory, EmbeddingService};
 use crate::index::VectorStore;
@@ -135,11 +134,12 @@ fn oversized_index_aborts_when_not_confirmed() {
     let persist = make_temp_dir("serve_oversized_abort");
     let config = serve_config(&persist);
 
-    let ui = RecordingUi::never_confirm();
-    let factory = FakeEmbedderFactory;
-    let index_access = FakeServeIndexAccess::new().with_oversized();
+    let app = Application::new()
+        .with_ui(Box::new(RecordingUi::never_confirm()))
+        .with_embedder_factory(Box::new(FakeEmbedderFactory))
+        .with_index_access(Box::new(FakeServeIndexAccess::new().with_oversized()));
 
-    let result = prepare_serve(&config, &ui, &factory, &index_access);
+    let result = app.prepare_serve(&config);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("Aborted"), "Expected abort error, got: {}", err);
@@ -150,18 +150,17 @@ fn oversized_index_aborts_when_not_confirmed() {
 #[test]
 fn oversized_index_continues_when_confirmed() {
     let persist = make_temp_dir("serve_oversized_continue");
-    // Create minimal actual index to make load_merged succeed
     create_minimal_file_index(&persist);
     let config = serve_config(&persist);
-    // Lower max_size_mb so the check triggers
     let mut oversized_config = config.clone();
     oversized_config.index.max_size_mb = 1;
 
-    let ui = RecordingUi::always_confirm();
-    let factory = FakeEmbedderFactory;
-    let index_access = RealServeIndexAccess;
+    let app = Application::new()
+        .with_ui(Box::new(RecordingUi::always_confirm()))
+        .with_embedder_factory(Box::new(FakeEmbedderFactory))
+        .with_index_access(Box::new(RealServeIndexAccess));
 
-    let result = prepare_serve(&oversized_config, &ui, &factory, &index_access);
+    let result = app.prepare_serve(&oversized_config);
     assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
 
     let _ = std::fs::remove_dir_all(&persist);
@@ -172,21 +171,20 @@ fn merged_index_loading_error_propagates() {
     let persist = make_temp_dir("serve_merge_error");
     let config = serve_config(&persist);
 
-    let ui = RecordingUi::always_confirm();
-    let factory = FakeEmbedderFactory;
-    let index_access = FakeServeIndexAccess::new().with_load_error();
+    let app = Application::new()
+        .with_ui(Box::new(RecordingUi::always_confirm()))
+        .with_embedder_factory(Box::new(FakeEmbedderFactory))
+        .with_index_access(Box::new(FakeServeIndexAccess::new().with_load_error()));
 
-    let result = prepare_serve(&config, &ui, &factory, &index_access);
+    let result = app.prepare_serve(&config);
     assert!(result.is_err());
     let err = result.unwrap_err();
     let display = err.to_string();
-    // The context message wraps the root error
     assert!(
         display.contains("Failed to load merged index"),
         "Expected context message about loading, got: {}",
         display
     );
-    // The root cause is in the chain
     let cause_found = err.chain().any(|e| e.to_string().contains("mock load error"));
     assert!(
         cause_found,
@@ -202,11 +200,12 @@ fn embedder_init_error_propagates() {
     let persist = make_temp_dir("serve_embedder_error");
     let config = serve_config(&persist);
 
-    let ui = RecordingUi::always_confirm();
-    let factory = FailingEmbedderFactory;
-    let index_access = FakeServeIndexAccess::new();
+    let app = Application::new()
+        .with_ui(Box::new(RecordingUi::always_confirm()))
+        .with_embedder_factory(Box::new(FailingEmbedderFactory))
+        .with_index_access(Box::new(FakeServeIndexAccess::new()));
 
-    let result = prepare_serve(&config, &ui, &factory, &index_access);
+    let result = app.prepare_serve(&config);
     assert!(result.is_err());
     let err = result.unwrap_err();
     let display = err.to_string();
@@ -231,16 +230,19 @@ fn bootstrap_succeeds_with_fake_dependencies() {
     create_minimal_file_index(&persist);
     let config = serve_config(&persist);
 
-    let ui = RecordingUi::always_confirm();
-    let factory = FakeEmbedderFactory;
-    let index_access = RealServeIndexAccess;
+    let app = Application::new()
+        .with_ui(Box::new(RecordingUi::always_confirm()))
+        .with_embedder_factory(Box::new(FakeEmbedderFactory))
+        .with_index_access(Box::new(RealServeIndexAccess));
 
-    let result = prepare_serve(&config, &ui, &factory, &index_access);
+    let result = app.prepare_serve(&config);
     assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
 
     let _ = std::fs::remove_dir_all(&persist);
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -268,7 +270,9 @@ fn create_minimal_file_index(persist_path: &Path) {
         is_fresh: None,
     };
 
-    let batch = crate::indexing::index_documents(&[doc], &config, &mut embedder, None, 1.2, 0.75).unwrap();
+    let tok = embedder.token_counter();
+    let pipeline = crate::indexing::IndexingPipeline::new(&config, tok);
+    let batch = pipeline.run(&[doc], &mut embedder, None, 1.2, 0.75).unwrap();
     let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
     repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None)
         .unwrap();
@@ -308,7 +312,9 @@ fn create_git_index_without_bm25(persist_path: &Path) {
         is_fresh: None,
     };
 
-    let batch = crate::indexing::index_documents(&[doc], &config, &mut embedder, None, 1.2, 0.75).unwrap();
+    let tok = embedder.token_counter();
+    let pipeline = crate::indexing::IndexingPipeline::new(&config, tok);
+    let batch = pipeline.run(&[doc], &mut embedder, None, 1.2, 0.75).unwrap();
     let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
     repo.store(SourceIndexKind::Git, &batch, embedder.dims(), doc_count, None)
         .unwrap();

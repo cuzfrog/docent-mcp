@@ -7,12 +7,6 @@ pub(crate) fn build_newline_positions(text: &str) -> Vec<usize> {
     text.match_indices('\n').map(|(i, _)| i).collect()
 }
 
-/// Convert a byte offset (in `text`) to a 1-indexed line number using a
-/// pre-computed newline-position lookup.
-pub(crate) fn byte_offset_to_line(byte_offset: usize, newlines: &[usize]) -> usize {
-    newlines.binary_search(&byte_offset).unwrap_or_else(|i| i) + 1
-}
-
 /// Split `body` into sections on H2 (`## `) and H3 (`### `) heading boundaries.
 ///
 /// Returns a `Vec` of `(Option<String>, String, usize)` tuples:
@@ -80,65 +74,67 @@ use crate::chunking::engine::{Chunk, ChunkingConfig};
 // chunk_section — apply sliding window within a single section
 // ---------------------------------------------------------------------------
 
+fn build_single_chunk(
+    section_text: &str,
+    section_heading: Option<&str>,
+    token_count: usize,
+    chunk_index: usize,
+) -> Chunk {
+    Chunk {
+        text: section_text.to_string(),
+        token_count,
+        section_heading: section_heading.map(|s| s.to_string()),
+        chunk_index,
+        line_start: 0,
+        line_end: 0,
+    }
+}
+
+fn build_sliding_chunk(
+    section_text: &str,
+    offsets: &[(usize, usize)],
+    window_start: usize,
+    window_end: usize,
+    section_heading: Option<&str>,
+    chunk_index: usize,
+) -> Chunk {
+    let char_start = offsets[window_start].0;
+    let char_end = offsets[window_end - 1].1;
+    let chunk_text = &section_text[char_start..char_end];
+    Chunk {
+        text: chunk_text.to_string(),
+        token_count: window_end - window_start,
+        section_heading: section_heading.map(|s| s.to_string()),
+        chunk_index,
+        line_start: 0,
+        line_end: 0,
+    }
+}
+
 pub(crate) fn chunk_section(
     section_text: &str,
     section_heading: Option<&str>,
     config: &ChunkingConfig,
     counter: &dyn TokenCounter,
     start_index: usize,
-    section_byte_offset: usize,
-    body_newlines: &[usize],
+    _section_byte_offset: usize,
+    _body_newlines: &[usize],
 ) -> Vec<Chunk> {
     let mut chunks = Vec::new();
     let (total_tokens, offsets) = counter.encode_with_offsets(section_text);
-    let token_count = total_tokens;
 
-    let abs_offset = |byte_off: usize| -> usize {
-        section_byte_offset + byte_off
-    };
-
-    let compute_lines = |byte_start: usize, byte_end: usize| -> (usize, usize) {
-        let ls = byte_offset_to_line(abs_offset(byte_start), body_newlines);
-        let le = byte_offset_to_line(abs_offset(byte_end), body_newlines);
-        (ls, le)
-    };
-
-    if token_count <= config.chunk_size {
-        let (line_start, line_end) = if token_count == 0 {
-            (0, 0)
-        } else {
-            compute_lines(0, section_text.len())
-        };
-        chunks.push(Chunk {
-            text: section_text.to_string(),
-            token_count,
-            section_heading: section_heading.map(|s| s.to_string()),
-            chunk_index: start_index,
-            line_start,
-            line_end,
-        });
+    if total_tokens <= config.chunk_size || total_tokens == 0 {
+        chunks.push(build_single_chunk(section_text, section_heading, total_tokens, start_index));
         return chunks;
     }
+
     let step = config.chunk_size.saturating_sub(config.chunk_overlap);
     let mut chunk_idx = start_index;
-
     let mut window_start = 0;
+
     while window_start + config.chunk_size <= total_tokens {
         let window_end = window_start + config.chunk_size;
-        let char_start = offsets[window_start].0;
-        let char_end = offsets[window_end - 1].1;
-        let chunk_text = &section_text[char_start..char_end];
-        let (line_start, line_end) = compute_lines(char_start, char_end);
-
-        chunks.push(Chunk {
-            text: chunk_text.to_string(),
-            token_count: config.chunk_size,
-            section_heading: section_heading.map(|s| s.to_string()),
-            chunk_index: chunk_idx,
-            line_start,
-            line_end,
-        });
-
+        chunks.push(build_sliding_chunk(section_text, &offsets, window_start, window_end, section_heading, chunk_idx));
         chunk_idx += 1;
         window_start += step;
         if step == 0 {
@@ -147,20 +143,8 @@ pub(crate) fn chunk_section(
     }
 
     if window_start < total_tokens {
-        let char_start = offsets[window_start].0;
-        let char_end = offsets[total_tokens - 1].1;
-        let chunk_text = &section_text[char_start..char_end];
-        let remaining_tokens = total_tokens - window_start;
-        let (line_start, line_end) = compute_lines(char_start, char_end);
-
-        chunks.push(Chunk {
-            text: chunk_text.to_string(),
-            token_count: remaining_tokens,
-            section_heading: section_heading.map(|s| s.to_string()),
-            chunk_index: chunk_idx,
-            line_start,
-            line_end,
-        });
+        let window_end = total_tokens;
+        chunks.push(build_sliding_chunk(section_text, &offsets, window_start, window_end, section_heading, chunk_idx));
     }
 
     chunks

@@ -1,4 +1,6 @@
-use crate::index::schema::{IndexHeader, StoredChunkMetadata, StoredIndex, VectorStore};
+use crate::index::header::IndexHeader;
+use crate::index::stored_metadata::StoredChunkMetadata;
+use crate::index::vector_store::{StoredIndex, VectorStore};
 use std::path::Path;
 
 /// Write the index directory: `header.json`, `vectors.bin`, and `metadata.bin`.
@@ -42,22 +44,22 @@ pub fn write_index(
     Ok(())
 }
 
-/// Read the index from `path` and return `StoredIndex`.
-pub fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
+fn read_header(path: &Path) -> anyhow::Result<IndexHeader> {
     let header_path = path.join("header.json");
     if !header_path.exists() {
         anyhow::bail!("no index found at '{}'", path.display());
     }
-
-    let header_bytes = std::fs::read(&header_path)
+    let bytes = std::fs::read(&header_path)
         .map_err(|e| anyhow::anyhow!("Failed to read '{}': {}", header_path.display(), e))?;
-    let header: IndexHeader = serde_json::from_slice(&header_bytes)
+    let header: IndexHeader = serde_json::from_slice(&bytes)
         .map_err(|e| anyhow::anyhow!("Failed to parse '{}': {}", header_path.display(), e))?;
-
     if header.embedding_dims == 0 {
         anyhow::bail!("corrupted '{}': embedding_dims is 0", header_path.display());
     }
+    Ok(header)
+}
 
+fn read_vectors(path: &Path, header: &IndexHeader) -> anyhow::Result<VectorStore> {
     let vectors_path = path.join("vectors.bin");
     let raw_bytes = std::fs::read(&vectors_path)
         .map_err(|e| anyhow::anyhow!("Failed to read '{}': {}", vectors_path.display(), e))?;
@@ -65,29 +67,18 @@ pub fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
     if raw_bytes.len() != expected_bytes {
         anyhow::bail!(
             "corrupted '{}': expected {} bytes for {} chunks of {} dims, but found {} bytes",
-            vectors_path.display(),
-            expected_bytes,
-            header.chunk_count,
-            header.embedding_dims,
-            raw_bytes.len(),
+            vectors_path.display(), expected_bytes, header.chunk_count, header.embedding_dims, raw_bytes.len(),
         );
     }
-
-    let vectors = if raw_bytes.is_empty() {
-        VectorStore {
-            data: vec![],
-            dims: 0,
-            count: 0,
-        }
+    if raw_bytes.is_empty() {
+        Ok(VectorStore { data: vec![], dims: 0, count: 0 })
     } else {
         let flat: &[f32] = bytemuck::cast_slice(&raw_bytes);
-        VectorStore {
-            data: flat.to_vec(),
-            dims: header.embedding_dims,
-            count: header.chunk_count,
-        }
-    };
+        Ok(VectorStore { data: flat.to_vec(), dims: header.embedding_dims, count: header.chunk_count })
+    }
+}
 
+fn read_metadata(path: &Path) -> anyhow::Result<Vec<StoredChunkMetadata>> {
     let metadata_path = if path.join("metadata.bin").exists() {
         path.join("metadata.bin")
     } else if path.join("metadata.json").exists() {
@@ -95,32 +86,33 @@ pub fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
     } else {
         anyhow::bail!("metadata file not found at '{}'", path.display());
     };
-
-    let metadata_bytes = std::fs::read(&metadata_path)
+    let bytes = std::fs::read(&metadata_path)
         .map_err(|e| anyhow::anyhow!("Failed to read '{}': {}", metadata_path.display(), e))?;
-
-    let metadata: Vec<StoredChunkMetadata> = if metadata_path.extension().is_some_and(|e| e == "bin") {
-        bincode::deserialize(&metadata_bytes)
-            .map_err(|e| anyhow::anyhow!("Failed to deserialize '{}': {}", metadata_path.display(), e))?
+    if metadata_path.extension().is_some_and(|e| e == "bin") {
+        bincode::deserialize(&bytes)
+            .map_err(|e| anyhow::anyhow!("Failed to deserialize '{}': {}", metadata_path.display(), e))
     } else {
-        serde_json::from_slice(&metadata_bytes)
-            .map_err(|e| anyhow::anyhow!("Failed to parse '{}': {}", metadata_path.display(), e))?
-    };
+        serde_json::from_slice(&bytes)
+            .map_err(|e| anyhow::anyhow!("Failed to parse '{}': {}", metadata_path.display(), e))
+    }
+}
 
+fn validate_consistency(header: &IndexHeader, vectors: &VectorStore, metadata: &[StoredChunkMetadata]) -> anyhow::Result<()> {
     if vectors.len() != header.chunk_count || metadata.len() != header.chunk_count {
         anyhow::bail!(
             "index consistency error: header.chunk_count = {}, vectors.len() = {}, metadata.len() = {}",
-            header.chunk_count,
-            vectors.len(),
-            metadata.len(),
+            header.chunk_count, vectors.len(), metadata.len(),
         );
     }
+    Ok(())
+}
 
-    Ok(StoredIndex {
-        header,
-        vectors,
-        metadata,
-    })
+pub fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
+    let header = read_header(path)?;
+    let vectors = read_vectors(path, &header)?;
+    let metadata = read_metadata(path)?;
+    validate_consistency(&header, &vectors, &metadata)?;
+    Ok(StoredIndex { header, vectors, metadata })
 }
 
 /// Write index into the given subdirectory (e.g. "file" or "git").
@@ -147,7 +139,7 @@ pub fn read_subdir(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::index::schema::StoredChunkKind;
+    use crate::index::stored_metadata::StoredChunkKind;
     use crate::index::SCHEMA_VERSION;
 
     fn matching_header() -> IndexHeader {

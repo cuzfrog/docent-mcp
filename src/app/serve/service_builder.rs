@@ -4,98 +4,87 @@ use crate::config::SearchConfig;
 use crate::embedder::{EmbedderFactory, EmbeddingService};
 use crate::index::MergedIndex;
 use crate::search::{
-    build_bm25_backend, create_fusion, DecayRanker, HybridSearchService, ScoreBackend,
-    VectorScoreBackend,
+    build_bm25_backend, create_fusion, builder::HybridSearchServiceBuilder, DecayRanker,
+    HybridSearchService, ScoreBackend, VectorScoreBackend, ZeroScoreBackend,
 };
 
-/// Create and box the embedding model.
-pub(crate) fn build_embedder(
-    embedder_factory: &dyn EmbedderFactory,
-    embedding_model: &str,
-) -> anyhow::Result<Arc<Mutex<dyn EmbeddingService>>> {
-    struct BoxedEmbedder(Box<dyn EmbeddingService>);
+pub(crate) struct HybridServiceBuilder;
 
-    impl EmbeddingService for BoxedEmbedder {
-        fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
-            self.0.embed(texts)
+impl HybridServiceBuilder {
+    pub(crate) fn build_embedder(
+        &self,
+        embedder_factory: &dyn EmbedderFactory,
+        embedding_model: &str,
+    ) -> anyhow::Result<Arc<Mutex<dyn EmbeddingService>>> {
+        struct BoxedEmbedder(Box<dyn EmbeddingService>);
+
+        impl EmbeddingService for BoxedEmbedder {
+            fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
+                self.0.embed(texts)
+            }
+
+            fn dims(&self) -> usize {
+                self.0.dims()
+            }
+
+            fn token_counter(&self) -> Box<dyn crate::chunking::TokenCounter> {
+                self.0.token_counter()
+            }
         }
 
-        fn dims(&self) -> usize {
-            self.0.dims()
-        }
+        let inner = embedder_factory
+            .create(embedding_model)
+            .map_err(|e| anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e))?;
 
-        fn token_counter(&self) -> Box<dyn crate::chunking::TokenCounter> {
-            self.0.token_counter()
-        }
+        Ok(Arc::new(Mutex::new(BoxedEmbedder(inner))))
     }
 
-    let inner = embedder_factory
-        .create(embedding_model)
-        .map_err(|e| anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e))?;
+    pub(crate) fn build(
+        &self,
+        merged: MergedIndex,
+        embedder: Arc<Mutex<dyn EmbeddingService>>,
+        search_config: &SearchConfig,
+    ) -> anyhow::Result<HybridSearchService> {
+        let vector_store = Arc::new(merged.vectors);
+        let semantic_backend = Arc::new(VectorScoreBackend::new(
+            embedder,
+            Arc::clone(&vector_store),
+        )) as Arc<dyn ScoreBackend>;
 
-    Ok(Arc::new(Mutex::new(BoxedEmbedder(inner))))
-}
+        let bm25_backend: Arc<dyn ScoreBackend> = match (&merged.bm25_embeddings, &merged.bm25_header) {
+            (Some(embeddings), Some(header)) => Arc::new(build_bm25_backend(
+                embeddings,
+                header.k1,
+                header.b,
+                header.avgdl,
+            )),
+            _ => {
+                let chunk_count = merged.metadata.len();
+                Arc::new(ZeroScoreBackend { chunk_count })
+            }
+        };
 
-/// Build a `HybridSearchService` from a merged index and config.
-pub(crate) fn build_hybrid_search_service(
-    merged: MergedIndex,
-    embedder: Arc<Mutex<dyn EmbeddingService>>,
-    search_config: &SearchConfig,
-) -> anyhow::Result<HybridSearchService> {
-    // Build semantic backend
-    let vector_store = Arc::new(merged.vectors);
-    let semantic_backend = Arc::new(VectorScoreBackend::new(
-        embedder,
-        Arc::clone(&vector_store),
-    )) as Arc<dyn ScoreBackend>;
+        let fusion = create_fusion(
+            &search_config.fusion_strategy,
+            search_config.rrf_k,
+            search_config.semantic_weight,
+        );
 
-    // Build BM25 backend
-    let bm25_backend: Arc<dyn ScoreBackend> = match (&merged.bm25_embeddings, &merged.bm25_header) {
-        (Some(embeddings), Some(header)) => Arc::new(build_bm25_backend(
-            embeddings,
-            header.k1,
-            header.b,
-            header.avgdl,
-        )),
-        _ => {
-            // No BM25 data available — use zero backend
-            let chunk_count = merged.metadata.len();
-            Arc::new(ZeroScoreBackend { chunk_count })
-        }
-    };
+        let ranker = Arc::new(DecayRanker::new(
+            search_config.same_src_score_decay,
+            search_config.file_hint_boost,
+        ));
 
-    // Build fusion strategy
-    let fusion = create_fusion(
-        &search_config.fusion_strategy,
-        search_config.rrf_k,
-        search_config.semantic_weight,
-    );
+        let search_service = HybridSearchServiceBuilder::new()
+            .semantic_backend(semantic_backend)
+            .bm25_backend(bm25_backend)
+            .fusion(fusion)
+            .ranker(ranker)
+            .metadata(Arc::new(merged.metadata))
+            .index_time(merged.built_at)
+            .build();
 
-    // Build ranker
-    let ranker = Arc::new(DecayRanker::new(
-        search_config.same_src_score_decay,
-        search_config.file_hint_boost,
-    ));
-
-    let search_service = HybridSearchService::new(
-        semantic_backend,
-        bm25_backend,
-        fusion,
-        ranker,
-        Arc::new(merged.metadata),
-        merged.built_at,
-    );
-
-    Ok(search_service)
-}
-
-struct ZeroScoreBackend {
-    chunk_count: usize,
-}
-
-impl ScoreBackend for ZeroScoreBackend {
-    fn score(&self, _query: &str) -> anyhow::Result<Vec<f32>> {
-        Ok(vec![0.0f32; self.chunk_count])
+        Ok(search_service)
     }
 }
 
@@ -119,7 +108,8 @@ mod tests {
     #[test]
     fn test_build_embedder_ok() {
         let factory = FakeEmbedderFactory;
-        let result = build_embedder(&factory, "test-model");
+        let builder = HybridServiceBuilder;
+        let result = builder.build_embedder(&factory, "test-model");
         assert!(result.is_ok());
     }
 
@@ -131,7 +121,8 @@ mod tests {
                 Err(anyhow::anyhow!("factory error"))
             }
         }
-        let result = build_embedder(&FailingFactory, "bad-model");
+        let builder = HybridServiceBuilder;
+        let result = builder.build_embedder(&FailingFactory, "bad-model");
         assert!(result.is_err());
         let err = result.err().unwrap();
         assert!(
@@ -153,7 +144,8 @@ mod tests {
         let embedder: Arc<Mutex<dyn EmbeddingService>> =
             Arc::new(Mutex::new(FakeEmbedder::new()));
         let config = Config::default();
-        let result = build_hybrid_search_service(
+        let builder = HybridServiceBuilder;
+        let result = builder.build(
             merged,
             embedder,
             &config.search,
@@ -210,8 +202,9 @@ mod tests {
         let embedder: Arc<Mutex<dyn EmbeddingService>> =
             Arc::new(Mutex::new(FakeEmbedder::new()));
         let config = Config::default();
+        let builder = HybridServiceBuilder;
 
-        let search_service = build_hybrid_search_service(
+        let search_service = builder.build(
             merged,
             embedder,
             &config.search,

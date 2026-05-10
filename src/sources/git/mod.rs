@@ -1,5 +1,5 @@
 mod estimate;
-mod extract;
+pub(crate) mod extract;
 mod freshness;
 pub(crate) mod history;
 mod merge;

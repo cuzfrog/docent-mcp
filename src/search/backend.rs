@@ -108,6 +108,20 @@ pub(crate) fn build_bm25_backend(
 }
 
 // ---------------------------------------------------------------------------
+// ZeroScoreBackend — returns all zeros (fallback when BM25 is unavailable)
+// ---------------------------------------------------------------------------
+
+pub(crate) struct ZeroScoreBackend {
+    pub(crate) chunk_count: usize,
+}
+
+impl ScoreBackend for ZeroScoreBackend {
+    fn score(&self, _query: &str) -> anyhow::Result<Vec<f32>> {
+        Ok(vec![0.0f32; self.chunk_count])
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 

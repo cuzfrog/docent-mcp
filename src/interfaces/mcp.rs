@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 use rmcp::ErrorData;
@@ -8,9 +6,7 @@ use rmcp::ServerHandler;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::search::HybridSearchService;
-
-use super::search_tool;
+use super::search_tool::SearchExecutor;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct SearchDdrParams {
@@ -27,7 +23,7 @@ fn default_limit() -> u8 {
 
 #[derive(Clone)]
 pub struct DocentMcpServer {
-    pub search_service: Arc<HybridSearchService>,
+    pub search_executor: SearchExecutor,
 }
 
 #[tool_router]
@@ -42,13 +38,9 @@ impl DocentMcpServer {
         params: Parameters<SearchDdrParams>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
-        let json_str = search_tool::search_ddr_tool(
-            &self.search_service,
-            &params.query,
-            params.limit,
-            &params.file_hint,
-        )
-        .await?;
+        let json_str = self.search_executor
+            .execute(&params.query, params.limit, &params.file_hint)
+            .await?;
 
         Ok(CallToolResult::success(vec![rmcp::model::Content::text(
             json_str,

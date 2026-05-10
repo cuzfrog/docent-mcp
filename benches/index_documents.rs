@@ -12,7 +12,7 @@ use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criteri
 use docent_mcp::config::IndexConfig;
 use docent_mcp::documents::ChunkKind;
 use docent_mcp::embedder::EmbeddingService;
-use docent_mcp::indexing::{index_documents, IndexableDocument};
+use docent_mcp::indexing::{IndexingPipeline, IndexableDocument};
 use docent_mcp::chunking::TokenCounter;
 
 // ---------------------------------------------------------------------------
@@ -152,8 +152,10 @@ fn bench_index_documents(c: &mut Criterion) {
                 b.iter_batched(
                     BenchEmbedder::new,
                     |mut embedder| {
+                        let tok = embedder.token_counter();
+                        let pipeline = IndexingPipeline::new(config, tok);
                         black_box(
-                            index_documents(black_box(docs), black_box(config), &mut embedder, None, 1.2, 0.75)
+                            pipeline.run(black_box(docs), &mut embedder, None, 1.2, 0.75)
                                 .unwrap(),
                         );
                     },

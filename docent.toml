@@ -8,12 +8,12 @@ max_size_mb     = 4                 # issue warning if total index size exceeds 
 
 [file]
 enabled          = true               # enable file indexing
-glob_patterns    = ["doc/*.md", "./*.md", "!.*/**"]           # later elements take precedence
+glob_patterns    = ["doc/*.md", "./*.md", "!.*/**", ".lissom/tasks/epic/*"]           # later elements take precedence
 file_size_limit_mb = 2                # skip files larger than this limit
 
 [git]
 enabled          = true               # enable git history indexing
-depth_limit      = 2               # -1 = no limit (all history)
+depth_limit      = 5             # -1 = no limit (all history)
 branch           = "main"
 glob_patterns    = ["*.rs", "*.java", "*.py", "*.js", "*.ts", "*.go"]
 

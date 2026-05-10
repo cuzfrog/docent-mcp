@@ -2,7 +2,7 @@ use crate::config::IndexConfig;
 use crate::documents::{ChunkKind, ChunkMetadata};
 use crate::embedder::EmbeddingService;
 use crate::index::{IndexRepository, SourceIndexKind, SCHEMA_VERSION};
-use crate::indexing::{index_documents, IndexableDocument};
+use crate::indexing::{IndexingPipeline, IndexableDocument};
 use crate::tests::fixtures::{make_temp_dir, read_index_at, FakeEmbedder};
 
 // ---------------------------------------------------------------------------
@@ -58,7 +58,9 @@ fn test_index_and_store_round_trip() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let batch = index_documents(&docs, &config, &mut embedder, None, 1.2, 0.75).unwrap();
+    let tok = embedder.token_counter();
+    let pipeline = IndexingPipeline::new(&config, tok);
+    let batch = pipeline.run(&docs, &mut embedder, None, 1.2, 0.75).unwrap();
 
     assert!(!batch.vectors.is_empty(), "Should produce vectors");
     assert_eq!(batch.vectors.len(), batch.metadata.len());
@@ -93,7 +95,9 @@ fn test_empty_document_list_produces_empty_index() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let batch = index_documents(&docs, &config, &mut embedder, None, 1.2, 0.75).unwrap();
+    let tok = embedder.token_counter();
+    let pipeline = IndexingPipeline::new(&config, tok);
+    let batch = pipeline.run(&docs, &mut embedder, None, 1.2, 0.75).unwrap();
 
     assert!(batch.vectors.is_empty());
     assert!(batch.metadata.is_empty());
@@ -121,10 +125,14 @@ fn test_vectors_are_deterministic() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let batch1 = index_documents(&docs, &config, &mut embedder, None, 1.2, 0.75).unwrap();
+    let tok = embedder.token_counter();
+    let pipeline = IndexingPipeline::new(&config, tok);
+    let batch1 = pipeline.run(&docs, &mut embedder, None, 1.2, 0.75).unwrap();
 
     let mut embedder2 = FakeEmbedder::new();
-    let batch2 = index_documents(&docs, &config, &mut embedder2, None, 1.2, 0.75).unwrap();
+    let tok2 = embedder2.token_counter();
+    let pipeline2 = IndexingPipeline::new(&config, tok2);
+    let batch2 = pipeline2.run(&docs, &mut embedder2, None, 1.2, 0.75).unwrap();
 
     assert_eq!(batch1.vectors, batch2.vectors);
     assert_eq!(batch1.metadata.len(), batch2.metadata.len());
@@ -142,7 +150,9 @@ fn test_index_preserves_metadata_fields() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let batch = index_documents(&docs, &config, &mut embedder, None, 1.2, 0.75).unwrap();
+    let tok = embedder.token_counter();
+    let pipeline = IndexingPipeline::new(&config, tok);
+    let batch = pipeline.run(&docs, &mut embedder, None, 1.2, 0.75).unwrap();
 
     let repo = IndexRepository::new(&index_dir, &config);
     let doc_count = crate::indexing::unique_doc_count(&batch.metadata);

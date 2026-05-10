@@ -82,10 +82,15 @@ function handleCopyRaw() {
   }
 }
 
+function handleRawToggle() {
+  view.toggleRawMode();
+}
+
 /* Wire up event listeners */
 document.addEventListener('DOMContentLoaded', () => {
   initializeApp();
 
   view.elements.form.addEventListener('submit', handleSearch);
   view.elements.copyRaw.addEventListener('click', handleCopyRaw);
+  view.elements.rawToggle.addEventListener('click', handleRawToggle);
 });

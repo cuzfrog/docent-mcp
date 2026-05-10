@@ -8,33 +8,15 @@ use crate::search::types::SearchResult;
 
 /// Orchestrates hybrid search: scores from two backends → fused → ranked.
 pub(crate) struct HybridSearchService {
-    semantic_backend: Arc<dyn ScoreBackend>,
-    bm25_backend: Arc<dyn ScoreBackend>,
-    fusion: Arc<dyn ScoreFusion>,
-    ranker: Arc<dyn Ranker>,
-    metadata: Arc<Vec<ChunkMetadata>>,
-    index_time: String,
+    pub(crate) semantic_backend: Arc<dyn ScoreBackend>,
+    pub(crate) bm25_backend: Arc<dyn ScoreBackend>,
+    pub(crate) fusion: Arc<dyn ScoreFusion>,
+    pub(crate) ranker: Arc<dyn Ranker>,
+    pub(crate) metadata: Arc<Vec<ChunkMetadata>>,
+    pub(crate) index_time: String,
 }
 
 impl HybridSearchService {
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(
-        semantic_backend: Arc<dyn ScoreBackend>,
-        bm25_backend: Arc<dyn ScoreBackend>,
-        fusion: Arc<dyn ScoreFusion>,
-        ranker: Arc<dyn Ranker>,
-        metadata: Arc<Vec<ChunkMetadata>>,
-        index_time: String,
-    ) -> Self {
-        Self {
-            semantic_backend,
-            bm25_backend,
-            fusion,
-            ranker,
-            metadata,
-            index_time,
-        }
-    }
 
     /// Run a hybrid search: score with both backends, fuse, then rank.
     pub(crate) async fn search(
