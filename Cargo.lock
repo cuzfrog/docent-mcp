@@ -796,6 +796,7 @@ name = "docent-mcp"
 version = "0.5.2"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "bincode",
  "bm25",

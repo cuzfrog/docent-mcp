@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
-use crate::search::HybridSearchService;
+use crate::search::SearchService;
 
 #[derive(Clone)]
 pub(crate) struct SearchExecutor {
-    service: Arc<HybridSearchService>,
+    service: Arc<dyn SearchService>,
 }
 
 impl SearchExecutor {
-    pub fn new(service: Arc<HybridSearchService>) -> Self {
+    pub fn new(service: Arc<dyn SearchService>) -> Self {
         Self { service }
     }
 

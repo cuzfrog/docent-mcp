@@ -5,6 +5,7 @@ use crate::search::backend::ScoreBackend;
 use crate::search::fusion::ScoreFusion;
 use crate::search::ranking::Ranker;
 use crate::search::types::SearchResult;
+use crate::search::SearchService;
 
 /// Orchestrates hybrid search: scores from two backends → fused → ranked.
 pub(crate) struct HybridSearchService {
@@ -16,10 +17,9 @@ pub(crate) struct HybridSearchService {
     pub(crate) index_time: String,
 }
 
-impl HybridSearchService {
-
-    /// Run a hybrid search: score with both backends, fuse, then rank.
-    pub(crate) async fn search(
+#[async_trait::async_trait]
+impl SearchService for HybridSearchService {
+    async fn search(
         &self,
         query: &str,
         limit: usize,

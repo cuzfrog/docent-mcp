@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use anyhow::Context;
+
 use crate::documents::ChunkMetadata;
 use crate::search::backend::ScoreBackend;
 use crate::search::fusion::ScoreFusion;
@@ -57,14 +59,14 @@ impl HybridSearchServiceBuilder {
         self
     }
 
-    pub fn build(self) -> HybridSearchService {
-        HybridSearchService {
-            semantic_backend: self.semantic_backend.expect("semantic_backend is required"),
-            bm25_backend: self.bm25_backend.expect("bm25_backend is required"),
-            fusion: self.fusion.expect("fusion is required"),
-            ranker: self.ranker.expect("ranker is required"),
-            metadata: self.metadata.expect("metadata is required"),
-            index_time: self.index_time.expect("index_time is required"),
-        }
+    pub fn build(self) -> anyhow::Result<HybridSearchService> {
+        Ok(HybridSearchService {
+            semantic_backend: self.semantic_backend.context("semantic_backend is required")?,
+            bm25_backend: self.bm25_backend.context("bm25_backend is required")?,
+            fusion: self.fusion.context("fusion is required")?,
+            ranker: self.ranker.context("ranker is required")?,
+            metadata: self.metadata.context("metadata is required")?,
+            index_time: self.index_time.context("index_time is required")?,
+        })
     }
 }

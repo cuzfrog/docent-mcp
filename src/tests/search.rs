@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::documents::{ChunkKind, ChunkMetadata, DocumentContext};
 use crate::search::{
     builder::HybridSearchServiceBuilder, create_fusion, DecayRanker, HybridSearchService,
-    ScoreBackend,
+    ScoreBackend, SearchService,
 };
 
 // ---------------------------------------------------------------------------
@@ -88,6 +88,7 @@ fn build_hybrid_service_with_boost(
         .metadata(Arc::new(metadata))
         .index_time("2026-01-01T00:00:00Z".into())
         .build()
+        .unwrap()
 }
 
 // ---------------------------------------------------------------------------
@@ -266,7 +267,8 @@ fn test_file_hint_boost_with_decay_interaction() {
         .ranker(ranker)
         .metadata(Arc::new(metadata))
         .index_time("now".into())
-        .build();
+        .build()
+        .unwrap();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     let results = rt.block_on(svc.search("test", 10, "same.md")).unwrap();

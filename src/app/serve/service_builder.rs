@@ -82,7 +82,7 @@ impl HybridServiceBuilder {
             .ranker(ranker)
             .metadata(Arc::new(merged.metadata))
             .index_time(merged.built_at)
-            .build();
+            .build()?;
 
         Ok(search_service)
     }
@@ -95,6 +95,7 @@ mod tests {
     use crate::documents::{ChunkKind, ChunkMetadata, DocumentContext};
     use crate::index::MergedIndex;
     use crate::index::VectorStore;
+    use crate::search::SearchService;
     use crate::tests::fixtures::FakeEmbedder;
 
     struct FakeEmbedderFactory;
