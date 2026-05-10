@@ -8,7 +8,6 @@ use rmcp::transport::streamable_http_server::{
 use crate::app::serve::service_builder::HybridServiceBuilder;
 use crate::app::serve::{RealServeIndexAccess, ServeIndexAccess};
 use crate::app::workflows;
-use crate::cli::{IndexArgs, IndexCommandArgs, ServeArgs};
 use crate::config::{defaults::DEFAULT_TEMPLATE, Config};
 use crate::embedder::{list_supported_models, EmbedderFactory, RealEmbedderFactory};
 use crate::interfaces::mcp::DocentMcpServer;
@@ -74,40 +73,58 @@ impl Application {
         }
     }
 
-    pub fn run_index(&self, args: &IndexCommandArgs) -> anyhow::Result<()> {
-        let config = Config::load(&args.config)?;
-        let dir = args.dir.clone().unwrap_or_else(|| PathBuf::from("."));
+    pub fn run_index(
+        &self,
+        dir: Option<PathBuf>,
+        config_path: &std::path::Path,
+        rebuild: bool,
+        verbose: bool,
+    ) -> anyhow::Result<()> {
+        let config = Config::load(config_path)?;
+        let dir = dir.unwrap_or_else(|| PathBuf::from("."));
         let dir = dir.canonicalize()?;
 
         let file_enabled = config.file.as_ref().map(|f| f.enabled).unwrap_or(true);
         if file_enabled {
-            self.run_file_index_workflow(&config, dir.clone(), args.rebuild, args.verbose)?;
+            self.run_file_index_workflow(&config, dir.clone(), rebuild, verbose)?;
         }
 
         let git_enabled = config.git.as_ref().map(|g| g.enabled).unwrap_or(false);
         if git_enabled {
-            self.run_git_index_workflow(&config, dir, args.rebuild, args.verbose)?;
+            self.run_git_index_workflow(&config, dir, rebuild, verbose)?;
         }
 
         Ok(())
     }
 
-    pub fn run_index_file(&self, args: &IndexArgs) -> anyhow::Result<()> {
-        let config = Config::load(&args.config)?;
-        let path = args.file.clone().unwrap_or_else(|| PathBuf::from("."));
+    pub fn run_index_file(
+        &self,
+        file: Option<PathBuf>,
+        config_path: &std::path::Path,
+        rebuild: bool,
+        verbose: bool,
+    ) -> anyhow::Result<()> {
+        let config = Config::load(config_path)?;
+        let path = file.unwrap_or_else(|| PathBuf::from("."));
         let input_root = resolve_input_root(&path)?;
-        self.run_file_index_workflow(&config, input_root, args.rebuild, args.verbose)
+        self.run_file_index_workflow(&config, input_root, rebuild, verbose)
     }
 
-    pub fn run_index_git(&self, args: &IndexArgs) -> anyhow::Result<()> {
-        let config = Config::load(&args.config)?;
-        let path = args.file.clone().unwrap_or_else(|| PathBuf::from("."));
+    pub fn run_index_git(
+        &self,
+        file: Option<PathBuf>,
+        config_path: &std::path::Path,
+        rebuild: bool,
+        verbose: bool,
+    ) -> anyhow::Result<()> {
+        let config = Config::load(config_path)?;
+        let path = file.unwrap_or_else(|| PathBuf::from("."));
         let repo_path = resolve_repo_path(&path)?;
-        self.run_git_index_workflow(&config, repo_path, args.rebuild, args.verbose)
+        self.run_git_index_workflow(&config, repo_path, rebuild, verbose)
     }
 
-    pub async fn run_serve(&self, args: &ServeArgs) -> anyhow::Result<()> {
-        let config = Config::load(&args.config)
+    pub async fn run_serve(&self, config_path: &std::path::Path) -> anyhow::Result<()> {
+        let config = Config::load(config_path)
             .context("Failed to load config — cannot start server")?;
 
         let prepared = self.prepare_serve(&config)?;
@@ -524,13 +541,12 @@ enabled = false
             .with_ui(Box::new(RecordingUi::always_confirm()))
             .with_embedder_factory(Box::new(FakeEmbedderFactory));
 
-        let args = IndexCommandArgs {
-            dir: Some(dir.clone()),
-            config: config_path,
-            rebuild: false,
-            verbose: false,
-        };
-        app.run_index(&args).unwrap();
+        app.run_index(
+            Some(dir.clone()),
+            &config_path,
+            false,
+            false,
+        ).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
