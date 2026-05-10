@@ -40,12 +40,6 @@ impl Config {
                 other
             ),
         }
-        if self.search.bm25_k1 <= 0.0 {
-            anyhow::bail!("bm25_k1 must be positive, got {}", self.search.bm25_k1);
-        }
-        if self.search.bm25_b < 0.0 || self.search.bm25_b > 1.0 {
-            anyhow::bail!("bm25_b must be in range 0.0..=1.0, got {}", self.search.bm25_b);
-        }
         if self.search.rrf_k <= 0.0 {
             anyhow::bail!("rrf_k must be positive, got {}", self.search.rrf_k);
         }
@@ -195,8 +189,6 @@ mod tests {
             search: SearchConfig {
                 same_src_score_decay: 1.5,
                 fusion_strategy: "rrf".to_string(),
-                bm25_k1: 1.2,
-                bm25_b: 0.75,
                 rrf_k: 60.0,
                 semantic_weight: 0.7,
             },
@@ -296,40 +288,6 @@ mod tests {
         };
         let err = config.validate().unwrap_err();
         assert!(err.to_string().contains("fusion_strategy must be one of"));
-    }
-
-    #[test]
-    fn test_bm25_k1_non_positive_validation_error() {
-        let config = Config {
-            index: IndexConfig {
-                embedding_model: "BGESmallENV15Q".to_string(),
-                ..IndexConfig::default()
-            },
-            search: SearchConfig {
-                bm25_k1: 0.0,
-                ..SearchConfig::default()
-            },
-            ..Config::default()
-        };
-        let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("bm25_k1 must be positive"));
-    }
-
-    #[test]
-    fn test_bm25_b_out_of_range_validation_error() {
-        let config = Config {
-            index: IndexConfig {
-                embedding_model: "BGESmallENV15Q".to_string(),
-                ..IndexConfig::default()
-            },
-            search: SearchConfig {
-                bm25_b: 1.5,
-                ..SearchConfig::default()
-            },
-            ..Config::default()
-        };
-        let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("bm25_b must be in range"));
     }
 
     #[test]

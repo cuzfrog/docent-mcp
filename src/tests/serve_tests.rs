@@ -109,8 +109,6 @@ fn serve_config(persist_path: &Path) -> Config {
         search: crate::config::SearchConfig {
             same_src_score_decay: 0.9,
             fusion_strategy: "rrf".to_string(),
-            bm25_k1: 1.2,
-            bm25_b: 0.75,
             rrf_k: 60.0,
             semantic_weight: 0.7,
         },

@@ -208,14 +208,15 @@ impl<'a> FileIndexWorkflow<'a> {
             &batch.vectors,
         );
 
-        let chunk_count = merged.metadata.len();
-        let doc_count = unique_doc_count(&merged.metadata);
+        let (merged_vectors, merged_metadata) = merged;
+        let chunk_count = merged_metadata.len();
+        let doc_count = unique_doc_count(&merged_metadata);
         let store_batch = IndexedBatch {
-            vectors: merged.vectors,
-            metadata: merged.metadata,
+            vectors: merged_vectors,
+            metadata: merged_metadata,
             bm25_embeddings: vec![],
-            bm25_k1: self.config.search.bm25_k1,
-            bm25_b: self.config.search.bm25_b,
+            bm25_k1: self.config.index.bm25_k1,
+            bm25_b: self.config.index.bm25_b,
             bm25_avgdl: 0.0,
         };
         repo.store(SourceIndexKind::File, &store_batch, embedder.dims(), doc_count, None)?;
@@ -261,8 +262,6 @@ mod tests {
             search: crate::config::SearchConfig {
                 same_src_score_decay: 0.9,
                 fusion_strategy: "rrf".to_string(),
-                bm25_k1: 1.2,
-                bm25_b: 0.75,
                 rrf_k: 60.0,
                 semantic_weight: 0.7,
             },

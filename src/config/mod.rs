@@ -129,15 +129,11 @@ embedding_model = "BGESmallENV15Q"
 
 [search]
 fusion_strategy = "weighted_sum"
-bm25_k1 = 1.5
-bm25_b = 0.5
 rrf_k = 100.0
 semantic_weight = 0.3
 "#;
         let config: Config = toml::from_str(toml_str).unwrap();
         assert_eq!(config.search.fusion_strategy, "weighted_sum");
-        assert!((config.search.bm25_k1 - 1.5).abs() < f32::EPSILON);
-        assert!((config.search.bm25_b - 0.5).abs() < f32::EPSILON);
         assert!((config.search.rrf_k - 100.0).abs() < f32::EPSILON);
         assert!((config.search.semantic_weight - 0.3).abs() < f32::EPSILON);
     }
@@ -146,18 +142,6 @@ semantic_weight = 0.3
     fn test_fusion_strategy_default() {
         let config: Config = Config::default();
         assert_eq!(config.search.fusion_strategy, "rrf");
-    }
-
-    #[test]
-    fn test_bm25_k1_default() {
-        let config: Config = Config::default();
-        assert!((config.search.bm25_k1 - 1.2).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn test_bm25_b_default() {
-        let config: Config = Config::default();
-        assert!((config.search.bm25_b - 0.75).abs() < f32::EPSILON);
     }
 
     #[test]
