@@ -113,8 +113,8 @@ describe('View', () => {
     assert.ok(card);
     assert.equal(card.querySelector('.result-title').textContent, 'Test Doc');
     assert.equal(card.querySelector('.result-source').textContent, '/path/to/doc.md');
-    assert.match(card.querySelector('.result-score').textContent, /85%/);
-    assert.equal(card.querySelector('.result-score').title, 'semantic: 0.95, bm25: 0.75');
+    assert.match(card.querySelector('.result-score').textContent, /100%/);
+    assert.equal(card.querySelector('.result-score').title, 'semantic: 0.95, bm25: 0.75, raw: 0.8500');
     assert.ok(card.querySelector('.result-lines'));
     assert.equal(card.querySelector('.result-section').textContent, 'Intro');
     // Kind badge
@@ -158,8 +158,8 @@ describe('View', () => {
     assert.equal(badge.textContent, 'Git');
     assert.ok(badge.classList.contains('badge-git'));
     // Score with breakdown tooltip
-    assert.match(card.querySelector('.result-score').textContent, /72%/);
-    assert.equal(card.querySelector('.result-score').title, 'semantic: 0.85, bm25: 0.60');
+    assert.match(card.querySelector('.result-score').textContent, /100%/);
+    assert.equal(card.querySelector('.result-score').title, 'semantic: 0.85, bm25: 0.60, raw: 0.7200');
     // Freshness badge
     const freshness = card.querySelector('.result-freshness');
     assert.equal(freshness.textContent, 'Fresh');
@@ -198,5 +198,84 @@ describe('View', () => {
     view.renderConnected('connected', 'Connected — protocol: v1');
     assert.ok(view.elements.status.classList.contains('status-connected'));
     assert.equal(view.elements.status.textContent, 'Connected — protocol: v1');
+  });
+
+  it('should render raw MCP response as JSON by default', () => {
+    const view = new View(dom.window.document);
+    const data = { jsonrpc: '2.0', result: { content: [{ text: 'hello' }] } };
+    view.renderRawResponse(data);
+    const text = view.elements.rawContent.textContent;
+    assert.ok(text.includes('"jsonrpc"'));
+    assert.ok(text.includes('"content"'));
+  });
+
+  it('should toggle to pretty mode and show human-readable content', () => {
+    const view = new View(dom.window.document);
+    const data = { jsonrpc: '2.0', result: { content: [{ text: 'search result 1' }, { text: 'search result 2' }] } };
+    view.renderRawResponse(data);
+    view.toggleRawMode();
+    const text = view.elements.rawContent.textContent;
+    assert.ok(!text.includes('"jsonrpc"'));
+    assert.ok(text.includes('search result 1'));
+    assert.ok(text.includes('---'));
+    assert.ok(text.includes('search result 2'));
+    assert.equal(view.rawMode, 'pretty');
+  });
+
+  it('should toggle back to raw mode', () => {
+    const view = new View(dom.window.document);
+    const data = { result: { content: [{ text: 'hello' }] } };
+    view.renderRawResponse(data);
+    view.toggleRawMode();
+    view.toggleRawMode();
+    const text = view.elements.rawContent.textContent;
+    assert.ok(text.includes('"result"'));
+    assert.equal(view.rawMode, 'raw');
+  });
+
+  it('should normalize scores relative to top result', () => {
+    const view = new View(dom.window.document);
+    const results = [
+      {
+        title: 'First',
+        sourcePath: 'a.md',
+        matchedContent: 'content a',
+        total_score: 0.032,
+        semantic_score: 0.9,
+        bm25_score: 0.8,
+        lineStart: 1,
+        lineEnd: 5,
+        sectionHeading: null,
+        modifiedAt: '2024-01-01T00:00:00Z',
+        kind: 'file',
+        sourceRevision: 'aabbcc',
+        isFresh: false,
+        indexTime: '2026-01-01T00:00:00Z',
+      },
+      {
+        title: 'Second',
+        sourcePath: 'b.md',
+        matchedContent: 'content b',
+        total_score: 0.020,
+        semantic_score: 0.5,
+        bm25_score: 0.4,
+        lineStart: 1,
+        lineEnd: 5,
+        sectionHeading: null,
+        modifiedAt: '2024-01-01T00:00:00Z',
+        kind: 'file',
+        sourceRevision: 'ddeeff',
+        isFresh: false,
+        indexTime: '2026-01-01T00:00:00Z',
+      },
+    ];
+    view.renderResults(results);
+    const cards = view.elements.results.querySelectorAll('.result-card');
+    assert.equal(cards.length, 2);
+    assert.match(cards[0].querySelector('.result-score').textContent, /100%/);
+    assert.match(cards[1].querySelector('.result-score').textContent, /63%/);
+    // Check raw score in tooltip
+    assert.equal(cards[0].querySelector('.result-score').title, 'semantic: 0.90, bm25: 0.80, raw: 0.0320');
+    assert.equal(cards[1].querySelector('.result-score').title, 'semantic: 0.50, bm25: 0.40, raw: 0.0200');
   });
 });

@@ -14,10 +14,13 @@ export class View {
       searchBtn: doc.getElementById('search-btn'),
       results: doc.getElementById('results'),
       rawContent: doc.getElementById('raw-content'),
+      rawToggle: doc.getElementById('raw-toggle'),
       copyRaw: doc.getElementById('copy-raw'),
       toolInfo: doc.getElementById('tool-info'),
       resultsSection: doc.getElementById('results-section'),
     };
+    this.rawMode = 'raw';
+    this.lastRaw = null;
   }
 
   /**
@@ -82,6 +85,8 @@ export class View {
     const template = this.doc.getElementById('result-card-template');
     if (!template) return;
 
+    const maxScore = Math.max(...results.map(r => r.total_score), 0.001);
+
     for (const result of results) {
       const clone = template.content.cloneNode(true);
 
@@ -121,7 +126,7 @@ export class View {
         }
       }
 
-      const { display, tooltip } = this.formatScore(result);
+      const { display, tooltip } = this.formatScore(result, maxScore);
       const scoreEl = clone.querySelector('.result-score');
       if (scoreEl) {
         scoreEl.textContent = display;
@@ -148,7 +153,49 @@ export class View {
    * @param {object} data
    */
   renderRawResponse(data) {
-    this.elements.rawContent.textContent = JSON.stringify(data, null, 2);
+    this.lastRaw = data;
+    if (this.rawMode === 'pretty') {
+      this._renderRawPretty(data);
+    } else {
+      this.elements.rawContent.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
+  /**
+   * Render a human-readable version of the MCP response content.
+   * @param {object} data
+   * @private
+   */
+  _renderRawPretty(data) {
+    const el = this.elements.rawContent;
+    if (!data || !data.result) {
+      el.textContent = '(no response)';
+      return;
+    }
+    const content = data.result.content;
+    if (!content || !content.length) {
+      el.textContent = '(empty content)';
+      return;
+    }
+    const parts = [];
+    for (const item of content) {
+      if (item.text) parts.push(item.text);
+    }
+    el.textContent = parts.join('\n---\n');
+  }
+
+  /**
+   * Toggle between raw JSON and pretty-printed content.
+   * Re-renders the last raw response in the new mode.
+   */
+  toggleRawMode() {
+    this.rawMode = this.rawMode === 'raw' ? 'pretty' : 'raw';
+    if (this.elements.rawToggle) {
+      this.elements.rawToggle.textContent = this.rawMode === 'raw' ? 'Pretty' : 'Raw';
+    }
+    if (this.lastRaw) {
+      this.renderRawResponse(this.lastRaw);
+    }
   }
 
   /**
@@ -231,18 +278,19 @@ export class View {
 
   /**
    * Format score display with breakdown tooltip.
+   * Scores are normalized against the top result so the best match shows 100%.
    * @param {import('./search_api.js').NormalizedResult} result
+   * @param {number} maxScore - highest total_score in the result set
    * @returns {{display: string, tooltip: string}}
    */
-  formatScore(result) {
+  formatScore(result, maxScore) {
     const total = result.total_score;
     const sem = result.semantic_score.toFixed(2);
     const bm25 = result.bm25_score.toFixed(2);
-    // Normalize rank-based RRF score (0-1 range) to percentage
-    const pct = Math.round(total * 100);
+    const pct = Math.round((total / maxScore) * 100);
     return {
       display: `${pct}% match`,
-      tooltip: `semantic: ${sem}, bm25: ${bm25}`,
+      tooltip: `semantic: ${sem}, bm25: ${bm25}, raw: ${total.toFixed(4)}`,
     };
   }
 

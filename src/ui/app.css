@@ -442,6 +442,16 @@ header .subtitle {
   color: var(--color-debug-text);
 }
 
+.raw-toggle-btn {
+  border-color: #5a6a8e !important;
+  color: #8a9ade !important;
+}
+
+.raw-toggle-btn:hover {
+  background: #3a4a6e !important;
+  color: #aac0f0 !important;
+}
+
 #raw-content {
   display: block;
   padding: var(--space-md);
