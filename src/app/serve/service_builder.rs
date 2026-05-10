@@ -49,14 +49,14 @@ impl HybridServiceBuilder {
         };
 
         let fusion = create_fusion(
-            &search_config.fusion_strategy,
-            search_config.rrf_k,
-            search_config.semantic_weight,
+            &search_config.fusion.strategy,
+            search_config.fusion.rrf_k,
+            search_config.fusion.semantic_weight,
         )?;
 
         let ranker = Arc::new(DecayRanker::new(
-            search_config.same_src_score_decay,
-            search_config.file_hint_boost,
+            search_config.ranking.same_src_score_decay,
+            search_config.ranking.file_hint_boost,
         ));
 
         let search_service = HybridSearchServiceBuilder::new()

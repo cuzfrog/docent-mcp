@@ -112,13 +112,19 @@ fn serve_config(persist_path: &Path) -> Config {
             log_level: "info".to_string(),
         },
         search: crate::config::SearchConfig {
-            same_src_score_decay: 0.9,
-            fusion_strategy: "rrf".to_string(),
-            rrf_k: 60.0,
-            semantic_weight: 0.7,
-            file_hint_boost: 1.5,
-            bm25_k1: 1.2,
-            bm25_b: 0.75,
+            ranking: crate::config::RankingConfig {
+                same_src_score_decay: 0.9,
+                file_hint_boost: 1.5,
+            },
+            fusion: crate::config::FusionConfig {
+                strategy: "rrf".to_string(),
+                rrf_k: 60.0,
+                semantic_weight: 0.7,
+            },
+            bm25: crate::config::Bm25Config {
+                k1: 1.2,
+                b: 0.75,
+            },
         },
         git: None,
         file: None,

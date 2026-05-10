@@ -37,7 +37,7 @@ chunk_overlap = 32
 [server]
 log_level = "error"
 
-[search]
+[search.ranking]
 same_src_score_decay = 0.95
 "#;
         let temp_path = std::env::temp_dir().join("docent_test_config.toml");
@@ -49,7 +49,7 @@ same_src_score_decay = 0.95
         assert_eq!(config.index.chunk_size, 256);
         assert_eq!(config.index.chunk_overlap, 32);
         assert_eq!(config.server.log_level, "error");
-        assert_eq!(config.search.same_src_score_decay, 0.95);
+        assert_eq!(config.search.ranking.same_src_score_decay, 0.95);
 
         let _ = std::fs::remove_file(&temp_path);
     }
@@ -95,7 +95,7 @@ same_src_score_decay = 0.95
         assert_eq!(file.glob_patterns, vec!["*.md".to_string()]);
         assert_eq!(file.file_size_limit_mb, 2);
 
-        assert!((config.search.same_src_score_decay - 0.9).abs() < f32::EPSILON);
+        assert!((config.search.ranking.same_src_score_decay - 0.9).abs() < f32::EPSILON);
 
         assert_eq!(config.server.log_level, "debug");
         assert_eq!(config.server.port, 7878);

@@ -175,7 +175,7 @@ impl Application {
         }
 
         let result = self.index_access
-            .load_merged(&persist_path, &config.index, config.search.bm25_k1, config.search.bm25_b)
+            .load_merged(&persist_path, &config.index, config.search.bm25.k1, config.search.bm25.b)
             .map_err(|e| anyhow::anyhow!("Failed to load merged index: {}", e))?;
         for notice in &result.notices {
             self.ui.info(notice);

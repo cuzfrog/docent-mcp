@@ -27,30 +27,30 @@ impl Config {
                 other
             ),
         }
-        if self.search.same_src_score_decay < 0.0 || self.search.same_src_score_decay > 1.0 {
+        if self.search.ranking.same_src_score_decay < 0.0 || self.search.ranking.same_src_score_decay > 1.0 {
             anyhow::bail!(
                 "same_src_score_decay must be in range 0.0..=1.0, got {}",
-                self.search.same_src_score_decay
+                self.search.ranking.same_src_score_decay
             );
         }
-        match self.search.fusion_strategy.as_str() {
+        match self.search.fusion.strategy.as_str() {
             "rrf" | "weighted_sum" | "comb_sum" | "comb_mnz" => {}
             other => anyhow::bail!(
                 "fusion_strategy must be one of rrf, weighted_sum, comb_sum, comb_mnz, got '{}'",
                 other
             ),
         }
-        if self.search.rrf_k <= 0.0 {
-            anyhow::bail!("rrf_k must be positive, got {}", self.search.rrf_k);
+        if self.search.fusion.rrf_k <= 0.0 {
+            anyhow::bail!("rrf_k must be positive, got {}", self.search.fusion.rrf_k);
         }
-        if self.search.semantic_weight < 0.0 || self.search.semantic_weight > 1.0 {
-            anyhow::bail!("semantic_weight must be in range 0.0..=1.0, got {}", self.search.semantic_weight);
+        if self.search.fusion.semantic_weight < 0.0 || self.search.fusion.semantic_weight > 1.0 {
+            anyhow::bail!("semantic_weight must be in range 0.0..=1.0, got {}", self.search.fusion.semantic_weight);
         }
-        if self.search.bm25_k1 <= 0.0 {
-            anyhow::bail!("bm25_k1 must be positive, got {}", self.search.bm25_k1);
+        if self.search.bm25.k1 <= 0.0 {
+            anyhow::bail!("bm25_k1 must be positive, got {}", self.search.bm25.k1);
         }
-        if self.search.bm25_b < 0.0 || self.search.bm25_b > 1.0 {
-            anyhow::bail!("bm25_b must be in range 0.0..=1.0, got {}", self.search.bm25_b);
+        if self.search.bm25.b < 0.0 || self.search.bm25.b > 1.0 {
+            anyhow::bail!("bm25_b must be in range 0.0..=1.0, got {}", self.search.bm25.b);
         }
         if let Some(git) = &self.git {
             if git.depth_limit < -1 {
@@ -193,7 +193,10 @@ mod tests {
                 ..IndexConfig::default()
             },
             search: SearchConfig {
-                same_src_score_decay: 1.5,
+                ranking: RankingConfig {
+                    same_src_score_decay: 1.5,
+                    ..RankingConfig::default()
+                },
                 ..SearchConfig::default()
             },
             ..Config::default()
@@ -285,7 +288,10 @@ mod tests {
                 ..IndexConfig::default()
             },
             search: SearchConfig {
-                fusion_strategy: "invalid".to_string(),
+                fusion: FusionConfig {
+                    strategy: "invalid".to_string(),
+                    ..FusionConfig::default()
+                },
                 ..SearchConfig::default()
             },
             ..Config::default()
@@ -302,7 +308,10 @@ mod tests {
                 ..IndexConfig::default()
             },
             search: SearchConfig {
-                rrf_k: 0.0,
+                fusion: FusionConfig {
+                    rrf_k: 0.0,
+                    ..FusionConfig::default()
+                },
                 ..SearchConfig::default()
             },
             ..Config::default()
@@ -319,7 +328,10 @@ mod tests {
                 ..IndexConfig::default()
             },
             search: SearchConfig {
-                semantic_weight: 1.5,
+                fusion: FusionConfig {
+                    semantic_weight: 1.5,
+                    ..FusionConfig::default()
+                },
                 ..SearchConfig::default()
             },
             ..Config::default()
@@ -336,7 +348,10 @@ mod tests {
                 ..IndexConfig::default()
             },
             search: SearchConfig {
-                bm25_k1: 0.0,
+                bm25: Bm25Config {
+                    k1: 0.0,
+                    ..Bm25Config::default()
+                },
                 ..SearchConfig::default()
             },
             ..Config::default()
@@ -353,7 +368,10 @@ mod tests {
                 ..IndexConfig::default()
             },
             search: SearchConfig {
-                bm25_b: 1.5,
+                bm25: Bm25Config {
+                    b: 1.5,
+                    ..Bm25Config::default()
+                },
                 ..SearchConfig::default()
             },
             ..Config::default()
@@ -370,7 +388,10 @@ mod tests {
                 ..IndexConfig::default()
             },
             search: SearchConfig {
-                bm25_b: -0.1,
+                bm25: Bm25Config {
+                    b: -0.1,
+                    ..Bm25Config::default()
+                },
                 ..SearchConfig::default()
             },
             ..Config::default()

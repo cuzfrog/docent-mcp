@@ -17,14 +17,18 @@ depth_limit      = 1000               # -1 = no limit (all history)
 branch           = "main"
 glob_patterns    = ["*.rs", "*.java", "*.py", "*.js", "*.ts", "*.go"]
 
-[search]
+[search.ranking]
 same_src_score_decay = 0.9            # score multiplier for subsequent chunks from same source
 file_hint_boost      = 1.5            # score multiplier for chunks matching the MCP file_hint parameter
-fusion_strategy     = "rrf"           # rrf | weighted_sum | comb_sum | comb_mnz
+
+[search.fusion]
+strategy           = "rrf"           # rrf | weighted_sum | comb_sum | comb_mnz
 rrf_k               = 60.0            # RRF k parameter
 semantic_weight     = 0.7             # only used by weighted_sum strategy
-bm25_k1             = 1.2            # BM25 k1 parameter
-bm25_b              = 0.75           # BM25 b parameter
+
+[search.bm25]
+k1                  = 1.2            # BM25 k1 parameter
+b                   = 0.75           # BM25 b parameter
 
 [server]
 log_level = "debug"                   # debug | info | warn | error

@@ -39,20 +39,38 @@ pub struct ServerConfig {
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct SearchConfig {
+    #[serde(default)]
+    pub ranking: RankingConfig,
+    #[serde(default)]
+    pub fusion: FusionConfig,
+    #[serde(default)]
+    pub bm25: Bm25Config,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+pub struct RankingConfig {
     #[serde(default = "super::defaults::default_same_src_score_decay")]
     pub same_src_score_decay: f32,
+    #[serde(default = "super::defaults::default_file_hint_boost")]
+    pub file_hint_boost: f32,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+pub struct FusionConfig {
     #[serde(default = "super::defaults::default_fusion_strategy")]
-    pub fusion_strategy: String,
+    pub strategy: String,
     #[serde(default = "super::defaults::default_rrf_k")]
     pub rrf_k: f32,
     #[serde(default = "super::defaults::default_semantic_weight")]
     pub semantic_weight: f32,
-    #[serde(default = "super::defaults::default_file_hint_boost")]
-    pub file_hint_boost: f32,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+pub struct Bm25Config {
     #[serde(default = "super::defaults::default_bm25_k1")]
-    pub bm25_k1: f32,
+    pub k1: f32,
     #[serde(default = "super::defaults::default_bm25_b")]
-    pub bm25_b: f32,
+    pub b: f32,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -96,16 +114,44 @@ impl Default for ServerConfig {
     }
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for SearchConfig {
     fn default() -> Self {
         Self {
+            ranking: RankingConfig::default(),
+            fusion: FusionConfig::default(),
+            bm25: Bm25Config::default(),
+        }
+    }
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for RankingConfig {
+    fn default() -> Self {
+        Self {
             same_src_score_decay: super::defaults::default_same_src_score_decay(),
-            fusion_strategy: super::defaults::default_fusion_strategy(),
+            file_hint_boost: super::defaults::default_file_hint_boost(),
+        }
+    }
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for FusionConfig {
+    fn default() -> Self {
+        Self {
+            strategy: super::defaults::default_fusion_strategy(),
             rrf_k: super::defaults::default_rrf_k(),
             semantic_weight: super::defaults::default_semantic_weight(),
-            file_hint_boost: super::defaults::default_file_hint_boost(),
-            bm25_k1: super::defaults::default_bm25_k1(),
-            bm25_b: super::defaults::default_bm25_b(),
+        }
+    }
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for Bm25Config {
+    fn default() -> Self {
+        Self {
+            k1: super::defaults::default_bm25_k1(),
+            b: super::defaults::default_bm25_b(),
         }
     }
 }

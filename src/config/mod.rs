@@ -21,7 +21,7 @@ chunk_overlap = 128
 [server]
 log_level = "debug"
 
-[search]
+[search.ranking]
 same_src_score_decay = 0.85
 "#;
         let config: Config = toml::from_str(toml_str).unwrap();
@@ -31,7 +31,7 @@ same_src_score_decay = 0.85
         assert_eq!(config.index.chunk_overlap, 128);
         assert_eq!(config.server.log_level, "debug");
         assert_eq!(config.server.port, 0);
-        assert_eq!(config.search.same_src_score_decay, 0.85);
+        assert_eq!(config.search.ranking.same_src_score_decay, 0.85);
     }
 
     #[test]
@@ -48,7 +48,7 @@ same_src_score_decay = 0.85
         assert_eq!(config.index.chunk_overlap, super::defaults::default_chunk_overlap());
         assert_eq!(config.index.max_size_mb, super::defaults::default_max_size_mb());
         assert_eq!(config.server.log_level, super::defaults::default_log_level());
-        assert_eq!(config.search.same_src_score_decay, super::defaults::default_same_src_score_decay());
+        assert_eq!(config.search.ranking.same_src_score_decay, super::defaults::default_same_src_score_decay());
         assert!(config.git.is_none());
     }
 
@@ -90,7 +90,7 @@ embedding_model = "BGESmallENV15Q"
 [search]
 "#;
         let config: Config = toml::from_str(toml_str).unwrap();
-        assert!((config.search.same_src_score_decay - 0.9).abs() < f32::EPSILON);
+        assert!((config.search.ranking.same_src_score_decay - 0.9).abs() < f32::EPSILON);
     }
 
     #[test]
@@ -127,32 +127,32 @@ embedding_model = "BGESmallENV15Q"
 [index]
 embedding_model = "BGESmallENV15Q"
 
-[search]
-fusion_strategy = "weighted_sum"
+[search.fusion]
+strategy = "weighted_sum"
 rrf_k = 100.0
 semantic_weight = 0.3
 "#;
         let config: Config = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.search.fusion_strategy, "weighted_sum");
-        assert!((config.search.rrf_k - 100.0).abs() < f32::EPSILON);
-        assert!((config.search.semantic_weight - 0.3).abs() < f32::EPSILON);
+        assert_eq!(config.search.fusion.strategy, "weighted_sum");
+        assert!((config.search.fusion.rrf_k - 100.0).abs() < f32::EPSILON);
+        assert!((config.search.fusion.semantic_weight - 0.3).abs() < f32::EPSILON);
     }
 
     #[test]
     fn test_fusion_strategy_default() {
         let config: Config = Config::default();
-        assert_eq!(config.search.fusion_strategy, "rrf");
+        assert_eq!(config.search.fusion.strategy, "rrf");
     }
 
     #[test]
     fn test_rrf_k_default() {
         let config: Config = Config::default();
-        assert!((config.search.rrf_k - 60.0).abs() < f32::EPSILON);
+        assert!((config.search.fusion.rrf_k - 60.0).abs() < f32::EPSILON);
     }
 
     #[test]
     fn test_semantic_weight_default() {
         let config: Config = Config::default();
-        assert!((config.search.semantic_weight - 0.7).abs() < f32::EPSILON);
+        assert!((config.search.fusion.semantic_weight - 0.7).abs() < f32::EPSILON);
     }
 }

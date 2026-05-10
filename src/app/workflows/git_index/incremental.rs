@@ -65,8 +65,8 @@ impl<'a> GitIndexWorkflow<'a> {
             self.embedder_factory,
             &self.config.index,
             &indexable,
-            self.config.search.bm25_k1,
-            self.config.search.bm25_b,
+            self.config.search.bm25.k1,
+            self.config.search.bm25.b,
             Some(pb2.as_ref()),
         )?;
         pb2.finish();
@@ -89,8 +89,8 @@ impl<'a> GitIndexWorkflow<'a> {
             merged_metadata,
             embedder.dims(),
             Some(head_commit),
-            self.config.search.bm25_k1,
-            self.config.search.bm25_b,
+            self.config.search.bm25.k1,
+            self.config.search.bm25.b,
         )?;
 
         Ok(GitIndexOutcome::Indexed {

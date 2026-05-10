@@ -36,8 +36,8 @@ impl<'a> FileIndexWorkflow<'a> {
             self.embedder_factory,
             &self.config.index,
             &docs,
-            self.config.search.bm25_k1,
-            self.config.search.bm25_b,
+            self.config.search.bm25.k1,
+            self.config.search.bm25.b,
             Some(pb.as_ref()),
         )?;
         pb.finish();

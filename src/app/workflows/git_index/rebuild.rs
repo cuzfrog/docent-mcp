@@ -40,8 +40,8 @@ impl<'a> GitIndexWorkflow<'a> {
             self.embedder_factory,
             &self.config.index,
             &indexable,
-            self.config.search.bm25_k1,
-            self.config.search.bm25_b,
+            self.config.search.bm25.k1,
+            self.config.search.bm25.b,
             Some(pb_embed.as_ref()),
         )?;
         pb_embed.finish();
