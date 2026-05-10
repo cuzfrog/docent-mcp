@@ -46,6 +46,12 @@ impl Config {
         if self.search.semantic_weight < 0.0 || self.search.semantic_weight > 1.0 {
             anyhow::bail!("semantic_weight must be in range 0.0..=1.0, got {}", self.search.semantic_weight);
         }
+        if self.search.bm25_k1 <= 0.0 {
+            anyhow::bail!("bm25_k1 must be positive, got {}", self.search.bm25_k1);
+        }
+        if self.search.bm25_b < 0.0 || self.search.bm25_b > 1.0 {
+            anyhow::bail!("bm25_b must be in range 0.0..=1.0, got {}", self.search.bm25_b);
+        }
         if let Some(git) = &self.git {
             if git.depth_limit < -1 {
                 anyhow::bail!(
@@ -188,10 +194,7 @@ mod tests {
             },
             search: SearchConfig {
                 same_src_score_decay: 1.5,
-                fusion_strategy: "rrf".to_string(),
-                rrf_k: 60.0,
-                semantic_weight: 0.7,
-                file_hint_boost: 1.5,
+                ..SearchConfig::default()
             },
             ..Config::default()
         };
@@ -323,5 +326,68 @@ mod tests {
         };
         let err = config.validate().unwrap_err();
         assert!(err.to_string().contains("semantic_weight must be in range"));
+    }
+
+    #[test]
+    fn test_bm25_k1_non_positive_validation_error() {
+        let config = Config {
+            index: IndexConfig {
+                embedding_model: "BGESmallENV15Q".to_string(),
+                ..IndexConfig::default()
+            },
+            search: SearchConfig {
+                bm25_k1: 0.0,
+                ..SearchConfig::default()
+            },
+            ..Config::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("bm25_k1 must be positive"));
+    }
+
+    #[test]
+    fn test_bm25_b_out_of_range_validation_error() {
+        let config = Config {
+            index: IndexConfig {
+                embedding_model: "BGESmallENV15Q".to_string(),
+                ..IndexConfig::default()
+            },
+            search: SearchConfig {
+                bm25_b: 1.5,
+                ..SearchConfig::default()
+            },
+            ..Config::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("bm25_b must be in range 0.0..=1.0"));
+    }
+
+    #[test]
+    fn test_bm25_b_negative_validation_error() {
+        let config = Config {
+            index: IndexConfig {
+                embedding_model: "BGESmallENV15Q".to_string(),
+                ..IndexConfig::default()
+            },
+            search: SearchConfig {
+                bm25_b: -0.1,
+                ..SearchConfig::default()
+            },
+            ..Config::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("bm25_b must be in range 0.0..=1.0"));
+    }
+
+    #[test]
+    fn test_bm25_defaults_pass_validation() {
+        let config = Config {
+            index: IndexConfig {
+                embedding_model: "BGESmallENV15Q".to_string(),
+                ..IndexConfig::default()
+            },
+            ..Config::default()
+        };
+        assert!(config.validate().is_ok());
     }
 }

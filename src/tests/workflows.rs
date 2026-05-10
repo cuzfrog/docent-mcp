@@ -16,8 +16,6 @@ fn test_config(index_dir: &std::path::Path) -> IndexConfig {
         chunk_size: 512,
         chunk_overlap: 64,
         max_size_mb: 512,
-        bm25_k1: 1.2,
-        bm25_b: 0.75,
     }
 }
 
@@ -60,7 +58,7 @@ fn test_index_and_store_round_trip() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let batch = index_documents(&docs, &config, &mut embedder, None).unwrap();
+    let batch = index_documents(&docs, &config, &mut embedder, None, 1.2, 0.75).unwrap();
 
     assert!(!batch.vectors.is_empty(), "Should produce vectors");
     assert_eq!(batch.vectors.len(), batch.metadata.len());
@@ -95,7 +93,7 @@ fn test_empty_document_list_produces_empty_index() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let batch = index_documents(&docs, &config, &mut embedder, None).unwrap();
+    let batch = index_documents(&docs, &config, &mut embedder, None, 1.2, 0.75).unwrap();
 
     assert!(batch.vectors.is_empty());
     assert!(batch.metadata.is_empty());
@@ -123,10 +121,10 @@ fn test_vectors_are_deterministic() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let batch1 = index_documents(&docs, &config, &mut embedder, None).unwrap();
+    let batch1 = index_documents(&docs, &config, &mut embedder, None, 1.2, 0.75).unwrap();
 
     let mut embedder2 = FakeEmbedder::new();
-    let batch2 = index_documents(&docs, &config, &mut embedder2, None).unwrap();
+    let batch2 = index_documents(&docs, &config, &mut embedder2, None, 1.2, 0.75).unwrap();
 
     assert_eq!(batch1.vectors, batch2.vectors);
     assert_eq!(batch1.metadata.len(), batch2.metadata.len());
@@ -144,7 +142,7 @@ fn test_index_preserves_metadata_fields() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let batch = index_documents(&docs, &config, &mut embedder, None).unwrap();
+    let batch = index_documents(&docs, &config, &mut embedder, None, 1.2, 0.75).unwrap();
 
     let repo = IndexRepository::new(&index_dir, &config);
     let doc_count = crate::indexing::unique_doc_count(&batch.metadata);

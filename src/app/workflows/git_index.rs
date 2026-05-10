@@ -129,6 +129,8 @@ impl<'a> GitIndexWorkflow<'a> {
             &self.config.index,
             &mut *embedder,
             Some(pb_embed.as_ref()),
+            self.config.search.bm25_k1,
+            self.config.search.bm25_b,
         )?;
         pb_embed.finish();
         let embed_secs = embed_start.elapsed().as_secs_f64();
@@ -220,6 +222,8 @@ impl<'a> GitIndexWorkflow<'a> {
             &self.config.index,
             &mut *embedder,
             Some(pb2.as_ref()),
+            self.config.search.bm25_k1,
+            self.config.search.bm25_b,
         )?;
         pb2.finish();
         let embed_secs = embed_start.elapsed().as_secs_f64();
@@ -239,15 +243,15 @@ impl<'a> GitIndexWorkflow<'a> {
         let doc_count = unique_doc_count(&merged_metadata);
         let chunk_texts: Vec<&str> = merged_metadata.iter().map(|m| m.chunk_text.as_str()).collect();
         let (bm25_embeddings, bm25_avgdl) = Bm25IndexBuilder {
-            k1: self.config.index.bm25_k1,
-            b: self.config.index.bm25_b,
+            k1: self.config.search.bm25_k1,
+            b: self.config.search.bm25_b,
         }.build(&chunk_texts);
         let store_batch = IndexedBatch {
             vectors: merged_vectors,
             metadata: merged_metadata,
             bm25_embeddings,
-            bm25_k1: self.config.index.bm25_k1,
-            bm25_b: self.config.index.bm25_b,
+            bm25_k1: self.config.search.bm25_k1,
+            bm25_b: self.config.search.bm25_b,
             bm25_avgdl,
         };
         repo.store(
@@ -335,8 +339,6 @@ mod tests {
                 chunk_size: 512,
                 chunk_overlap: 64,
                 max_size_mb: 512,
-                bm25_k1: 1.2,
-                bm25_b: 0.75,
             },
             server: crate::config::ServerConfig {
                 port: 0,
@@ -348,6 +350,8 @@ mod tests {
                 rrf_k: 60.0,
                 semantic_weight: 0.7,
                 file_hint_boost: 1.5,
+                bm25_k1: 1.2,
+                bm25_b: 0.75,
             },
             git: None,
             file: None,
@@ -363,8 +367,6 @@ mod tests {
                 chunk_size: 512,
                 chunk_overlap: 64,
                 max_size_mb: 512,
-                bm25_k1: 1.2,
-                bm25_b: 0.75,
             },
             server: crate::config::ServerConfig {
                 port: 0,
@@ -376,6 +378,8 @@ mod tests {
                 rrf_k: 60.0,
                 semantic_weight: 0.7,
                 file_hint_boost: 1.5,
+                bm25_k1: 1.2,
+                bm25_b: 0.75,
             },
             git: Some(GitConfig {
                 depth_limit: -1,

@@ -99,8 +99,6 @@ fn serve_config(persist_path: &Path) -> Config {
             chunk_size: 256,
             chunk_overlap: 32,
             max_size_mb: 512,
-            bm25_k1: 1.2,
-            bm25_b: 0.75,
         },
         server: crate::config::ServerConfig {
             port: 9999,
@@ -112,6 +110,8 @@ fn serve_config(persist_path: &Path) -> Config {
             rrf_k: 60.0,
             semantic_weight: 0.7,
             file_hint_boost: 1.5,
+            bm25_k1: 1.2,
+            bm25_b: 0.75,
         },
         git: None,
         file: None,
@@ -245,8 +245,6 @@ fn create_minimal_file_index(persist_path: &Path) {
         chunk_size: 256,
         chunk_overlap: 32,
         max_size_mb: 512,
-        bm25_k1: 1.2,
-        bm25_b: 0.75,
     };
 
     let repo = IndexRepository::new(persist_path, &config);
@@ -262,7 +260,7 @@ fn create_minimal_file_index(persist_path: &Path) {
         is_fresh: None,
     };
 
-    let batch = crate::indexing::index_documents(&[doc], &config, &mut embedder, None).unwrap();
+    let batch = crate::indexing::index_documents(&[doc], &config, &mut embedder, None, 1.2, 0.75).unwrap();
     let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
     repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None)
         .unwrap();

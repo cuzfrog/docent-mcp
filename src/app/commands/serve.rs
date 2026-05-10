@@ -100,7 +100,6 @@ pub(crate) fn prepare_serve(
         merged,
         embedder,
         &config.search,
-        &config.index,
     )?);
 
     // 5. Build MCP server and router

@@ -15,6 +15,8 @@ pub fn index_documents(
     config: &IndexConfig,
     embedder: &mut dyn EmbeddingService,
     progress: Option<&dyn ProgressSink>,
+    bm25_k1: f32,
+    bm25_b: f32,
 ) -> anyhow::Result<IndexedBatch> {
     let chunking_config = ChunkingConfig {
         chunk_size: config.chunk_size,
@@ -59,8 +61,8 @@ pub fn index_documents(
 
     // Phase E: Build BM25 embeddings from chunk texts.
     let (bm25_embeddings, bm25_avgdl) = Bm25IndexBuilder {
-        k1: config.bm25_k1,
-        b: config.bm25_b,
+        k1: bm25_k1,
+        b: bm25_b,
     }
     .build(&chunk_texts);
 
@@ -68,8 +70,8 @@ pub fn index_documents(
         vectors: all_vectors,
         metadata: batch_metadata,
         bm25_embeddings,
-        bm25_k1: config.bm25_k1,
-        bm25_b: config.bm25_b,
+        bm25_k1,
+        bm25_b,
         bm25_avgdl,
     })
 }

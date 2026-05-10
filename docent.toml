@@ -19,6 +19,8 @@ glob_patterns    = ["*.rs", "*.java", "*.py", "*.js", "*.ts", "*.go"]
 
 [search]
 same_src_score_decay = 0.9            # score multiplier for subsequent chunks from same source
+bm25_k1 = 1.2            # BM25 k1 parameter
+bm25_b  = 0.75           # BM25 b parameter
 
 [server]
 log_level = "debug"                   # debug | info | warn | error
