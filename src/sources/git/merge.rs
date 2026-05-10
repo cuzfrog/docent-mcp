@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::documents::{ChunkKind, ChunkMetadata};
 use crate::index::VectorStore;
-use crate::indexing::MergedBatch;
+
 use crate::sources::git::extract::GitDocument;
 
 /// Merge old and new git-index data into a single batch.
@@ -16,7 +16,7 @@ pub fn merge_git_incremental(
     new_docs: &[GitDocument],
     new_metadata: &[ChunkMetadata],
     new_vectors: &[Vec<f32>],
-) -> MergedBatch {
+) -> (Vec<Vec<f32>>, Vec<ChunkMetadata>) {
     // Build freshness map with owned keys so the borrow on old_metadata
     // can be dropped before we move old_metadata into the combined result.
     let fresh_map: HashMap<(String, String), bool> = {
@@ -57,8 +57,5 @@ pub fn merge_git_incremental(
         }
     }
 
-    MergedBatch {
-        vectors: combined_vectors,
-        metadata: combined_metadata,
-    }
+    (combined_vectors, combined_metadata)
 }

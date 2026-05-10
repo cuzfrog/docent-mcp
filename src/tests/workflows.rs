@@ -16,6 +16,8 @@ fn test_config(index_dir: &std::path::Path) -> IndexConfig {
         chunk_size: 512,
         chunk_overlap: 64,
         max_size_mb: 512,
+        bm25_k1: 1.2,
+        bm25_b: 0.75,
     }
 }
 
@@ -68,9 +70,9 @@ fn test_index_and_store_round_trip() {
         assert_eq!(vec.len(), 4);
     }
 
-    let repo = IndexRepository::new(&index_dir, SourceIndexKind::File, &config);
+    let repo = IndexRepository::new(&index_dir, &config);
     let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
-    repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, None).unwrap();
+    repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None).unwrap();
 
     let (header, vectors, metadata) = read_index_at(&index_dir);
 
@@ -98,9 +100,9 @@ fn test_empty_document_list_produces_empty_index() {
     assert!(batch.vectors.is_empty());
     assert!(batch.metadata.is_empty());
 
-    let repo = IndexRepository::new(&index_dir, SourceIndexKind::File, &config);
+    let repo = IndexRepository::new(&index_dir, &config);
     let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
-    repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, None).unwrap();
+    repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None).unwrap();
 
     let (header, vectors, metadata) = read_index_at(&index_dir);
     assert_eq!(header.chunk_count, 0);
@@ -144,9 +146,9 @@ fn test_index_preserves_metadata_fields() {
     let mut embedder = FakeEmbedder::new();
     let batch = index_documents(&docs, &config, &mut embedder, None).unwrap();
 
-    let repo = IndexRepository::new(&index_dir, SourceIndexKind::File, &config);
+    let repo = IndexRepository::new(&index_dir, &config);
     let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
-    repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, None).unwrap();
+    repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None).unwrap();
 
     let (_header, _vectors, metadata) = read_index_at(&index_dir);
 

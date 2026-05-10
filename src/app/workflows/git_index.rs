@@ -5,7 +5,7 @@ use crate::config::{Config, GitConfig};
 use crate::embedder::{Embedder, EmbedderFactory};
 use crate::index::{IndexRepository, SourceIndexKind};
 use crate::indexing;
-use crate::indexing::unique_doc_count;
+use crate::indexing::{unique_doc_count, Bm25IndexBuilder, IndexedBatch};
 use crate::sources::git::GitIndexer;
 use crate::support::ui::WorkflowUi;
 
@@ -67,7 +67,8 @@ impl<'a> GitIndexWorkflow<'a> {
         let persist_path = self.config.persist_path_buf();
         let dims = Embedder::dims_for_model(&self.config.index.embedding_model)?;
 
-        if request.rebuild || !IndexRepository::exists(&persist_path, SourceIndexKind::Git) {
+        let repo = IndexRepository::new(&persist_path, &self.config.index);
+        if request.rebuild || !repo.exists(SourceIndexKind::Git) {
             self.rebuild(&request, git_config, &persist_path, dims)
         } else {
             self.incremental(&request, git_config, &persist_path, dims)
@@ -132,13 +133,13 @@ impl<'a> GitIndexWorkflow<'a> {
         pb_embed.finish();
         let embed_secs = embed_start.elapsed().as_secs_f64();
 
-        let repo = IndexRepository::new(persist_path, SourceIndexKind::Git, &self.config.index);
+        let repo = IndexRepository::new(persist_path, &self.config.index);
         let chunk_count = batch.metadata.len();
         let doc_count = unique_doc_count(&batch.metadata);
-        repo.store_index(
+        repo.store(
+            SourceIndexKind::Git,
+            &batch,
             embedder.dims(),
-            &batch.vectors,
-            batch.metadata,
             doc_count,
             Some(head_commit),
         )?;
@@ -164,8 +165,8 @@ impl<'a> GitIndexWorkflow<'a> {
         persist_path: &Path,
         dims: usize,
     ) -> anyhow::Result<GitIndexOutcome> {
-        let repo = IndexRepository::new(persist_path, SourceIndexKind::Git, &self.config.index);
-        let stored = repo.load_one()?;
+        let repo = IndexRepository::new(persist_path, &self.config.index);
+        let stored = repo.load_one(SourceIndexKind::Git)?;
         let old_header = stored.header;
         let old_vectors = stored.vectors;
         let old_metadata = stored.metadata;
@@ -233,12 +234,26 @@ impl<'a> GitIndexWorkflow<'a> {
             &batch.vectors,
         );
 
-        let chunk_count = merged.metadata.len();
-        let doc_count = unique_doc_count(&merged.metadata);
-        repo.store_index(
+        let (merged_vectors, merged_metadata) = merged;
+        let chunk_count = merged_metadata.len();
+        let doc_count = unique_doc_count(&merged_metadata);
+        let chunk_texts: Vec<&str> = merged_metadata.iter().map(|m| m.chunk_text.as_str()).collect();
+        let (bm25_embeddings, bm25_avgdl) = Bm25IndexBuilder {
+            k1: self.config.index.bm25_k1,
+            b: self.config.index.bm25_b,
+        }.build(&chunk_texts);
+        let store_batch = IndexedBatch {
+            vectors: merged_vectors,
+            metadata: merged_metadata,
+            bm25_embeddings,
+            bm25_k1: self.config.index.bm25_k1,
+            bm25_b: self.config.index.bm25_b,
+            bm25_avgdl,
+        };
+        repo.store(
+            SourceIndexKind::Git,
+            &store_batch,
             embedder.dims(),
-            &merged.vectors,
-            merged.metadata,
             doc_count,
             Some(head_commit),
         )?;
@@ -320,6 +335,8 @@ mod tests {
                 chunk_size: 512,
                 chunk_overlap: 64,
                 max_size_mb: 512,
+                bm25_k1: 1.2,
+                bm25_b: 0.75,
             },
             server: crate::config::ServerConfig {
                 port: 0,
@@ -327,6 +344,9 @@ mod tests {
             },
             search: crate::config::SearchConfig {
                 same_src_score_decay: 0.9,
+                fusion_strategy: "rrf".to_string(),
+                rrf_k: 60.0,
+                semantic_weight: 0.7,
             },
             git: None,
             file: None,
@@ -342,6 +362,8 @@ mod tests {
                 chunk_size: 512,
                 chunk_overlap: 64,
                 max_size_mb: 512,
+                bm25_k1: 1.2,
+                bm25_b: 0.75,
             },
             server: crate::config::ServerConfig {
                 port: 0,
@@ -349,6 +371,9 @@ mod tests {
             },
             search: crate::config::SearchConfig {
                 same_src_score_decay: 0.9,
+                fusion_strategy: "rrf".to_string(),
+                rrf_k: 60.0,
+                semantic_weight: 0.7,
             },
             git: Some(GitConfig {
                 depth_limit: -1,

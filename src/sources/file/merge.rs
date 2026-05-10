@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use crate::documents::ChunkMetadata;
 use crate::index::VectorStore;
-use crate::indexing::MergedBatch;
+
 
 /// Extract old file hashes (source_path → source_revision) from stored metadata.
 ///
@@ -35,7 +35,7 @@ pub fn merge_incremental(
     old_vectors: &VectorStore,
     fresh_metadata: &[ChunkMetadata],
     fresh_vectors: &[Vec<f32>],
-) -> MergedBatch {
+) -> (Vec<Vec<f32>>, Vec<ChunkMetadata>) {
     // Build a set of source paths that changed (have fresh data).
     let changed_paths: HashSet<&str> = fresh_metadata
         .iter()
@@ -92,10 +92,7 @@ pub fn merge_incremental(
         }
     }
 
-    MergedBatch {
-        vectors: all_vectors,
-        metadata: all_metadata,
-    }
+    (all_vectors, all_metadata)
 }
 
 #[cfg(test)]
@@ -188,11 +185,11 @@ mod tests {
             &fresh_vectors,
         );
 
-        assert_eq!(result.metadata.len(), 4);
-        assert_eq!(result.vectors.len(), 4);
+        assert_eq!(result.1.len(), 4);
+        assert_eq!(result.0.len(), 4);
 
         let source_paths: Vec<&str> = result
-            .metadata
+            .1
             .iter()
             .map(|m| &*m.doc_ctx.source_path)
             .collect();
@@ -220,9 +217,9 @@ mod tests {
             &fresh_vectors,
         );
 
-        assert_eq!(result.metadata.len(), 1);
-        assert_eq!(result.vectors.len(), 1);
-        assert_eq!(&*result.metadata[0].doc_ctx.source_path, "a.md");
+        assert_eq!(result.1.len(), 1);
+        assert_eq!(result.0.len(), 1);
+        assert_eq!(&*result.1[0].doc_ctx.source_path, "a.md");
     }
 
     #[test]
@@ -275,11 +272,11 @@ mod tests {
             &fresh_vectors,
         );
 
-        assert_eq!(result.metadata.len(), 3);
-        assert_eq!(result.vectors.len(), 3);
+        assert_eq!(result.1.len(), 3);
+        assert_eq!(result.0.len(), 3);
 
         let source_paths: Vec<&str> = result
-            .metadata
+            .1
             .iter()
             .map(|m| &*m.doc_ctx.source_path)
             .collect();
@@ -317,10 +314,10 @@ mod tests {
         );
 
         // b.md should be excluded from the merged result
-        assert_eq!(result.metadata.len(), 2);
-        assert_eq!(result.vectors.len(), 2);
+        assert_eq!(result.1.len(), 2);
+        assert_eq!(result.0.len(), 2);
         let source_paths: Vec<&str> = result
-            .metadata
+            .1
             .iter()
             .map(|m| &*m.doc_ctx.source_path)
             .collect();

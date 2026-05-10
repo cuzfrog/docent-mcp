@@ -8,7 +8,7 @@ use rmcp::ServerHandler;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::search::VectorSearchService;
+use crate::search::HybridSearchService;
 
 use super::search_tool;
 
@@ -25,13 +25,13 @@ fn default_limit() -> u8 {
 
 #[derive(Clone)]
 pub struct DocentMcpServer {
-    pub search_service: Arc<VectorSearchService>,
+    pub search_service: Arc<HybridSearchService>,
 }
 
 #[tool_router]
 impl DocentMcpServer {
     #[tool(
-        description = "Search Design Decision Records by semantic similarity. Returns the most relevant DDRs with their source paths, matching content, and last-modified timestamps."
+        description = "Search Design Decision Records by hybrid semantic and lexical relevance. Returns the most relevant DDRs ranked by a fused score combining dense vector similarity and BM25 keyword matching."
     )]
     async fn search_ddr(
         &self,

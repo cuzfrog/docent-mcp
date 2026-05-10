@@ -33,6 +33,19 @@ impl Config {
                 self.search.same_src_score_decay
             );
         }
+        match self.search.fusion_strategy.as_str() {
+            "rrf" | "weighted_sum" | "comb_sum" | "comb_mnz" => {}
+            other => anyhow::bail!(
+                "fusion_strategy must be one of rrf, weighted_sum, comb_sum, comb_mnz, got '{}'",
+                other
+            ),
+        }
+        if self.search.rrf_k <= 0.0 {
+            anyhow::bail!("rrf_k must be positive, got {}", self.search.rrf_k);
+        }
+        if self.search.semantic_weight < 0.0 || self.search.semantic_weight > 1.0 {
+            anyhow::bail!("semantic_weight must be in range 0.0..=1.0, got {}", self.search.semantic_weight);
+        }
         if let Some(git) = &self.git {
             if git.depth_limit < -1 {
                 anyhow::bail!(
@@ -175,6 +188,9 @@ mod tests {
             },
             search: SearchConfig {
                 same_src_score_decay: 1.5,
+                fusion_strategy: "rrf".to_string(),
+                rrf_k: 60.0,
+                semantic_weight: 0.7,
             },
             ..Config::default()
         };
@@ -255,5 +271,56 @@ mod tests {
             ..Config::default()
         };
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_invalid_fusion_strategy_validation_error() {
+        let config = Config {
+            index: IndexConfig {
+                embedding_model: "BGESmallENV15Q".to_string(),
+                ..IndexConfig::default()
+            },
+            search: SearchConfig {
+                fusion_strategy: "invalid".to_string(),
+                ..SearchConfig::default()
+            },
+            ..Config::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("fusion_strategy must be one of"));
+    }
+
+    #[test]
+    fn test_rrf_k_non_positive_validation_error() {
+        let config = Config {
+            index: IndexConfig {
+                embedding_model: "BGESmallENV15Q".to_string(),
+                ..IndexConfig::default()
+            },
+            search: SearchConfig {
+                rrf_k: 0.0,
+                ..SearchConfig::default()
+            },
+            ..Config::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("rrf_k must be positive"));
+    }
+
+    #[test]
+    fn test_semantic_weight_out_of_range_validation_error() {
+        let config = Config {
+            index: IndexConfig {
+                embedding_model: "BGESmallENV15Q".to_string(),
+                ..IndexConfig::default()
+            },
+            search: SearchConfig {
+                semantic_weight: 1.5,
+                ..SearchConfig::default()
+            },
+            ..Config::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("semantic_weight must be in range"));
     }
 }

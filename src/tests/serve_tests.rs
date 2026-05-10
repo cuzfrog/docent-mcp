@@ -67,6 +67,8 @@ impl ServeIndexAccess for FakeServeIndexAccess {
             Ok(MergedIndex {
                 vectors: VectorStore::from_vec_vec(vec![]).unwrap(),
                 metadata: vec![],
+                bm25_embeddings: None,
+                bm25_header: None,
                 built_at: "2026-01-01T00:00:00Z".to_string(),
             })
         }
@@ -97,6 +99,8 @@ fn serve_config(persist_path: &Path) -> Config {
             chunk_size: 256,
             chunk_overlap: 32,
             max_size_mb: 512,
+            bm25_k1: 1.2,
+            bm25_b: 0.75,
         },
         server: crate::config::ServerConfig {
             port: 9999,
@@ -104,6 +108,9 @@ fn serve_config(persist_path: &Path) -> Config {
         },
         search: crate::config::SearchConfig {
             same_src_score_decay: 0.9,
+            fusion_strategy: "rrf".to_string(),
+            rrf_k: 60.0,
+            semantic_weight: 0.7,
         },
         git: None,
         file: None,
@@ -237,9 +244,11 @@ fn create_minimal_file_index(persist_path: &Path) {
         chunk_size: 256,
         chunk_overlap: 32,
         max_size_mb: 512,
+        bm25_k1: 1.2,
+        bm25_b: 0.75,
     };
 
-    let repo = IndexRepository::new(persist_path, SourceIndexKind::File, &config);
+    let repo = IndexRepository::new(persist_path, &config);
 
     let mut embedder = FakeEmbedder::new();
     let doc = crate::indexing::IndexableDocument {
@@ -254,6 +263,6 @@ fn create_minimal_file_index(persist_path: &Path) {
 
     let batch = crate::indexing::index_documents(&[doc], &config, &mut embedder, None).unwrap();
     let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
-    repo.store_index(embedder.dims(), &batch.vectors, batch.metadata, doc_count, None)
+    repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None)
         .unwrap();
 }

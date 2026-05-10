@@ -94,7 +94,9 @@ describe('View', () => {
         title: 'Test Doc',
         sourcePath: '/path/to/doc.md',
         matchedContent: 'some matched content',
-        score: 0.95,
+        total_score: 0.85,
+        semantic_score: 0.95,
+        bm25_score: 0.75,
         lineStart: 10,
         lineEnd: 20,
         sectionHeading: 'Intro',
@@ -111,7 +113,8 @@ describe('View', () => {
     assert.ok(card);
     assert.equal(card.querySelector('.result-title').textContent, 'Test Doc');
     assert.equal(card.querySelector('.result-source').textContent, '/path/to/doc.md');
-    assert.match(card.querySelector('.result-score').textContent, /95/);
+    assert.match(card.querySelector('.result-score').textContent, /85%/);
+    assert.equal(card.querySelector('.result-score').title, 'semantic: 0.95, bm25: 0.75');
     assert.ok(card.querySelector('.result-lines'));
     assert.equal(card.querySelector('.result-section').textContent, 'Intro');
     // Kind badge
@@ -133,7 +136,9 @@ describe('View', () => {
         title: 'feat: add caching',
         sourcePath: 'src/cache.rs',
         matchedContent: '+ fn get() {}',
-        score: 0.85,
+        total_score: 0.72,
+        semantic_score: 0.85,
+        bm25_score: 0.60,
         lineStart: 10,
         lineEnd: 45,
         sectionHeading: null,
@@ -152,6 +157,9 @@ describe('View', () => {
     const badge = card.querySelector('.result-kind-badge');
     assert.equal(badge.textContent, 'Git');
     assert.ok(badge.classList.contains('badge-git'));
+    // Score with breakdown tooltip
+    assert.match(card.querySelector('.result-score').textContent, /72%/);
+    assert.equal(card.querySelector('.result-score').title, 'semantic: 0.85, bm25: 0.60');
     // Freshness badge
     const freshness = card.querySelector('.result-freshness');
     assert.equal(freshness.textContent, 'Fresh');

@@ -41,8 +41,8 @@ chunk_overlap = 64
 pub fn read_index_at(
     path: &std::path::Path,
 ) -> (crate::index::IndexHeader, VectorStore, Vec<ChunkMetadata>) {
-    let repo = IndexRepository::new(path, SourceIndexKind::File, &IndexConfig::default());
-    let stored = repo.load_one().unwrap();
+    let repo = IndexRepository::new(path, &IndexConfig::default());
+    let stored = repo.load_one(SourceIndexKind::File).unwrap();
     (stored.header, stored.vectors, stored.metadata)
 }
 

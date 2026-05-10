@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::documents::ChunkMetadata;
 use crate::index::VectorStore;
-use crate::indexing::{IndexableDocument, MergedBatch};
+use crate::indexing::IndexableDocument;
 
 use super::diff::FileDiff;
 
@@ -57,7 +57,7 @@ impl FileIndexer {
         old_vectors: &VectorStore,
         fresh_metadata: &[ChunkMetadata],
         fresh_vectors: &[Vec<f32>],
-    ) -> MergedBatch {
+    ) -> (Vec<Vec<f32>>, Vec<ChunkMetadata>) {
         super::merge::merge_incremental(
             sorted_files,
             old_metadata,

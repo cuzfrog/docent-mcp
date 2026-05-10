@@ -26,6 +26,26 @@ pub(crate) fn default_same_src_score_decay() -> f32 {
     0.9
 }
 
+pub(crate) fn default_fusion_strategy() -> String {
+    "rrf".to_string()
+}
+
+pub(crate) const fn default_bm25_k1() -> f32 {
+    1.2
+}
+
+pub(crate) const fn default_bm25_b() -> f32 {
+    0.75
+}
+
+pub(crate) const fn default_rrf_k() -> f32 {
+    60.0
+}
+
+pub(crate) const fn default_semantic_weight() -> f32 {
+    0.7
+}
+
 pub(crate) fn default_git_branch() -> String {
     "main".to_string()
 }

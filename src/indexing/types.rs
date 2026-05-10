@@ -33,9 +33,44 @@ impl IndexableDocument {
 pub(crate) struct IndexedBatch {
     pub vectors: Vec<Vec<f32>>,
     pub metadata: Vec<ChunkMetadata>,
+    // BM25 fields — stubs for SubIndex::store (Step 5). Full integration in later steps.
+    pub bm25_embeddings: Vec<bm25::Embedding<u32>>,
+    pub bm25_k1: f32,
+    pub bm25_b: f32,
+    pub bm25_avgdl: f32,
 }
 
-pub(crate) struct MergedBatch {
-    pub vectors: Vec<Vec<f32>>,
-    pub metadata: Vec<ChunkMetadata>,
+
+/// Encapsulates fitting a BM25 embedder to a corpus and embedding chunk texts.
+pub(crate) struct Bm25IndexBuilder {
+    pub k1: f32,
+    pub b: f32,
+}
+
+impl Bm25IndexBuilder {
+    /// Build BM25 embeddings for all `chunk_texts`.
+    ///
+    /// The embedder is fit to the full corpus via `with_fit_to_corpus`,
+    /// then each text is embedded. Returns the per-chunk embeddings
+    /// and the average document length.
+    pub(crate) fn build(
+        &self,
+        chunk_texts: &[&str],
+    ) -> (Vec<bm25::Embedding<u32>>, f32) {
+        let embedder = bm25::EmbedderBuilder::<u32>::with_fit_to_corpus(
+            bm25::Language::English,
+            chunk_texts,
+        )
+        .k1(self.k1)
+        .b(self.b)
+        .build();
+
+        let avgdl = embedder.avgdl();
+        let embeddings: Vec<bm25::Embedding<u32>> = chunk_texts
+            .iter()
+            .map(|t| embedder.embed(t))
+            .collect();
+
+        (embeddings, avgdl)
+    }
 }

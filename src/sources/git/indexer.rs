@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::config::GitConfig;
 use crate::documents::ChunkMetadata;
-use crate::indexing::MergedBatch;
+
 use crate::sources::git::extract::GitDocument;
 use crate::support::progress::ProgressSink;
 
@@ -73,7 +73,7 @@ impl GitIndexer {
         new_docs: &[GitDocument],
         new_metadata: &[ChunkMetadata],
         new_vectors: &[Vec<f32>],
-    ) -> MergedBatch {
+    ) -> (Vec<Vec<f32>>, Vec<ChunkMetadata>) {
         super::merge::merge_git_incremental(
             old_metadata,
             old_vectors,

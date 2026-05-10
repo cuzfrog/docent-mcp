@@ -1,36 +1,18 @@
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use anyhow::Context;
 use rmcp::transport::streamable_http_server::{
     session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
 };
 
+use crate::app::serve::{builder, preflight};
 use crate::cli::ServeArgs;
-use crate::config::Config;
-use crate::embedder::{EmbedderFactory, EmbeddingService};
+use crate::config::{Config, IndexConfig};
+use crate::embedder::EmbedderFactory;
 use crate::index::{IndexRepository, IndexSizeInfo, MergedIndex};
 use crate::interfaces::mcp::DocentMcpServer;
-use crate::search::VectorSearchService;
 use crate::support::ui::WorkflowUi;
-
-/// Wrapper that bridges `Box<dyn EmbeddingService>` (the factory output) into
-/// `Mutex<dyn EmbeddingService>` (what `Arc<Mutex<dyn EmbeddingService>>` needs).
-struct BoxedEmbedder(Box<dyn EmbeddingService>);
-
-impl EmbeddingService for BoxedEmbedder {
-    fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
-        self.0.embed(texts)
-    }
-
-    fn dims(&self) -> usize {
-        self.0.dims()
-    }
-
-    fn token_counter(&self) -> Box<dyn crate::chunking::TokenCounter> {
-        self.0.token_counter()
-    }
-}
 
 // ---------------------------------------------------------------------------
 // ServeIndexAccess — narrow trait for index-loading operations needed by
@@ -47,7 +29,7 @@ pub(crate) trait ServeIndexAccess: Send + Sync {
     fn load_merged(
         &self,
         persist_path: &Path,
-        config: &crate::config::IndexConfig,
+        config: &IndexConfig,
     ) -> anyhow::Result<MergedIndex>;
 }
 
@@ -59,15 +41,17 @@ impl ServeIndexAccess for RealServeIndexAccess {
         persist_path: &Path,
         max_size_mb: u64,
     ) -> anyhow::Result<Option<IndexSizeInfo>> {
-        IndexRepository::check_size(persist_path, max_size_mb)
+        let repo = IndexRepository::new(persist_path, &IndexConfig::default());
+        repo.check_size(max_size_mb)
     }
 
     fn load_merged(
         &self,
         persist_path: &Path,
-        config: &crate::config::IndexConfig,
+        config: &IndexConfig,
     ) -> anyhow::Result<MergedIndex> {
-        IndexRepository::load_merged_for_serve(persist_path, config)
+        let repo = IndexRepository::new(persist_path, config);
+        repo.load_merged()
     }
 }
 
@@ -101,59 +85,26 @@ pub(crate) fn prepare_serve(
     let persist_path = config.persist_path_buf();
 
     // 1. Check index size
-    if let Some(info) = index_access.check_size(&persist_path, config.index.max_size_mb)? {
-        ui.warn(&format!(
-            "The total index is {:.1} MB, which exceeds the configured limit of {} MB.",
-            info.total_bytes as f64 / (1024.0 * 1024.0),
-            config.index.max_size_mb
-        ));
-        if persist_path.join("file").exists() {
-            ui.warn(&format!(
-                "  file/ subdirectory: {:.1} MB",
-                info.file_bytes as f64 / (1024.0 * 1024.0)
-            ));
-        }
-        if persist_path.join("git").exists() {
-            ui.warn(&format!(
-                "  git/ subdirectory:  {:.1} MB",
-                info.git_bytes as f64 / (1024.0 * 1024.0)
-            ));
-        }
-        if !ui.confirm("Continue?")? {
-            anyhow::bail!("Aborted by user.");
-        }
+    if let Some(_info) = preflight::check_index_size(&persist_path, config, ui, index_access)? {
+        // Warning already printed; user confirmed (or abort returned Err above)
     }
 
     // 2. Load merged index
-    let merged = index_access
-        .load_merged(&persist_path, &config.index)
-        .with_context(|| "Failed to load merged index".to_string())?;
+    let merged = preflight::load_merged_index(&persist_path, &config.index, index_access)?;
 
     // 3. Create embedder
-    let embedder: Arc<Mutex<dyn EmbeddingService>> = Arc::new(Mutex::new(BoxedEmbedder(
-        embedder_factory
-            .create(&config.index.embedding_model)
-            .with_context(|| "Failed to initialize embedding model — cannot start server".to_string())?,
-    )));
+    let embedder = builder::build_embedder(embedder_factory, &config.index.embedding_model)?;
 
-    // 4. Build merged ANN index and search service
-    let ann_index = crate::index::AnnIndex::build(&merged.vectors)
-        .with_context(|| "Failed to build ANN index")?;
-    let ranker = Arc::new(crate::search::AnnRanker::new(
-        config.search.same_src_score_decay,
-        ann_index,
-    ));
-    let search_service = Arc::new(VectorSearchService::new(
+    // 4. Build hybrid search service
+    let search_service = Arc::new(builder::build_hybrid_search_service(
+        merged,
         embedder,
-        Arc::new(merged.vectors),
-        Arc::new(merged.metadata),
-        ranker,
-        merged.built_at,
-    ));
+        &config.search,
+        &config.index,
+    )?);
 
     // 5. Build MCP server and router
     let server = DocentMcpServer { search_service };
-
     let service: StreamableHttpService<DocentMcpServer, LocalSessionManager> =
         StreamableHttpService::new(
             {
@@ -163,7 +114,6 @@ pub(crate) fn prepare_serve(
             LocalSessionManager::default().into(),
             StreamableHttpServerConfig::default(),
         );
-
     let router = crate::ui::router(service);
 
     Ok(PreparedServe { router })
