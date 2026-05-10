@@ -152,6 +152,25 @@ impl EmbeddingService for Embedder {
 }
 
 // ---------------------------------------------------------------------------
+// Allow Box<dyn EmbeddingService> to be used as EmbeddingService directly.
+// This avoids the need for a newtype wrapper in consumers.
+// ---------------------------------------------------------------------------
+
+impl EmbeddingService for Box<dyn EmbeddingService> {
+    fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
+        self.as_mut().embed(texts)
+    }
+
+    fn dims(&self) -> usize {
+        self.as_ref().dims()
+    }
+
+    fn token_counter(&self) -> Box<dyn TokenCounter> {
+        self.as_ref().token_counter()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // EmbedderFactory — abstraction over embedder construction
 // ---------------------------------------------------------------------------
 

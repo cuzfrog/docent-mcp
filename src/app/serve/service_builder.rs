@@ -16,27 +16,11 @@ impl HybridServiceBuilder {
         embedder_factory: &dyn EmbedderFactory,
         embedding_model: &str,
     ) -> anyhow::Result<Arc<Mutex<dyn EmbeddingService>>> {
-        struct BoxedEmbedder(Box<dyn EmbeddingService>);
-
-        impl EmbeddingService for BoxedEmbedder {
-            fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
-                self.0.embed(texts)
-            }
-
-            fn dims(&self) -> usize {
-                self.0.dims()
-            }
-
-            fn token_counter(&self) -> Box<dyn crate::chunking::TokenCounter> {
-                self.0.token_counter()
-            }
-        }
-
         let inner = embedder_factory
             .create(embedding_model)
             .map_err(|e| anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e))?;
 
-        Ok(Arc::new(Mutex::new(BoxedEmbedder(inner))))
+        Ok(Arc::new(Mutex::new(inner)))
     }
 
     pub(crate) fn build(
