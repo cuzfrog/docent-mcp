@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crate::config::Config;
 use crate::embedder::{Embedder, EmbedderFactory};
+use crate::index::{IndexRepository, SourceIndexKind};
 use crate::support::ui::WorkflowUi;
 
 pub(crate) mod rebuild;
@@ -89,6 +90,13 @@ impl<'a> GitIndexWorkflow<'a> {
         if request.rebuild {
             self.rebuild(&request, git_config, &persist_path, dims)
         } else {
+            let repo = IndexRepository::new(&persist_path, &self.config.index);
+            if !repo.exists(SourceIndexKind::Git) {
+                anyhow::bail!(
+                    "No existing Git index found at '{}'. Use `docent index-git --rebuild` to create one.",
+                    persist_path.display()
+                );
+            }
             self.incremental(&request, git_config, &persist_path, dims)
         }
     }
