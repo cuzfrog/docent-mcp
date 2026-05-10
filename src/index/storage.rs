@@ -1,7 +1,7 @@
 use crate::index::schema::{IndexHeader, StoredChunkMetadata, StoredIndex, VectorStore};
 use std::path::Path;
 
-/// Write the index directory: `header.json`, `vectors.bin`, and `metadata.json`.
+/// Write the index directory: `header.json`, `vectors.bin`, and `metadata.bin`.
 ///
 /// Creates `path` (and any missing parents) if it does not exist (`create_dir_all`
 /// is idempotent).  Does **not** validate that `vectors.len()` equals

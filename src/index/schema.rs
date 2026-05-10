@@ -114,7 +114,7 @@ pub enum StoredChunkKind {
     Git,
 }
 
-/// Per-chunk source provenance written to `metadata.json`.
+/// Per-chunk source provenance written to `metadata.bin`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StoredChunkMetadata {
     pub source_path: String,

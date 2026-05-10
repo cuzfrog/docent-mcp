@@ -41,6 +41,10 @@ src/
 │   │   ├── index.rs       #   run_index / run_index_file / run_index_git entry points
 │   │   ├── list_models.rs #   list_models command
 │   │   └── serve.rs       #   run_serve: server bootstrap
+│   ├── serve/             #   Server preflight, search-service builder
+│   │   ├── mod.rs
+│   │   ├── builder.rs     #   build_embedder, build_hybrid_search_service
+│   │   └── preflight.rs   #   check_index_size, load_merged_index
 │   └── workflows/         #   High-level orchestration (struct-based)
 │       ├── file_index.rs  #     File indexing workflow (discover → extract → index)
 │       └── git_index.rs   #     Git history indexing workflow
@@ -65,15 +69,20 @@ src/
 │   └── pipeline.rs        #   Orchestration logic
 │
 ├── index/                 # Persistent index storage & retrieval
-│   ├── schema.rs          #   On-disk index header/schema
+│   ├── schema.rs          #   On-disk index header/schema, VectorStore
 │   ├── storage.rs         #   Vector storage (read/write)
-│   ├── repository.rs      #   IndexRepository: coordinates file/git sub-indexes
-│   └── validation.rs      #   Index integrity checks
+│   ├── repository.rs      #   IndexRepository + MergedIndex
+│   ├── sub_index.rs       #   SubIndex: per-source index load/store/repair
+│   ├── validation.rs      #   Index integrity checks
+│   ├── bm25_schema.rs     #   BM25 sub-index header types
+│   └── bm25_storage.rs    #   BM25 sub-index read/write
 │
-├── search/                # Vector similarity search
-│   ├── types.rs           #   Search result types
-│   ├── service.rs         #   VectorSearchService: query orchestration
-│   └── ranking.rs         #   DecayRanker for interleaved result scoring
+├── search/                # Hybrid (semantic + BM25) search
+│   ├── types.rs           #   SearchResult with three scores
+│   ├── backend.rs         #   ScoreBackend trait + VectorScoreBackend + Bm25ScoreBackend
+│   ├── fusion.rs          #   ScoreFusion strategies (RRF, weighted sum, comb)
+│   ├── orchestrator.rs    #   HybridSearchService: score → fuse → rank
+│   └── ranking.rs         #   DecayRanker: file_hint boost + same-source decay
 │
 ├── interfaces/            # External protocol adapters
 │   ├── mcp.rs             #   MCP server (DocentMcpServer, tool handlers)
@@ -94,7 +103,7 @@ src/
 
 **Data flow (index):** `sources/*/` extract documents/git-history → `chunking/` splits into chunks → `embedder.rs` embeds vectors → `indexing/pipeline.rs` coordinates → `index/storage.rs` persists
 
-**Data flow (search):** `interfaces/mcp.rs` receives query → `search/service.rs` retrieves from `index/` → `search/ranking.rs` scores results → response
+**Data flow (search):** `interfaces/mcp.rs` receives query → `search/orchestrator.rs` scores (semantic + BM25) → `search/fusion.rs` fuses → `search/ranking.rs` ranks with decay + file_hint → response
 
 ## Dependencies
 
