@@ -10,7 +10,7 @@ use crate::app::serve::{builder, preflight};
 use crate::cli::ServeArgs;
 use crate::config::{Config, IndexConfig};
 use crate::embedder::EmbedderFactory;
-use crate::index::{IndexRepository, IndexSizeInfo, MergedIndex};
+use crate::index::{IndexRepository, IndexSizeInfo, LoadMergedResult};
 use crate::interfaces::mcp::DocentMcpServer;
 use crate::support::ui::WorkflowUi;
 
@@ -30,7 +30,9 @@ pub(crate) trait ServeIndexAccess: Send + Sync {
         &self,
         persist_path: &Path,
         config: &IndexConfig,
-    ) -> anyhow::Result<MergedIndex>;
+        k1: f32,
+        b: f32,
+    ) -> anyhow::Result<LoadMergedResult>;
 }
 
 pub(crate) struct RealServeIndexAccess;
@@ -49,9 +51,11 @@ impl ServeIndexAccess for RealServeIndexAccess {
         &self,
         persist_path: &Path,
         config: &IndexConfig,
-    ) -> anyhow::Result<MergedIndex> {
+        k1: f32,
+        b: f32,
+    ) -> anyhow::Result<LoadMergedResult> {
         let repo = IndexRepository::new(persist_path, config);
-        repo.load_merged()
+        repo.load_merged(k1, b)
     }
 }
 
@@ -89,8 +93,15 @@ pub(crate) fn prepare_serve(
         // Warning already printed; user confirmed (or abort returned Err above)
     }
 
-    // 2. Load merged index
-    let merged = preflight::load_merged_index(&persist_path, &config.index, index_access)?;
+    // 2. Load merged index (BM25 repair happens inside, emitting notices via ui)
+    let (merged, _notices) = preflight::load_merged_index(
+        &persist_path,
+        &config.index,
+        index_access,
+        ui,
+        config.search.bm25_k1,
+        config.search.bm25_b,
+    )?;
 
     // 3. Create embedder
     let embedder = builder::build_embedder(embedder_factory, &config.index.embedding_model)?;

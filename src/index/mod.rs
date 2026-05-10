@@ -23,7 +23,7 @@ impl SourceIndexKind {
 
 #[cfg(test)]
 pub(crate) use bm25_storage::read_bm25_index;
-pub(crate) use repository::{IndexRepository, IndexSizeInfo, MergedIndex};
+pub(crate) use repository::{IndexRepository, IndexSizeInfo, LoadMergedResult, MergedIndex};
 pub(crate) use validation::validate_header;
 pub use schema::{IndexHeader, StoredChunkKind, StoredChunkMetadata, StoredIndex, VectorStore, SCHEMA_VERSION};
 pub use storage::{read_index, write_index};

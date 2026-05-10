@@ -41,13 +41,20 @@ pub(crate) fn check_index_size(
 }
 
 /// Load and merge index for serving.
-/// Returns the merged index ready for search service construction.
+/// Returns the merged index and any repair notices, surfaced via ui.
 pub(crate) fn load_merged_index(
     persist_path: &Path,
     config: &IndexConfig,
     index_access: &dyn crate::app::commands::serve::ServeIndexAccess,
-) -> anyhow::Result<MergedIndex> {
-    index_access
-        .load_merged(persist_path, config)
-        .map_err(|e| anyhow::anyhow!("Failed to load merged index: {}", e))
+    ui: &dyn WorkflowUi,
+    k1: f32,
+    b: f32,
+) -> anyhow::Result<(MergedIndex, Vec<String>)> {
+    let result = index_access
+        .load_merged(persist_path, config, k1, b)
+        .map_err(|e| anyhow::anyhow!("Failed to load merged index: {}", e))?;
+    for notice in &result.notices {
+        ui.info(notice);
+    }
+    Ok((result.merged, result.notices))
 }

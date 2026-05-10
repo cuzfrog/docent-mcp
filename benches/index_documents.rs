@@ -150,10 +150,10 @@ fn bench_index_documents(c: &mut Criterion) {
             &(&docs, &config),
             |b, &(docs, config)| {
                 b.iter_batched(
-                    || BenchEmbedder::new(),
+                    BenchEmbedder::new,
                     |mut embedder| {
                         black_box(
-                            index_documents(black_box(docs), black_box(config), &mut embedder, None)
+                            index_documents(black_box(docs), black_box(config), &mut embedder, None, 1.2, 0.75)
                                 .unwrap(),
                         );
                     },

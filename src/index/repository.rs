@@ -25,6 +25,11 @@ pub(crate) struct IndexSizeInfo {
     pub git_bytes: u64,
 }
 
+pub(crate) struct LoadMergedResult {
+    pub merged: MergedIndex,
+    pub notices: Vec<String>,
+}
+
 pub(crate) struct IndexRepository {
     persist_path: PathBuf,
     config: IndexConfig,
@@ -56,7 +61,7 @@ impl IndexRepository {
         SubIndex::store(&self.persist_path, kind, &header, batch, doc_count, last_indexed_commit)
     }
 
-    pub(crate) fn load_merged(&self) -> anyhow::Result<MergedIndex> {
+    pub(crate) fn load_merged(&self, k1: f32, b: f32) -> anyhow::Result<LoadMergedResult> {
         let file_exists = self.exists(SourceIndexKind::File);
         let git_exists = self.exists(SourceIndexKind::Git);
 
@@ -67,16 +72,23 @@ impl IndexRepository {
             );
         }
 
+        let mut notices: Vec<String> = Vec::new();
+
         let file_index = if file_exists {
-            let sub = SubIndex::load(&self.persist_path, SourceIndexKind::File)?;
+            let mut sub = SubIndex::load(&self.persist_path, SourceIndexKind::File)?;
             validate_header(&sub.header, &self.config)?;
+            if sub.bm25.is_none() && !sub.metadata.is_empty() {
+                let notice = sub.rebuild_bm25(&self.persist_path, SourceIndexKind::File, k1, b)?;
+                notices.push(notice);
+                sub = SubIndex::load(&self.persist_path, SourceIndexKind::File)?;
+            }
             Some(sub)
         } else {
             None
         };
 
         let git_index = if git_exists {
-            let sub = SubIndex::load(&self.persist_path, SourceIndexKind::Git)?;
+            let mut sub = SubIndex::load(&self.persist_path, SourceIndexKind::Git)?;
             if let Some(ref fh) = file_index {
                 if sub.header.embedding_model != fh.header.embedding_model {
                     anyhow::bail!(
@@ -94,6 +106,11 @@ impl IndexRepository {
                 }
             } else {
                 validate_header(&sub.header, &self.config)?;
+            }
+            if sub.bm25.is_none() && !sub.metadata.is_empty() {
+                let notice = sub.rebuild_bm25(&self.persist_path, SourceIndexKind::Git, k1, b)?;
+                notices.push(notice);
+                sub = SubIndex::load(&self.persist_path, SourceIndexKind::Git)?;
             }
             Some(sub)
         } else {
@@ -145,12 +162,15 @@ impl IndexRepository {
             .map(|s| s.header.built_at.clone())
             .unwrap_or_default();
 
-        Ok(MergedIndex {
-            vectors: all_vectors,
-            metadata: all_metadata,
-            bm25_embeddings,
-            bm25_header,
-            built_at,
+        Ok(LoadMergedResult {
+            merged: MergedIndex {
+                vectors: all_vectors,
+                metadata: all_metadata,
+                bm25_embeddings,
+                bm25_header,
+                built_at,
+            },
+            notices,
         })
     }
 

@@ -6,7 +6,7 @@ use crate::index::bm25_storage;
 use crate::index::schema::{IndexHeader, StoredChunkMetadata, VectorStore};
 use crate::index::storage::{read_index, write_index};
 use crate::index::SourceIndexKind;
-use crate::indexing::IndexedBatch;
+use crate::indexing::{Bm25IndexBuilder, IndexedBatch};
 
 pub(crate) struct Bm25SubIndex {
     pub header: Bm25IndexHeader,
@@ -49,6 +49,38 @@ impl SubIndex {
             metadata,
             bm25,
         })
+    }
+
+    /// Rebuild BM25 data from this sub-index's own metadata and persist it
+    /// to `persist_path/<kind>/bm25/`. Returns a notice string like
+    /// "Rebuilt BM25 index for file/ from metadata (N chunks)."
+    pub(crate) fn rebuild_bm25(
+        &self,
+        persist_path: &Path,
+        kind: SourceIndexKind,
+        k1: f32,
+        b: f32,
+    ) -> anyhow::Result<String> {
+        let chunk_texts: Vec<&str> = self.metadata.iter().map(|m| m.chunk_text.as_str()).collect();
+        let chunk_count = chunk_texts.len();
+
+        let (bm25_embeddings, bm25_avgdl) = Bm25IndexBuilder { k1, b }.build(&chunk_texts);
+
+        let bm25_dir = persist_path.join(kind.subdir()).join("bm25");
+        let bm25_header = Bm25IndexHeader {
+            schema_version: BM25_SCHEMA_VERSION,
+            k1,
+            b,
+            avgdl: bm25_avgdl,
+            chunk_count,
+        };
+        bm25_storage::write_bm25_index(&bm25_dir, &bm25_header, &bm25_embeddings)?;
+
+        let kind_name = kind.subdir();
+        Ok(format!(
+            "Rebuilt BM25 index for {}/ from metadata ({} chunks).",
+            kind_name, chunk_count
+        ))
     }
 
     /// Store a sub-index for `kind` under `persist_path / kind.subdir()`.

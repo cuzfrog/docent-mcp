@@ -3,7 +3,6 @@ use std::sync::{Arc, Mutex};
 use crate::config::SearchConfig;
 use crate::embedder::{EmbedderFactory, EmbeddingService};
 use crate::index::MergedIndex;
-use crate::indexing::Bm25IndexBuilder;
 use crate::search::{
     build_bm25_backend, create_fusion, DecayRanker, HybridSearchService, ScoreBackend,
     VectorScoreBackend,
@@ -51,41 +50,18 @@ pub(crate) fn build_hybrid_search_service(
     )) as Arc<dyn ScoreBackend>;
 
     // Build BM25 backend
-    let bm25_backend: Arc<dyn ScoreBackend> = if let (Some(embeddings), Some(header)) =
-        (&merged.bm25_embeddings, &merged.bm25_header)
-    {
-        Arc::new(build_bm25_backend(
+    let bm25_backend: Arc<dyn ScoreBackend> = match (&merged.bm25_embeddings, &merged.bm25_header) {
+        (Some(embeddings), Some(header)) => Arc::new(build_bm25_backend(
             embeddings,
             header.k1,
             header.b,
             header.avgdl,
-        ))
-    } else if !merged.metadata.is_empty() {
-        let chunk_texts: Vec<&str> =
-            merged.metadata.iter().map(|m| m.chunk_text.as_str()).collect();
-        let (bm25_embeddings, bm25_avgdl) = Bm25IndexBuilder {
-            k1: search_config.bm25_k1,
-            b: search_config.bm25_b,
+        )),
+        _ => {
+            // No BM25 data available — use zero backend
+            let chunk_count = merged.metadata.len();
+            Arc::new(ZeroScoreBackend { chunk_count })
         }
-        .build(&chunk_texts);
-
-        eprintln!(
-            "Rebuilt BM25 index from metadata ({} chunks).",
-            chunk_texts.len()
-        );
-
-        Arc::new(build_bm25_backend(
-            &bm25_embeddings,
-            search_config.bm25_k1,
-            search_config.bm25_b,
-            bm25_avgdl,
-        ))
-    } else {
-        eprintln!(
-            "Warning: No chunk metadata available — BM25 scores will be zero. \
-             Run 'docent index' to rebuild."
-        );
-        Arc::new(ZeroScoreBackend { chunk_count: 0 })
     };
 
     // Build fusion strategy
@@ -186,7 +162,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_bm25_rebuild_from_metadata() -> anyhow::Result<()> {
+    async fn test_missing_bm25_uses_zero_backend() -> anyhow::Result<()> {
         let metadata = vec![
             ChunkMetadata {
                 doc_ctx: DocumentContext {
@@ -242,10 +218,10 @@ mod tests {
         )?;
 
         let results = search_service.search("apples", 5, "").await?;
-        let has_bm25_scores = results.iter().any(|r| r.bm25_score > 0.0);
+        let all_zero = results.iter().all(|r| r.bm25_score == 0.0);
         assert!(
-            has_bm25_scores,
-            "BM25 rebuild should produce non-zero scores for matching terms"
+            all_zero,
+            "All BM25 scores should be zero when no BM25 data is available"
         );
 
         Ok(())
