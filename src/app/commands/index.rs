@@ -304,7 +304,7 @@ enabled = false
         let config_path = dir.join("docent.toml");
         std::fs::write(
             &config_path,
-            &format!(
+            format!(
                 r#"
 [index]
 embedding_model = "BGESmallENV15Q"
@@ -363,7 +363,7 @@ persist_path = "{}"
         let config_path = dir.join("docent.toml");
         std::fs::write(
             &config_path,
-            &format!(
+            format!(
                 r#"
 [index]
 embedding_model = "BGESmallENV15Q"
@@ -428,7 +428,7 @@ glob_patterns = ["*.md"]
         let config_path = dir.join("docent.toml");
         std::fs::write(
             &config_path,
-            &format!(
+            format!(
                 r#"
 [index]
 embedding_model = "BGESmallENV15Q"

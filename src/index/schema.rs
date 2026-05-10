@@ -298,6 +298,31 @@ pub struct IndexHeader {
     pub last_indexed_commit: Option<String>,
 }
 
+// ---------------------------------------------------------------------------
+// IndexHeader builder
+// ---------------------------------------------------------------------------
+
+/// Build an `IndexHeader` from `IndexConfig` + embedding dimensions + metadata.
+pub(crate) fn build_header(
+    config: &IndexConfig,
+    embedding_dims: usize,
+    metadata: &[ChunkMetadata],
+    last_indexed_commit: Option<String>,
+    doc_count: usize,
+) -> IndexHeader {
+    IndexHeader {
+        schema_version: SCHEMA_VERSION,
+        embedding_model: config.embedding_model.clone(),
+        embedding_dims,
+        chunk_size: config.chunk_size,
+        chunk_overlap: config.chunk_overlap,
+        built_at: chrono::Utc::now().to_rfc3339(),
+        doc_count,
+        chunk_count: metadata.len(),
+        last_indexed_commit,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -417,28 +442,5 @@ mod tests {
     }
 }
 
-// ---------------------------------------------------------------------------
-// IndexHeader builder
-// ---------------------------------------------------------------------------
 
-/// Build an `IndexHeader` from `IndexConfig` + embedding dimensions + metadata.
-pub(crate) fn build_header(
-    config: &IndexConfig,
-    embedding_dims: usize,
-    metadata: &[ChunkMetadata],
-    last_indexed_commit: Option<String>,
-    doc_count: usize,
-) -> IndexHeader {
-    IndexHeader {
-        schema_version: SCHEMA_VERSION,
-        embedding_model: config.embedding_model.clone(),
-        embedding_dims,
-        chunk_size: config.chunk_size,
-        chunk_overlap: config.chunk_overlap,
-        built_at: chrono::Utc::now().to_rfc3339(),
-        doc_count,
-        chunk_count: metadata.len(),
-        last_indexed_commit,
-    }
-}
 
