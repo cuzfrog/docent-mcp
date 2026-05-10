@@ -77,7 +77,7 @@ fn build_hybrid_service_with_boost(
         scores: bm25_scores,
     });
     let fusion = create_fusion("rrf", 60.0, 0.7);
-    let ranker = Arc::new(DecayRanker::new(0.9));
+    let ranker = Arc::new(DecayRanker::new(0.9, file_hint_boost));
 
     HybridSearchService::new(
         semantic_backend,
@@ -86,7 +86,6 @@ fn build_hybrid_service_with_boost(
         ranker,
         Arc::new(metadata),
         "2026-01-01T00:00:00Z".into(),
-        file_hint_boost,
     )
 }
 
@@ -213,14 +212,17 @@ fn test_search_result_fields_json() {
 fn test_file_hint_boost_exact_match() {
     let semantic = vec![0.9, 0.8];
     let bm25 = vec![0.1, 0.2];
-    let svc = build_hybrid_service_with_boost(semantic, bm25, &["a text", "b text"], 1.5);
+    let svc = build_hybrid_service_with_boost(semantic.clone(), bm25.clone(), &["a text", "b text"], 1.5);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     let results = rt.block_on(svc.search("test", 5, "doc1.md")).unwrap();
 
     assert!(!results.is_empty());
-    // doc1.md has raw 0.8 boosted to 1.2, doc0.md has 0.9 unboosted
+    // doc1.md is top because its fused score is boosted
     assert_eq!(results[0].source_path, "doc1.md");
+    // semantic_score must remain raw (unboosted)
+    assert!((results[0].semantic_score - 0.8).abs() < 1e-6);
+    assert!((results[1].semantic_score - 0.9).abs() < 1e-6);
 }
 
 #[test]
@@ -255,7 +257,7 @@ fn test_file_hint_boost_with_decay_interaction() {
     let semantic_backend = Arc::new(FakeScoreBackend { scores: semantic_scores });
     let bm25_backend = Arc::new(FakeScoreBackend { scores: bm25_scores });
     let fusion = create_fusion("rrf", 60.0, 0.7);
-    let ranker = Arc::new(DecayRanker::new(0.5));
+    let ranker = Arc::new(DecayRanker::new(0.5, 1.5));
     let svc = HybridSearchService::new(
         semantic_backend,
         bm25_backend,
@@ -263,7 +265,6 @@ fn test_file_hint_boost_with_decay_interaction() {
         ranker,
         Arc::new(metadata),
         "now".into(),
-        1.5,
     );
 
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -271,4 +272,60 @@ fn test_file_hint_boost_with_decay_interaction() {
 
     assert_eq!(results.len(), 4);
     assert_eq!(results[0].source_path, "same.md");
+
+    // Verify semantic_score and bm25_score are raw (not modified by hint or boost)
+    for r in &results {
+        assert!(
+            r.semantic_score == 0.9 || r.semantic_score == 0.8 || r.semantic_score == 0.7 || r.semantic_score == 0.85,
+            "semantic_score must remain raw, got {}",
+            r.semantic_score
+        );
+        assert!(
+            (r.bm25_score - 0.1).abs() < 1e-6,
+            "bm25_score must remain raw, got {}",
+            r.bm25_score
+        );
+    }
+}
+
+#[test]
+fn test_file_hint_boost_only_affects_total_score() {
+    // Same query, same data — compare results with and without file_hint
+    let semantic = vec![0.9, 0.6];
+    let bm25 = vec![0.2, 0.8];
+    let svc = build_hybrid_service_with_boost(semantic, bm25, &["doc A", "doc B"], 2.0);
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+
+    // Without hint
+    let results_no_hint = rt.block_on(svc.search("test", 5, "")).unwrap();
+    // With hint on doc0.md
+    let results_hint = rt.block_on(svc.search("test", 5, "doc0.md")).unwrap();
+
+    assert_eq!(results_no_hint.len(), results_hint.len());
+
+    for i in 0..results_no_hint.len() {
+        // semantic_score and bm25_score must be identical with/without hint
+        assert!(
+            (results_no_hint[i].semantic_score - results_hint[i].semantic_score).abs() < 1e-6,
+            "semantic_score must be identical with/without file_hint at index {}",
+            i
+        );
+        assert!(
+            (results_no_hint[i].bm25_score - results_hint[i].bm25_score).abs() < 1e-6,
+            "bm25_score must be identical with/without file_hint at index {}",
+            i
+        );
+
+        // total_score may differ: hinted doc gets boosted
+        if results_hint[i].source_path == "doc0.md" {
+            assert!(
+                results_hint[i].total_score >= results_no_hint[i].total_score,
+                "total_score for hinted doc should be >= non-hinted version"
+            );
+        }
+    }
+
+    // The hinted doc (doc0.md) should be top result when hinted
+    assert_eq!(results_hint[0].source_path, "doc0.md");
 }
