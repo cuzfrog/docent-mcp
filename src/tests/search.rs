@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::documents::{ChunkKind, ChunkMetadata, DocumentContext};
 use crate::search::{
-    backend::ScoreBackend, builder::HybridSearchServiceBuilder, create_fusion, DecayRanker,
-    HybridSearchService,
+    builder::HybridSearchServiceBuilder, create_fusion, DecayRanker, HybridSearchService,
+    ScoreBackend,
 };
 
 // ---------------------------------------------------------------------------

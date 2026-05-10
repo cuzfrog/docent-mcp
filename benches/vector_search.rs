@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 
 use docent_mcp::embedder::EmbeddingService;
 use docent_mcp::index::VectorStore;
-use docent_mcp::search::backend::{ScoreBackend, VectorScoreBackend};
+use docent_mcp::search::{ScoreBackend, VectorScoreBackend};
 use docent_mcp::chunking::TokenCounter;
 
 // ---------------------------------------------------------------------------
