@@ -26,13 +26,13 @@ impl<'a> FileIndexWorkflow<'a> {
         Ok(true)
     }
 
-    fn index_files(&self, request: &FileIndexRequest) -> anyhow::Result<(crate::indexing::IndexedBatch, Box<dyn crate::embedder::EmbeddingService>)> {
+    fn index_files(&self, request: &FileIndexRequest) -> anyhow::Result<(crate::indexing::IndexedBatch, usize)> {
         let all_files = crate::sources::file::FileIndexer::discover_files(&request.input_root, &self.file_glob_patterns())?;
         self.ui.info(&format!("Scanning: {} files found", all_files.len()));
 
         let pb = self.ui.progress(all_files.len() as u64, "Indexing files", request.verbose);
         let docs = crate::sources::file::FileIndexer::prepare_files(&all_files, &request.input_root, self.file_size_limit_mb())?;
-        let result = runner::run_indexing_pipeline(
+        let (batch, dims) = runner::run_indexing_pipeline(
             self.embedder_factory,
             &self.config.index,
             &docs,
@@ -41,7 +41,7 @@ impl<'a> FileIndexWorkflow<'a> {
             Some(pb.as_ref()),
         )?;
         pb.finish();
-        Ok(result)
+        Ok((batch, dims))
     }
 
     pub(super) fn rebuild(&self, request: &FileIndexRequest) -> anyhow::Result<FileIndexOutcome> {
@@ -50,10 +50,10 @@ impl<'a> FileIndexWorkflow<'a> {
             return Ok(FileIndexOutcome::Aborted);
         }
         let repo = IndexRepository::new(&persist_path, &self.config.index);
-        let (batch, embedder) = self.index_files(request)?;
+        let (batch, dims) = self.index_files(request)?;
         let chunk_count = batch.metadata.len();
         let doc_count = unique_doc_count(&batch.metadata);
-        repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None)?;
+        repo.store(SourceIndexKind::File, &batch, dims, doc_count, None)?;
         Ok(FileIndexOutcome::Indexed { rebuilt: true, chunk_count, doc_count })
     }
 }

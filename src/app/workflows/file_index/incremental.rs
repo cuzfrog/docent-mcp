@@ -109,7 +109,7 @@ impl<'a> FileIndexWorkflow<'a> {
 
         let pb = self.ui.progress(diff.to_index.len() as u64, "Indexing files", request.verbose);
         let docs = FileIndexer::prepare_files(&diff.to_index, &request.input_root, self.file_size_limit_mb())?;
-        let (batch, embedder) = runner::run_indexing_pipeline(
+        let (batch, dims) = runner::run_indexing_pipeline(
             self.embedder_factory,
             &self.config.index,
             &docs,
@@ -119,7 +119,6 @@ impl<'a> FileIndexWorkflow<'a> {
         )?;
         pb.finish();
 
-        let dims = embedder.dims();
         let (chunk_count, doc_count) = self.merge_and_store(&repo, &all_files, old_metadata, old_vectors, &batch, dims)?;
 
         Ok(FileIndexOutcome::Indexed { rebuilt: false, chunk_count, doc_count })

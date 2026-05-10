@@ -36,7 +36,7 @@ impl<'a> GitIndexWorkflow<'a> {
         let pb_embed = self.ui.progress(total_docs as u64, "Embedding", request.verbose);
         let freshness = GitIndexer::compute_freshness(docs);
         let indexable = GitIndexer::prepare_git_documents(docs, &freshness);
-        let (batch, embedder) = runner::run_indexing_pipeline(
+        let (batch, dims) = runner::run_indexing_pipeline(
             self.embedder_factory,
             &self.config.index,
             &indexable,
@@ -46,7 +46,6 @@ impl<'a> GitIndexWorkflow<'a> {
         )?;
         pb_embed.finish();
         let embed_secs = embed_start.elapsed().as_secs_f64();
-        let dims = embedder.dims();
         Ok((batch, dims, embed_secs))
     }
 
