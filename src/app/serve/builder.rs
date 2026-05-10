@@ -1,8 +1,13 @@
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use crate::config::SearchConfig;
+use crate::config::{IndexConfig, SearchConfig};
 use crate::embedder::{EmbedderFactory, EmbeddingService};
+use crate::index::write_bm25_index;
+use crate::index::Bm25IndexHeader;
+use crate::index::SourceIndexKind;
 use crate::index::MergedIndex;
+use crate::indexing::Bm25IndexBuilder;
 use crate::search::{
     build_bm25_backend, create_fusion, DecayRanker, HybridSearchService, ScoreBackend,
     VectorScoreBackend,
@@ -39,10 +44,16 @@ pub(crate) fn build_embedder(
 }
 
 /// Build a `HybridSearchService` from a merged index and config.
+///
+/// When BM25 data is missing from the merged index (e.g. old index created
+/// before IMPL-14), this function rebuilds it from `chunk_text` metadata,
+/// persists it to disk, and prints a notice.
 pub(crate) fn build_hybrid_search_service(
     merged: MergedIndex,
     embedder: Arc<Mutex<dyn EmbeddingService>>,
     search_config: &SearchConfig,
+    persist_path: &Path,
+    index_config: &IndexConfig,
 ) -> anyhow::Result<HybridSearchService> {
     // Build semantic backend
     let vectors: Vec<Vec<f32>> = merged.vectors.into_vec_vec();
@@ -51,20 +62,63 @@ pub(crate) fn build_hybrid_search_service(
         Arc::new(vectors),
     )) as Arc<dyn ScoreBackend>;
 
-    // Build BM25 backend (if BM25 embeddings exist; otherwise build a no-op backend)
+    // Build BM25 backend
     let bm25_backend: Arc<dyn ScoreBackend> = if let (Some(embeddings), Some(header)) =
         (&merged.bm25_embeddings, &merged.bm25_header)
     {
+        // BM25 data exists — use it directly
         Arc::new(build_bm25_backend(
             embeddings,
             header.k1,
             header.b,
             header.avgdl,
         ))
+    } else if !merged.metadata.is_empty() {
+        // BM25 data is missing — rebuild from chunk_text metadata
+        let chunk_texts: Vec<&str> =
+            merged.metadata.iter().map(|m| m.chunk_text.as_str()).collect();
+        let (bm25_embeddings, bm25_avgdl) = Bm25IndexBuilder {
+            k1: index_config.bm25_k1,
+            b: index_config.bm25_b,
+        }
+        .build(&chunk_texts);
+
+        // Persist to disk for future fast loads
+        let bm25_header = Bm25IndexHeader {
+            schema_version: crate::index::BM25_SCHEMA_VERSION,
+            k1: index_config.bm25_k1,
+            b: index_config.bm25_b,
+            avgdl: bm25_avgdl,
+            chunk_count: chunk_texts.len(),
+        };
+        // Write BM25 to each source sub-index that exists
+        for kind in &[SourceIndexKind::File, SourceIndexKind::Git] {
+            let source_dir = persist_path.join(kind.subdir());
+            if source_dir.exists() {
+                let bm25_dir = source_dir.join("bm25");
+                write_bm25_index(&bm25_dir, &bm25_header, &bm25_embeddings)?;
+            }
+        }
+
+        // Print a notice about the rebuild
+        eprintln!(
+            "Rebuilt BM25 index from metadata ({} chunks).",
+            chunk_texts.len()
+        );
+
+        Arc::new(build_bm25_backend(
+            &bm25_embeddings,
+            index_config.bm25_k1,
+            index_config.bm25_b,
+            bm25_avgdl,
+        ))
     } else {
-        // No BM25 data — use a backend that returns all zeros
-        let chunk_count = merged.metadata.len();
-        Arc::new(ZeroScoreBackend { chunk_count })
+        // No metadata available — use zero backend with a warning
+        eprintln!(
+            "Warning: No chunk metadata available — BM25 scores will be zero. \
+             Run 'docent index' to rebuild."
+        );
+        Arc::new(ZeroScoreBackend { chunk_count: 0 })
     };
 
     // Build fusion strategy
@@ -153,7 +207,14 @@ mod tests {
         let embedder: Arc<Mutex<dyn EmbeddingService>> =
             Arc::new(Mutex::new(FakeEmbedder::new()));
         let config = Config::default();
-        let result = build_hybrid_search_service(merged, embedder, &config.search);
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let result = build_hybrid_search_service(
+            merged,
+            embedder,
+            &config.search,
+            temp_dir.path(),
+            &config.index,
+        );
         assert!(result.is_ok());
     }
 }

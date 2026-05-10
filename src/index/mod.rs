@@ -21,6 +21,8 @@ impl SourceIndexKind {
     }
 }
 
+pub(crate) use bm25_schema::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
+pub(crate) use bm25_storage::write_bm25_index;
 pub(crate) use repository::{IndexRepository, IndexSizeInfo, MergedIndex};
 pub(crate) use validation::validate_header;
 pub(crate) use schema::{IndexHeader, VectorStore, SCHEMA_VERSION};
