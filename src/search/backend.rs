@@ -63,20 +63,6 @@ pub(crate) struct Bm25ScoreBackend {
     chunk_count: usize,
 }
 
-impl Bm25ScoreBackend {
-    pub(crate) fn new(
-        embedder: bm25::Embedder,
-        scorer: bm25::Scorer<usize, u32>,
-        chunk_count: usize,
-    ) -> Self {
-        Self {
-            embedder,
-            scorer,
-            chunk_count,
-        }
-    }
-}
-
 impl ScoreBackend for Bm25ScoreBackend {
     fn score(&self, query: &str) -> anyhow::Result<Vec<f32>> {
         let query_embedding = self.embedder.embed(query);

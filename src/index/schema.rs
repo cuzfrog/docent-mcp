@@ -102,6 +102,7 @@ impl VectorStore {
 // ---------------------------------------------------------------------------
 
 /// A single vector point usable with `instant_distance::Hnsw`.
+#[allow(dead_code)]
 #[derive(Clone)]
 struct AnnPoint(Vec<f32>);
 
@@ -125,6 +126,7 @@ impl instant_distance::Point for AnnPoint {
 /// Built from a [`VectorStore`] during index load (not persisted separately).
 /// Only constructed for indexes with ≥ 5 000 chunks; smaller indexes use
 /// brute-force search which is faster.
+#[allow(dead_code)]
 pub(crate) struct AnnIndex {
     hnsw: instant_distance::Hnsw<AnnPoint>,
     /// Maps HNSW-internal `PointId` → original index in the `VectorStore`.
@@ -139,6 +141,7 @@ impl std::fmt::Debug for AnnIndex {
     }
 }
 
+#[allow(dead_code)]
 impl AnnIndex {
     /// Build an ANN index from `vectors`.
     ///
