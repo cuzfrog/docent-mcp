@@ -7,50 +7,18 @@ use super::types::SearchResult;
 // ---------------------------------------------------------------------------
 
 /// A strategy for ranking and selecting search results from a set of
-/// pre-computed scores and metadata.
+/// pre-computed scores and metadata. Returns (original_index, SearchResult)
+/// pairs so callers can enrich results with per-backend scores.
 pub(crate) trait Ranker: Send + Sync {
     /// Rank candidates by their scores, apply any de-duplication or score
-    /// decay, and return the top results.
+    /// decay, and return the top results paired with their original index.
     fn rank(
         &self,
         scores: &[f32],
         metadata: &[ChunkMetadata],
         limit: usize,
         index_time: &str,
-    ) -> Vec<SearchResult>;
-
-    /// Like `rank` but returns pairs of (original_index, SearchResult)
-    /// so the caller can enrich results with per-backend scores.
-    fn rank_with_indices(
-        &self,
-        scores: &[f32],
-        metadata: &[ChunkMetadata],
-        limit: usize,
-        index_time: &str,
-    ) -> Vec<(usize, SearchResult)> {
-        // Default: call rank and match by identity (slower but correct)
-        let results = self.rank(scores, metadata, limit, index_time);
-        let text_to_idx: std::collections::HashMap<(&str, &str, &str), usize> = metadata
-            .iter()
-            .enumerate()
-            .map(|(i, m)| {
-                (
-                    (m.doc_ctx.source_path.as_ref(), m.doc_ctx.source_revision.as_ref(), m.chunk_text.as_str()),
-                    i,
-                )
-            })
-            .collect();
-        results
-            .into_iter()
-            .map(|r| {
-                let idx = text_to_idx
-                    .get(&(r.source_path.as_str(), r.source_revision.as_str(), r.matched_content.as_str()))
-                    .copied()
-                    .unwrap_or(0);
-                (idx, r)
-            })
-            .collect()
-    }
+    ) -> Vec<(usize, SearchResult)>;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,7 +50,7 @@ impl Ranker for DecayRanker {
         metadata: &[ChunkMetadata],
         limit: usize,
         index_time: &str,
-    ) -> Vec<SearchResult> {
+    ) -> Vec<(usize, SearchResult)> {
         rank_results(scores, metadata, limit, self.same_src_score_decay, index_time)
     }
 }
@@ -92,22 +60,22 @@ impl Ranker for DecayRanker {
 // ---------------------------------------------------------------------------
 
 fn apply_score_decay<'a>(
-    candidates: Vec<(f32, &'a ChunkMetadata)>,
+    candidates: Vec<(f32, usize, &'a ChunkMetadata)>,
     same_src_score_decay: f32,
-) -> Vec<(f32, &'a ChunkMetadata)> {
-    let mut groups: std::collections::HashMap<String, Vec<(f32, &'a ChunkMetadata)>> =
+) -> Vec<(f32, usize, &'a ChunkMetadata)> {
+    let mut groups: std::collections::HashMap<String, Vec<(f32, usize, &'a ChunkMetadata)>> =
         std::collections::HashMap::new();
-    for (score, meta) in candidates {
+    for (score, orig_idx, meta) in candidates {
         let key = format!("{}:{}", meta.doc_ctx.source_path, meta.doc_ctx.source_revision);
-        groups.entry(key).or_default().push((score, meta));
+        groups.entry(key).or_default().push((score, orig_idx, meta));
     }
 
     let mut results = Vec::new();
     for (_key, mut group) in groups {
         group.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        for (i, (score, meta)) in group.into_iter().enumerate() {
+        for (i, (score, orig_idx, meta)) in group.into_iter().enumerate() {
             let decayed = score * same_src_score_decay.powi(i as i32);
-            results.push((decayed, meta));
+            results.push((decayed, orig_idx, meta));
         }
     }
 
@@ -121,17 +89,19 @@ pub(crate) fn rank_results(
     limit: usize,
     same_src_score_decay: f32,
     index_time: &str,
-) -> Vec<SearchResult> {
+) -> Vec<(usize, SearchResult)> {
     let limit = if limit == 0 { 3 } else { limit.clamp(1, 10) };
 
     if scores.is_empty() || scores.len() != metadata.len() {
         return vec![];
     }
 
-    let candidates: Vec<(f32, &ChunkMetadata)> = scores
+    let candidates: Vec<(f32, usize, &ChunkMetadata)> = scores
         .iter()
         .copied()
+        .enumerate()
         .zip(metadata.iter())
+        .map(|((orig_idx, score), meta)| (score, orig_idx, meta))
         .collect();
 
     let deduped = apply_score_decay(candidates, same_src_score_decay);
@@ -139,21 +109,23 @@ pub(crate) fn rank_results(
     deduped
         .into_iter()
         .take(limit)
-        .map(|(total_score, meta)| SearchResult {
-            kind: meta.doc_ctx.kind.clone(),
-            title: meta.doc_ctx.title.to_string(),
-            source_path: meta.doc_ctx.source_path.to_string(),
-            source_revision: meta.doc_ctx.source_revision.to_string(),
-            matched_content: meta.chunk_text.clone(),
-            total_score,
-            semantic_score: 0.0,
-            bm25_score: 0.0,
-            line_start: meta.line_start,
-            line_end: meta.line_end,
-            section_heading: meta.section_heading.clone(),
-            modified_at: meta.doc_ctx.modified_at.as_ref().map(|s| s.to_string()),
-            is_fresh: meta.is_fresh.unwrap_or(false),
-            index_time: index_time.to_string(),
+        .map(|(total_score, orig_idx, meta)| {
+            (orig_idx, SearchResult {
+                kind: meta.doc_ctx.kind.clone(),
+                title: meta.doc_ctx.title.to_string(),
+                source_path: meta.doc_ctx.source_path.to_string(),
+                source_revision: meta.doc_ctx.source_revision.to_string(),
+                matched_content: meta.chunk_text.clone(),
+                total_score,
+                semantic_score: 0.0,
+                bm25_score: 0.0,
+                line_start: meta.line_start,
+                line_end: meta.line_end,
+                section_heading: meta.section_heading.clone(),
+                modified_at: meta.doc_ctx.modified_at.as_ref().map(|s| s.to_string()),
+                is_fresh: meta.is_fresh.unwrap_or(false),
+                index_time: index_time.to_string(),
+            })
         })
         .collect()
 }
@@ -196,9 +168,10 @@ mod tests {
         let meta_a1 = make_meta("doc.md", "Doc", "chunk 0", 0);
         let meta_a2 = make_meta("doc.md", "Doc", "chunk 1", 1);
         let meta_b = make_meta("doc_b.md", "Doc B", "chunk 0", 0);
-        let candidates = vec![(0.5f32, &meta_a1), (0.9f32, &meta_a2), (0.7f32, &meta_b)];
+        let candidates = vec![(0.5f32, 0usize, &meta_a1), (0.9f32, 1usize, &meta_a2), (0.7f32, 2usize, &meta_b)];
         let results = apply_score_decay(candidates, 1.0);
         assert_eq!(results.len(), 3);
+        // results[i].0 is the decayed score, .1 is original index, .2 is metadata
         assert!((results[0].0 - 0.9).abs() < 1e-6);
         assert!((results[1].0 - 0.7).abs() < 1e-6);
         assert!((results[2].0 - 0.5).abs() < 1e-6);
@@ -209,7 +182,7 @@ mod tests {
         let meta_a1 = make_meta("doc.md", "Doc", "chunk 0", 0);
         let meta_a2 = make_meta("doc.md", "Doc", "chunk 1", 1);
         let meta_b = make_meta("doc_b.md", "Doc B", "chunk 0", 0);
-        let candidates = vec![(0.5f32, &meta_a1), (0.9f32, &meta_a2), (0.7f32, &meta_b)];
+        let candidates = vec![(0.5f32, 0usize, &meta_a1), (0.9f32, 1usize, &meta_a2), (0.7f32, 2usize, &meta_b)];
         let results = apply_score_decay(candidates, 0.0);
         assert_eq!(results.len(), 3);
         assert!((results[0].0 - 0.9).abs() < 1e-6);
@@ -221,7 +194,7 @@ mod tests {
     fn test_score_decay_soft() {
         let meta_a1 = make_meta("doc.md", "Doc", "chunk 0", 0);
         let meta_a2 = make_meta("doc.md", "Doc", "chunk 1", 1);
-        let candidates = vec![(0.5f32, &meta_a1), (0.9f32, &meta_a2)];
+        let candidates = vec![(0.5f32, 0usize, &meta_a1), (0.9f32, 1usize, &meta_a2)];
         let results = apply_score_decay(candidates, 0.9);
         assert_eq!(results.len(), 2);
         assert!((results[0].0 - 0.9).abs() < 1e-6);
@@ -250,8 +223,9 @@ mod tests {
         let metadata = vec![meta_a, meta_b];
         let results = rank_results(&scores, &metadata, 5, 1.0, "t0");
         assert_eq!(results.len(), 2);
-        assert!((results[0].total_score - 0.9).abs() < 1e-6);
-        assert!((results[1].total_score - 0.5).abs() < 1e-6);
-        assert_eq!(results[0].index_time, "t0");
+        // results[i].0 is original index, .1 is the SearchResult
+        assert!((results[0].1.total_score - 0.9).abs() < 1e-6);
+        assert!((results[1].1.total_score - 0.5).abs() < 1e-6);
+        assert_eq!(results[0].1.index_time, "t0");
     }
 }

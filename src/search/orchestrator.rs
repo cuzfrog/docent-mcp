@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::documents::ChunkMetadata;
@@ -74,36 +73,18 @@ impl HybridSearchService {
             // Fuse scores
             let fused = fusion.fuse(&semantic_scores, &bm25_scores);
 
-            // Rank: apply decay, sort, format
-            let mut results = ranker.rank(&fused, &metadata, limit, &index_time);
+            // Rank: apply decay, sort, format — results carry original indices
+            let results = ranker.rank(&fused, &metadata, limit, &index_time);
 
-            // Build hashmap: (source_path, source_revision, chunk_text) → original index
-            let text_to_idx: HashMap<(&str, &str, &str), usize> = metadata
-                .iter()
-                .enumerate()
-                .map(|(i, m)| {
-                    (
-                        (
-                            m.doc_ctx.source_path.as_ref(),
-                            m.doc_ctx.source_revision.as_ref(),
-                            m.chunk_text.as_str(),
-                        ),
-                        i,
-                    )
-                })
-                .collect();
-
-            // Populate individual score fields by looking up original indices
-            for result in &mut results {
-                if let Some(&orig_idx) = text_to_idx.get(&(
-                    result.source_path.as_str(),
-                    result.source_revision.as_str(),
-                    result.matched_content.as_str(),
-                )) {
+            // Populate individual score fields using original indices from the ranker
+            let results: Vec<SearchResult> = results
+                .into_iter()
+                .map(|(orig_idx, mut result)| {
                     result.semantic_score = semantic_scores[orig_idx];
                     result.bm25_score = bm25_scores[orig_idx];
-                }
-            }
+                    result
+                })
+                .collect();
 
             Ok(results)
         })
