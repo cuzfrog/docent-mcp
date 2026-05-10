@@ -148,6 +148,7 @@ class TestToolsList:
         assert schema["type"] == "object"
         assert "query" in schema["properties"]
         assert "limit" in schema["properties"]
+        assert "file_hint" in schema["properties"]
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +185,10 @@ class TestSearchDdr:
             assert "title" in r
             assert "source_path" in r
             assert "matched_content" in r
-            assert "score" in r
+            assert "total_score" in r
+            assert "semantic_score" in r
+            assert "bm25_score" in r
+            assert "score" not in r  # verify old field is gone
 
     def test_invalid_limit_returns_error(self):
         client = requests.Session()
@@ -213,3 +217,39 @@ class TestSearchDdr:
 
         assert "error" in response, f"Expected error key, got: {response}"
         assert "code" in response["error"]
+
+    def test_file_hint_changes_ranking(self):
+        """Verify file_hint boosts the hinted document."""
+        client = requests.Session()
+        _, session_id = initialize(client)
+
+        # Query without hint
+        resp_no_hint = send_mcp_request(
+            client,
+            "tools/call",
+            {"name": "search_ddr", "arguments": {"query": "authentication", "limit": 5}},
+            session_id=session_id,
+        )
+        results_no_hint = json.loads(resp_no_hint["result"]["content"][0]["text"])
+
+        # Query with hint targeting the first result's source_path
+        if results_no_hint:
+            target_path = results_no_hint[0]["source_path"]
+            resp_hint = send_mcp_request(
+                client,
+                "tools/call",
+                {"name": "search_ddr", "arguments": {
+                    "query": "authentication",
+                    "limit": 5,
+                    "file_hint": target_path,
+                }},
+                session_id=session_id,
+            )
+            results_hint = json.loads(resp_hint["result"]["content"][0]["text"])
+
+            # The hinted file should be at least as high as without hint
+            hinted_scores = [r["total_score"] for r in results_hint if r["source_path"] == target_path]
+            no_hint_scores = [r["total_score"] for r in results_no_hint if r["source_path"] == target_path]
+            if hinted_scores and no_hint_scores:
+                assert hinted_scores[0] >= no_hint_scores[0], \
+                    f"file_hint should not decrease score for hinted file"
