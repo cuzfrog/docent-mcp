@@ -36,7 +36,7 @@ impl Config {
         match self.search.fusion.strategy.as_str() {
             "rrf" | "weighted_sum" | "comb_sum" | "comb_mnz" => {}
             other => anyhow::bail!(
-                "fusion_strategy must be one of rrf, weighted_sum, comb_sum, comb_mnz, got '{}'",
+                "search.fusion.strategy must be one of rrf, weighted_sum, comb_sum, comb_mnz, got '{}'",
                 other
             ),
         }
@@ -47,10 +47,10 @@ impl Config {
             anyhow::bail!("semantic_weight must be in range 0.0..=1.0, got {}", self.search.fusion.semantic_weight);
         }
         if self.search.bm25.k1 <= 0.0 {
-            anyhow::bail!("bm25_k1 must be positive, got {}", self.search.bm25.k1);
+            anyhow::bail!("search.bm25.k1 must be positive, got {}", self.search.bm25.k1);
         }
         if self.search.bm25.b < 0.0 || self.search.bm25.b > 1.0 {
-            anyhow::bail!("bm25_b must be in range 0.0..=1.0, got {}", self.search.bm25.b);
+            anyhow::bail!("search.bm25.b must be in range 0.0..=1.0, got {}", self.search.bm25.b);
         }
         if let Some(git) = &self.git {
             if git.depth_limit < -1 {
@@ -297,7 +297,7 @@ mod tests {
             ..Config::default()
         };
         let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("fusion_strategy must be one of"));
+        assert!(err.to_string().contains("search.fusion.strategy must be one of"));
     }
 
     #[test]
@@ -357,7 +357,7 @@ mod tests {
             ..Config::default()
         };
         let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("bm25_k1 must be positive"));
+        assert!(err.to_string().contains("search.bm25.k1 must be positive"));
     }
 
     #[test]
@@ -377,7 +377,7 @@ mod tests {
             ..Config::default()
         };
         let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("bm25_b must be in range 0.0..=1.0"));
+        assert!(err.to_string().contains("search.bm25.b must be in range 0.0..=1.0"));
     }
 
     #[test]
@@ -397,7 +397,7 @@ mod tests {
             ..Config::default()
         };
         let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("bm25_b must be in range 0.0..=1.0"));
+        assert!(err.to_string().contains("search.bm25.b must be in range 0.0..=1.0"));
     }
 
     #[test]
