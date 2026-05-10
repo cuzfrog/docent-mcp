@@ -347,6 +347,7 @@ mod tests {
                 fusion_strategy: "rrf".to_string(),
                 rrf_k: 60.0,
                 semantic_weight: 0.7,
+                file_hint_boost: 1.5,
             },
             git: None,
             file: None,
@@ -374,6 +375,7 @@ mod tests {
                 fusion_strategy: "rrf".to_string(),
                 rrf_k: 60.0,
                 semantic_weight: 0.7,
+                file_hint_boost: 1.5,
             },
             git: Some(GitConfig {
                 depth_limit: -1,

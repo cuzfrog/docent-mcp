@@ -66,5 +66,9 @@ pub(crate) const fn default_git_enabled() -> bool {
     true
 }
 
+pub(crate) const fn default_file_hint_boost() -> f32 {
+    1.5
+}
+
 /// Embedded default docent.toml template for the `init` command.
 pub(crate) const DEFAULT_TEMPLATE: &str = include_str!("../templates/docent.toml");

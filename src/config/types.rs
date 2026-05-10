@@ -51,6 +51,8 @@ pub struct SearchConfig {
     pub rrf_k: f32,
     #[serde(default = "super::defaults::default_semantic_weight")]
     pub semantic_weight: f32,
+    #[serde(default = "super::defaults::default_file_hint_boost")]
+    pub file_hint_boost: f32,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -103,6 +105,7 @@ impl Default for SearchConfig {
             fusion_strategy: super::defaults::default_fusion_strategy(),
             rrf_k: super::defaults::default_rrf_k(),
             semantic_weight: super::defaults::default_semantic_weight(),
+            file_hint_boost: super::defaults::default_file_hint_boost(),
         }
     }
 }

@@ -191,6 +191,7 @@ mod tests {
                 fusion_strategy: "rrf".to_string(),
                 rrf_k: 60.0,
                 semantic_weight: 0.7,
+                file_hint_boost: 1.5,
             },
             ..Config::default()
         };

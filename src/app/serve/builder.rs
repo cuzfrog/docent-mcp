@@ -117,6 +117,7 @@ pub(crate) fn build_hybrid_search_service(
         ranker,
         Arc::new(merged.metadata),
         merged.built_at,
+        search_config.file_hint_boost,
     );
 
     Ok(search_service)
@@ -254,7 +255,7 @@ mod tests {
         )?;
 
         // The service should have a real BM25 backend, not a ZeroScoreBackend
-        let results = search_service.search("apples", 5).await?;
+        let results = search_service.search("apples", 5, "").await?;
         let has_bm25_scores = results.iter().any(|r| r.bm25_score > 0.0);
         assert!(
             has_bm25_scores,

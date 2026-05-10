@@ -10,6 +10,7 @@ use crate::search::HybridSearchService;
 pub(crate) fn validate_search_params(
     query: &str,
     limit: u8,
+    _file_hint: &str,
 ) -> Result<(), rmcp::ErrorData> {
     if query.trim().is_empty() {
         return Err(rmcp::ErrorData::invalid_params(
@@ -39,11 +40,12 @@ pub(crate) async fn search_ddr_tool(
     search_service: &HybridSearchService,
     query: &str,
     limit: u8,
+    file_hint: &str,
 ) -> Result<String, rmcp::ErrorData> {
-    validate_search_params(query, limit)?;
+    validate_search_params(query, limit, file_hint)?;
 
     let results = search_service
-        .search(query, limit as usize)
+        .search(query, limit as usize, file_hint)
         .await
         .map_err(|e| {
             rmcp::ErrorData::new(
@@ -72,32 +74,32 @@ mod tests {
 
     #[test]
     fn test_validate_empty_query() {
-        let err = validate_search_params("", 5).unwrap_err();
+        let err = validate_search_params("", 5, "").unwrap_err();
         assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_PARAMS);
     }
 
     #[test]
     fn test_validate_blank_query() {
-        let err = validate_search_params("   ", 5).unwrap_err();
+        let err = validate_search_params("   ", 5, "").unwrap_err();
         assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_PARAMS);
     }
 
     #[test]
     fn test_validate_limit_too_low() {
-        let err = validate_search_params("hello", 0).unwrap_err();
+        let err = validate_search_params("hello", 0, "").unwrap_err();
         assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_PARAMS);
     }
 
     #[test]
     fn test_validate_limit_too_high() {
-        let err = validate_search_params("hello", 11).unwrap_err();
+        let err = validate_search_params("hello", 11, "").unwrap_err();
         assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_PARAMS);
     }
 
     #[test]
     fn test_validate_limit_ok() {
-        assert!(validate_search_params("hello", 1).is_ok());
-        assert!(validate_search_params("hello", 5).is_ok());
-        assert!(validate_search_params("hello", 10).is_ok());
+        assert!(validate_search_params("hello", 1, "").is_ok());
+        assert!(validate_search_params("hello", 5, "").is_ok());
+        assert!(validate_search_params("hello", 10, "").is_ok());
     }
 }

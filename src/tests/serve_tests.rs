@@ -111,6 +111,7 @@ fn serve_config(persist_path: &Path) -> Config {
             fusion_strategy: "rrf".to_string(),
             rrf_k: 60.0,
             semantic_weight: 0.7,
+            file_hint_boost: 1.5,
         },
         git: None,
         file: None,

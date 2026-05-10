@@ -14,6 +14,7 @@ pub(crate) struct HybridSearchService {
     ranker: Arc<dyn Ranker>,
     metadata: Arc<Vec<ChunkMetadata>>,
     index_time: String,
+    file_hint_boost: f32,
 }
 
 impl HybridSearchService {
@@ -25,6 +26,7 @@ impl HybridSearchService {
         ranker: Arc<dyn Ranker>,
         metadata: Arc<Vec<ChunkMetadata>>,
         index_time: String,
+        file_hint_boost: f32,
     ) -> Self {
         Self {
             semantic_backend,
@@ -33,6 +35,7 @@ impl HybridSearchService {
             ranker,
             metadata,
             index_time,
+            file_hint_boost,
         }
     }
 
@@ -41,6 +44,7 @@ impl HybridSearchService {
         &self,
         query: &str,
         limit: usize,
+        file_hint: &str,
     ) -> anyhow::Result<Vec<SearchResult>> {
         let semantic_backend = Arc::clone(&self.semantic_backend);
         let bm25_backend = Arc::clone(&self.bm25_backend);
@@ -49,6 +53,8 @@ impl HybridSearchService {
         let metadata = Arc::clone(&self.metadata);
         let query = query.to_string();
         let index_time = self.index_time.clone();
+        let file_hint = file_hint.to_string();
+        let file_hint_boost = self.file_hint_boost;
 
         tokio::task::spawn_blocking(move || {
             // Score from both backends
@@ -69,6 +75,23 @@ impl HybridSearchService {
                 bm25_scores.len(),
                 chunk_count
             );
+
+            // Apply file_hint boost to semantic scores before fusion
+            let semantic_scores: Vec<f32> = if !file_hint.is_empty() && (file_hint_boost - 1.0).abs() > f32::EPSILON {
+                semantic_scores
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &s)| {
+                        if metadata[i].doc_ctx.source_path.as_ref() == file_hint {
+                            s * file_hint_boost
+                        } else {
+                            s
+                        }
+                    })
+                    .collect()
+            } else {
+                semantic_scores
+            };
 
             // Fuse scores
             let fused = fusion.fuse(&semantic_scores, &bm25_scores);

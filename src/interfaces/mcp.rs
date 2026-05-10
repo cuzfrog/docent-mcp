@@ -17,6 +17,8 @@ pub struct SearchDdrParams {
     pub query: String,
     #[serde(default = "default_limit")]
     pub limit: u8,
+    #[serde(default)]
+    pub file_hint: String,
 }
 
 fn default_limit() -> u8 {
@@ -31,7 +33,9 @@ pub struct DocentMcpServer {
 #[tool_router]
 impl DocentMcpServer {
     #[tool(
-        description = "Search Design Decision Records by hybrid semantic and lexical relevance. Returns the most relevant DDRs ranked by a fused score combining dense vector similarity and BM25 keyword matching."
+        description = "Search Design Decision Records by hybrid semantic and lexical relevance. \
+                       Provide a file_hint (path of the file you are reading) \
+                       to boost results from that source file."
     )]
     async fn search_ddr(
         &self,
@@ -42,6 +46,7 @@ impl DocentMcpServer {
             &self.search_service,
             &params.query,
             params.limit,
+            &params.file_hint,
         )
         .await?;
 
@@ -64,14 +69,16 @@ mod tests {
         let params: SearchDdrParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.query, "hello");
         assert_eq!(params.limit, 3);
+        assert_eq!(params.file_hint, "");
     }
 
     #[test]
     fn test_params_deserialize_full() {
-        let json = r#"{"query": "hello", "limit": 5}"#;
+        let json = r#"{"query": "hello", "limit": 5, "file_hint": "src/main.rs"}"#;
         let params: SearchDdrParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.query, "hello");
         assert_eq!(params.limit, 5);
+        assert_eq!(params.file_hint, "src/main.rs");
     }
 
     #[test]
@@ -79,6 +86,13 @@ mod tests {
         let json = r#"{}"#;
         let result = serde_json::from_str::<SearchDdrParams>(json);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_params_backward_compat() {
+        let json = r#"{"query": "hello", "limit": 3}"#;
+        let params: SearchDdrParams = serde_json::from_str(json).unwrap();
+        assert_eq!(params.file_hint, "");
     }
 
     #[test]
