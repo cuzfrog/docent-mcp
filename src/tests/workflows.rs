@@ -1,8 +1,8 @@
 use crate::config::IndexConfig;
-use crate::documents::{ChunkKind, ChunkMetadata};
-use crate::embedder::EmbeddingService;
+use crate::domain::{ChunkKind, ChunkMetadata};
+use crate::index::embedder::Embedder;
 use crate::index::{IndexRepository, SourceIndexKind, SCHEMA_VERSION};
-use crate::indexing::{IndexingPipeline, IndexableDocument};
+use crate::app::index::pipeline::{IndexingPipeline, IndexableDocument};
 use crate::tests::fixtures::{make_temp_dir, read_index_at, FakeEmbedder};
 
 // ---------------------------------------------------------------------------
@@ -71,7 +71,7 @@ fn test_index_and_store_round_trip() {
     }
 
     let repo = IndexRepository::new(&index_dir, &config);
-    let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
+    let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
     repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None).unwrap();
 
     let (header, vectors, metadata) = read_index_at(&index_dir);
@@ -103,7 +103,7 @@ fn test_empty_document_list_produces_empty_index() {
     assert!(batch.metadata.is_empty());
 
     let repo = IndexRepository::new(&index_dir, &config);
-    let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
+    let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
     repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None).unwrap();
 
     let (header, vectors, metadata) = read_index_at(&index_dir);
@@ -155,7 +155,7 @@ fn test_index_preserves_metadata_fields() {
     let batch = pipeline.run(&docs, &mut embedder, None, 1.2, 0.75).unwrap();
 
     let repo = IndexRepository::new(&index_dir, &config);
-    let doc_count = crate::indexing::unique_doc_count(&batch.metadata);
+    let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
     repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None).unwrap();
 
     let (_header, _vectors, metadata) = read_index_at(&index_dir);

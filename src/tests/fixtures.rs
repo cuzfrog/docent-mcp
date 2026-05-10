@@ -1,11 +1,84 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use crate::chunking::TokenCounter;
-use crate::config::IndexConfig;
-use crate::documents::ChunkMetadata;
-use crate::embedder::{EmbedderFactory, EmbeddingService};
+use crate::app::index::chunking::TokenCounter;
+use crate::config::{Config, FileConfig, GitConfig, IndexConfig};
+use crate::domain::ChunkMetadata;
+use crate::index::embedder::Embedder;
 use crate::index::VectorStore;
 use crate::index::{IndexRepository, SourceIndexKind};
+
+// ---------------------------------------------------------------------------
+// Config fixture helpers — produce valid config types without touching Config::default()
+// ---------------------------------------------------------------------------
+
+/// Build a valid (IndexConfig, FileConfig) pair for file indexing tests.
+pub fn file_index_fixtures(persist: &Path, globs: &[&str]) -> (IndexConfig, FileConfig) {
+    let index_config = IndexConfig {
+        embedding_model: "BGESmallENV15Q".to_string(),
+        persist_path: persist.to_string_lossy().to_string(),
+        chunk_size: 256,
+        chunk_overlap: 32,
+        max_size_mb: 512,
+    };
+    let file_config = FileConfig {
+        enabled: true,
+        glob_patterns: globs.iter().map(|s| s.to_string()).collect(),
+        file_size_limit_mb: 0,
+    };
+    (index_config, file_config)
+}
+
+/// Build a valid (IndexConfig, GitConfig) pair for git indexing tests.
+pub fn git_index_fixtures(persist: &Path, globs: &[&str]) -> (IndexConfig, GitConfig) {
+    let index_config = IndexConfig {
+        embedding_model: "BGESmallENV15Q".to_string(),
+        persist_path: persist.to_string_lossy().to_string(),
+        chunk_size: 256,
+        chunk_overlap: 32,
+        max_size_mb: 512,
+    };
+    let git_config = GitConfig {
+        depth_limit: -1,
+        branch: "main".to_string(),
+        enabled: true,
+        glob_patterns: globs.iter().map(|s| s.to_string()).collect(),
+    };
+    (index_config, git_config)
+}
+
+/// Build a valid full `Config` for serve/search tests with explicit search params.
+pub fn serve_config_fixture(persist: &Path) -> Config {
+    Config {
+        index: IndexConfig {
+            embedding_model: "BGESmallENV15Q".to_string(),
+            persist_path: persist.to_string_lossy().to_string(),
+            chunk_size: 256,
+            chunk_overlap: 32,
+            max_size_mb: 512,
+        },
+        server: crate::config::ServerConfig {
+            port: 9999,
+            log_level: "info".to_string(),
+        },
+        search: crate::config::SearchConfig {
+            ranking: crate::config::RankingConfig {
+                same_src_score_decay: 0.9,
+                file_hint_boost: 1.5,
+            },
+            fusion: crate::config::FusionConfig {
+                strategy: "rrf".to_string(),
+                rrf_k: 60.0,
+                semantic_weight: 0.7,
+            },
+            bm25: crate::config::Bm25Config {
+                k1: 1.2,
+                b: 0.75,
+            },
+        },
+        git: None,
+        file: None,
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Temporary directory helpers
@@ -24,7 +97,14 @@ pub fn make_temp_dir(name: &str) -> PathBuf {
 pub fn read_index_at(
     path: &std::path::Path,
 ) -> (crate::index::IndexHeader, VectorStore, Vec<ChunkMetadata>) {
-    let repo = IndexRepository::new(path, &IndexConfig::default());
+    let config = IndexConfig {
+        embedding_model: "BGESmallENV15Q".to_string(),
+        persist_path: path.to_string_lossy().to_string(),
+        chunk_size: 256,
+        chunk_overlap: 32,
+        max_size_mb: 512,
+    };
+    let repo = IndexRepository::new(path, &config);
     let stored = repo.load_one(SourceIndexKind::File).unwrap();
     (stored.header, stored.vectors, stored.metadata)
 }
@@ -52,7 +132,7 @@ impl FakeEmbedder {
     }
 }
 
-impl EmbeddingService for FakeEmbedder {
+impl Embedder for FakeEmbedder {
     fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
         Ok(texts
             .iter()
@@ -70,19 +150,7 @@ impl EmbeddingService for FakeEmbedder {
     }
 
     fn token_counter(&self) -> Box<dyn TokenCounter> {
-        Box::new(crate::chunking::WhitespaceTokenCounter)
-    }
-}
-
-// ---------------------------------------------------------------------------
-// FakeEmbedderFactory — returns FakeEmbedder for tests
-// ---------------------------------------------------------------------------
-
-pub(crate) struct FakeEmbedderFactory;
-
-impl EmbedderFactory for FakeEmbedderFactory {
-    fn create(&self, _model: &str) -> anyhow::Result<Box<dyn EmbeddingService>> {
-        Ok(Box::new(FakeEmbedder::new()))
+        Box::new(crate::app::index::chunking::WhitespaceTokenCounter)
     }
 }
 
@@ -93,8 +161,7 @@ impl EmbedderFactory for FakeEmbedderFactory {
 pub(crate) struct NoopProgress;
 
 impl crate::support::progress::ProgressSink for NoopProgress {
-    fn tick(&self) {}
-    fn tick_n(&self, _n: u64) {}
+    fn tick(&self, _n: u64) {}
     fn tick_msg(&self, _msg: &str) {}
     fn finish(&self) {}
 }
@@ -129,7 +196,7 @@ impl RecordingUi {
     }
 }
 
-impl crate::support::ui::WorkflowUi for RecordingUi {
+impl crate::support::ui::Console for RecordingUi {
     fn info(&self, msg: &str) {
         self.messages.lock().unwrap().push(format!("INFO: {}", msg));
     }
@@ -150,7 +217,7 @@ impl crate::support::ui::WorkflowUi for RecordingUi {
         Ok(responses.get(idx).copied().unwrap_or(true))
     }
 
-    fn progress(&self, _total: u64, _label: &str, _verbose: bool) -> Box<dyn crate::support::progress::ProgressSink> {
+    fn progress(&self, _total: u64, _label: &str) -> Box<dyn crate::support::progress::ProgressSink> {
         self.progress_calls
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Box::new(NoopProgress)

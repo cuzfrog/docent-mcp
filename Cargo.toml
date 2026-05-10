@@ -38,14 +38,3 @@ reqwest = { version = "=0.12.26", default-features = false, features = ["blockin
 tempfile = "=3.25.0"
 criterion = { version = "=0.5.1", features = ["html_reports"] }
 
-[[bench]]
-name = "index_documents"
-harness = false
-
-[[bench]]
-name = "read_index"
-harness = false
-
-[[bench]]
-name = "vector_search"
-harness = false

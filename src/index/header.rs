@@ -1,5 +1,5 @@
 use crate::config::IndexConfig;
-use crate::documents::ChunkMetadata;
+use crate::domain::ChunkMetadata;
 use serde::{Deserialize, Serialize};
 
 pub const SCHEMA_VERSION: u32 = 7;

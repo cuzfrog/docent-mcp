@@ -1,88 +1,82 @@
 use clap::{Parser, Subcommand};
-use docent_mcp::app::application::{Application, IndexRunRequest};
+use docent_mcp::app::Application;
+use docent_mcp::config::Config;
 use std::path::PathBuf;
 
-/// Top-level CLI struct for docent.
 #[derive(Parser)]
-#[command(
-    name = "docent",
-    about = "MCP server for Document & Code History indexing and querying."
-)]
+#[command(name = "docent", about = "MCP server for Document & Code History indexing and querying.")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
 }
 
-/// Available subcommands.
 #[derive(Subcommand)]
 enum Commands {
-    /// Generate a default docent.toml in the current directory.
     Init,
-    /// Index files and/or git history based on config.
     Index(CommonIndexArgs),
-    /// Index files from a directory.
     IndexFile(CommonIndexArgs),
-    /// Index git history from a repository.
     IndexGit(CommonIndexArgs),
-    /// Start the MCP server.
     Serve(ServeArgs),
-    /// List all supported embedding models.
     ListModels,
 }
 
-/// Shared fields for subcommands that take an input path and config.
 #[derive(clap::Args)]
 struct CommonIndexArgs {
-    /// Path to file/directory/git-repo (defaults to current directory).
     path: Option<PathBuf>,
 
-    /// Path to config file (default: ./docent.toml).
     #[arg(long, default_value = "./docent.toml")]
     config: PathBuf,
 
-    /// Re-index from scratch (instead of incremental).
     #[arg(long)]
     rebuild: bool,
 
-    /// Show detailed progress output.
     #[arg(long)]
     verbose: bool,
 }
 
-/// Arguments for the `serve` subcommand.
 #[derive(clap::Args)]
 struct ServeArgs {
-    /// Path to config file (default: ./docent.toml).
     #[arg(long, default_value = "./docent.toml")]
     config: PathBuf,
+}
+
+fn make_app(verbose: bool) -> Application {
+    Application::new(
+        Box::new(docent_mcp::support::ui::create_console(verbose)),
+        Box::new(docent_mcp::app::serve::server::create_server()),
+        Box::new(docent_mcp::app::index::file::create_file_indexer(
+            Box::new(docent_mcp::support::ui::create_console(verbose)),
+        )),
+        Box::new(docent_mcp::app::index::git::create_git_indexer(
+            Box::new(docent_mcp::support::ui::create_console(verbose)),
+        )),
+    )
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let app = Application::new();
     match cli.command {
-        Commands::IndexFile(args) => app.run_index_file(&IndexRunRequest {
-            input_path: args.path,
-            config_path: args.config,
-            rebuild: args.rebuild,
-            verbose: args.verbose,
-        })?,
-        Commands::IndexGit(args) => app.run_index_git(&IndexRunRequest {
-            input_path: args.path,
-            config_path: args.config,
-            rebuild: args.rebuild,
-            verbose: args.verbose,
-        })?,
-        Commands::Serve(args) => app.run_serve(&args.config).await?,
-        Commands::ListModels => app.list_models(),
-        Commands::Init => app.run_init()?,
-        Commands::Index(args) => app.run_index(&IndexRunRequest {
-            input_path: args.path,
-            config_path: args.config,
-            rebuild: args.rebuild,
-            verbose: args.verbose,
-        })?,
+        Commands::IndexFile(args) => {
+            let mut config = Config::load(&args.config)?;
+            config.git = None;
+            make_app(args.verbose).run_index(&config, args.path, args.rebuild, args.verbose)?;
+        }
+        Commands::IndexGit(args) => {
+            let mut config = Config::load(&args.config)?;
+            config.file = None;
+            make_app(args.verbose).run_index(&config, args.path, args.rebuild, args.verbose)?;
+        }
+        Commands::Serve(args) => {
+            let config = Config::load(&args.config)?;
+            make_app(false).run_serve(&config).await?;
+        }
+        Commands::ListModels => make_app(false).list_models(),
+        Commands::Init => make_app(false).run_init()?,
+        Commands::Index(args) => {
+            let config = Config::load(&args.config)?;
+            make_app(args.verbose).run_index(&config, args.path, args.rebuild, args.verbose)?;
+        }
     }
     Ok(())
 }
@@ -153,12 +147,7 @@ mod tests {
     #[test]
     fn test_index_file_all_flags() {
         let cli = Cli::try_parse_from([
-            "docent",
-            "index-file",
-            "./ddrs",
-            "--config",
-            "custom.toml",
-            "--rebuild",
+            "docent", "index-file", "./ddrs", "--config", "custom.toml", "--rebuild",
         ]);
         assert!(cli.is_ok());
         let cli = cli.unwrap();
@@ -329,9 +318,7 @@ mod tests {
     #[test]
     fn test_index_with_all_flags() {
         let cli = Cli::try_parse_from([
-            "docent", "index", "./my-dir",
-            "--config", "custom.toml",
-            "--rebuild", "--verbose",
+            "docent", "index", "./my-dir", "--config", "custom.toml", "--rebuild", "--verbose",
         ]);
         assert!(cli.is_ok());
         match cli.unwrap().command {
