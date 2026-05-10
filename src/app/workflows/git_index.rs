@@ -5,7 +5,7 @@ use crate::config::{Config, GitConfig};
 use crate::embedder::{Embedder, EmbedderFactory};
 use crate::index::{IndexRepository, SourceIndexKind};
 use crate::indexing;
-use crate::indexing::{unique_doc_count, IndexedBatch};
+use crate::indexing::{unique_doc_count, Bm25IndexBuilder, IndexedBatch};
 use crate::sources::git::GitIndexer;
 use crate::support::ui::WorkflowUi;
 
@@ -237,13 +237,18 @@ impl<'a> GitIndexWorkflow<'a> {
         let (merged_vectors, merged_metadata) = merged;
         let chunk_count = merged_metadata.len();
         let doc_count = unique_doc_count(&merged_metadata);
+        let chunk_texts: Vec<&str> = merged_metadata.iter().map(|m| m.chunk_text.as_str()).collect();
+        let (bm25_embeddings, bm25_avgdl) = Bm25IndexBuilder {
+            k1: self.config.index.bm25_k1,
+            b: self.config.index.bm25_b,
+        }.build(&chunk_texts);
         let store_batch = IndexedBatch {
             vectors: merged_vectors,
             metadata: merged_metadata,
-            bm25_embeddings: vec![],
+            bm25_embeddings,
             bm25_k1: self.config.index.bm25_k1,
             bm25_b: self.config.index.bm25_b,
-            bm25_avgdl: 0.0,
+            bm25_avgdl,
         };
         repo.store(
             SourceIndexKind::Git,
