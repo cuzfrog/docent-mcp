@@ -37,7 +37,7 @@ pub struct ServerConfig {
     pub port: u16,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Deserialize, PartialEq, Clone, Default)]
 pub struct SearchConfig {
     #[serde(default)]
     pub ranking: RankingConfig,
@@ -114,18 +114,6 @@ impl Default for ServerConfig {
     }
 }
 
-#[allow(clippy::derivable_impls)]
-impl Default for SearchConfig {
-    fn default() -> Self {
-        Self {
-            ranking: RankingConfig::default(),
-            fusion: FusionConfig::default(),
-            bm25: Bm25Config::default(),
-        }
-    }
-}
-
-#[allow(clippy::derivable_impls)]
 impl Default for RankingConfig {
     fn default() -> Self {
         Self {
@@ -135,7 +123,6 @@ impl Default for RankingConfig {
     }
 }
 
-#[allow(clippy::derivable_impls)]
 impl Default for FusionConfig {
     fn default() -> Self {
         Self {
@@ -146,7 +133,6 @@ impl Default for FusionConfig {
     }
 }
 
-#[allow(clippy::derivable_impls)]
 impl Default for Bm25Config {
     fn default() -> Self {
         Self {
