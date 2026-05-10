@@ -1,9 +1,10 @@
 use std::path::Path;
 use std::time::Instant;
 
+use crate::app::workflows::runner;
 use crate::config::GitConfig;
 use crate::index::{IndexRepository, SourceIndexKind};
-use crate::indexing::{unique_doc_count, IndexedBatch, IndexingPipeline};
+use crate::indexing::unique_doc_count;
 use crate::sources::git::GitIndexer;
 
 use super::{GitIndexOutcome, GitIndexRequest, GitIndexWorkflow};
@@ -29,16 +30,20 @@ impl<'a> GitIndexWorkflow<'a> {
         &self,
         docs: &[crate::sources::git::extract::GitDocument],
         request: &GitIndexRequest,
-    ) -> anyhow::Result<(IndexedBatch, usize, f64)> {
+    ) -> anyhow::Result<(crate::indexing::IndexedBatch, usize, f64)> {
         let total_docs = docs.len();
         let embed_start = Instant::now();
         let pb_embed = self.ui.progress(total_docs as u64, "Embedding", request.verbose);
-        let mut embedder = self.embedder_factory.create(&self.config.index.embedding_model)?;
         let freshness = GitIndexer::compute_freshness(docs);
         let indexable = GitIndexer::prepare_git_documents(docs, &freshness);
-        let token_counter = embedder.token_counter();
-        let pipeline = IndexingPipeline::new(&self.config.index, token_counter);
-        let batch = pipeline.run(&indexable, &mut *embedder, Some(pb_embed.as_ref()), self.config.search.bm25_k1, self.config.search.bm25_b)?;
+        let (batch, embedder) = runner::run_indexing_pipeline(
+            self.embedder_factory,
+            &self.config.index,
+            &indexable,
+            self.config.search.bm25_k1,
+            self.config.search.bm25_b,
+            Some(pb_embed.as_ref()),
+        )?;
         pb_embed.finish();
         let embed_secs = embed_start.elapsed().as_secs_f64();
         let dims = embedder.dims();

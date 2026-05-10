@@ -8,7 +8,7 @@ use crate::index::merger::IndexMerger;
 use crate::index::sub_index::SubIndex;
 use crate::index::vector_store::VectorStore;
 use crate::index::SourceIndexKind;
-use crate::indexing::IndexedBatch;
+use crate::indexing::{Bm25IndexBuilder, IndexedBatch, unique_doc_count};
 use crate::support::fs::dir_size;
 
 pub(crate) struct MergedIndex {
@@ -146,6 +146,35 @@ impl IndexRepository {
         } else {
             Ok(None)
         }
+    }
+
+    /// Store merged vectors/metadata, rebuilding BM25 from the merged chunk texts.
+    /// This is the common persistence pattern shared by incremental workflows.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn store_merged(
+        &self,
+        kind: SourceIndexKind,
+        merged_vectors: Vec<Vec<f32>>,
+        merged_metadata: Vec<ChunkMetadata>,
+        dims: usize,
+        last_indexed_commit: Option<String>,
+        bm25_k1: f32,
+        bm25_b: f32,
+    ) -> anyhow::Result<(usize, usize)> {
+        let chunk_texts: Vec<&str> = merged_metadata.iter().map(|m| m.chunk_text.as_str()).collect();
+        let (bm25_embeddings, bm25_avgdl) = Bm25IndexBuilder { k1: bm25_k1, b: bm25_b }.build(&chunk_texts);
+        let doc_count = unique_doc_count(&merged_metadata);
+        let chunk_count = merged_metadata.len();
+        let store_batch = IndexedBatch {
+            vectors: merged_vectors,
+            metadata: merged_metadata,
+            bm25_embeddings,
+            bm25_k1,
+            bm25_b,
+            bm25_avgdl,
+        };
+        self.store(kind, &store_batch, dims, doc_count, last_indexed_commit)?;
+        Ok((chunk_count, doc_count))
     }
 
     pub(crate) fn load_one(&self, kind: SourceIndexKind) -> anyhow::Result<SubIndex> {

@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use super::{FileIndexOutcome, FileIndexRequest, FileIndexWorkflow};
+use crate::app::workflows::runner;
 use crate::documents::ChunkMetadata;
 use crate::index::{IndexRepository, SourceIndexKind, VectorStore};
-use crate::indexing::{unique_doc_count, Bm25IndexBuilder, IndexedBatch, IndexingPipeline};
+use crate::indexing::IndexedBatch;
 use crate::sources::file::FileIndexer;
 
 type ExistingIndex = (HashMap<String, String>, Vec<ChunkMetadata>, VectorStore, bool);
@@ -41,25 +42,20 @@ impl<'a> FileIndexWorkflow<'a> {
     ) -> anyhow::Result<(usize, usize)> {
         let merged = FileIndexer::merge_incremental(all_files, &old_metadata, &old_vectors, &batch.metadata, &batch.vectors);
         let (merged_vectors, merged_metadata) = merged;
-        let chunk_count = merged_metadata.len();
-        let doc_count = unique_doc_count(&merged_metadata);
-        let chunk_texts: Vec<&str> = merged_metadata.iter().map(|m| m.chunk_text.as_str()).collect();
-        let (bm25_embeddings, bm25_avgdl) = Bm25IndexBuilder {
-            k1: self.config.search.bm25_k1,
-            b: self.config.search.bm25_b,
-        }.build(&chunk_texts);
-        let store_batch = IndexedBatch {
-            vectors: merged_vectors, metadata: merged_metadata, bm25_embeddings,
-            bm25_k1: self.config.search.bm25_k1, bm25_b: self.config.search.bm25_b, bm25_avgdl,
-        };
-        repo.store(SourceIndexKind::File, &store_batch, dims, doc_count, None)?;
-        Ok((chunk_count, doc_count))
+        repo.store_merged(
+            SourceIndexKind::File,
+            merged_vectors,
+            merged_metadata,
+            dims,
+            None,
+            self.config.search.bm25_k1,
+            self.config.search.bm25_b,
+        )
     }
 
     pub(super) fn incremental(&self, request: &FileIndexRequest) -> anyhow::Result<FileIndexOutcome> {
         let persist_path = self.config.persist_path_buf();
         let repo = IndexRepository::new(&persist_path, &self.config.index);
-        let mut embedder = self.embedder_factory.create(&self.config.index.embedding_model)?;
 
         let (old_hashes, old_metadata, old_vectors, index_exists) = match self.load_existing_index() {
             Ok(v) => v,
@@ -91,9 +87,14 @@ impl<'a> FileIndexWorkflow<'a> {
 
         let pb = self.ui.progress(diff.to_index.len() as u64, "Indexing files", request.verbose);
         let docs = FileIndexer::prepare_files(&diff.to_index, &request.input_root, self.file_size_limit_mb())?;
-        let token_counter = embedder.token_counter();
-        let pipeline = IndexingPipeline::new(&self.config.index, token_counter);
-        let batch = pipeline.run(&docs, &mut *embedder, Some(pb.as_ref()), self.config.search.bm25_k1, self.config.search.bm25_b)?;
+        let (batch, embedder) = runner::run_indexing_pipeline(
+            self.embedder_factory,
+            &self.config.index,
+            &docs,
+            self.config.search.bm25_k1,
+            self.config.search.bm25_b,
+            Some(pb.as_ref()),
+        )?;
         pb.finish();
 
         let dims = embedder.dims();

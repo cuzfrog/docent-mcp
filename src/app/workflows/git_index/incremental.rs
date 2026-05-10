@@ -1,9 +1,9 @@
 use std::path::Path;
 use std::time::Instant;
 
+use crate::app::workflows::runner;
 use crate::config::GitConfig;
 use crate::index::{IndexRepository, SourceIndexKind};
-use crate::indexing::{unique_doc_count, Bm25IndexBuilder, IndexedBatch, IndexingPipeline};
 use crate::sources::git::GitIndexer;
 
 use super::{GitIndexOutcome, GitIndexRequest, GitIndexWorkflow};
@@ -59,19 +59,15 @@ impl<'a> GitIndexWorkflow<'a> {
             "Embedding documents",
             request.verbose,
         );
-        let mut embedder = self
-            .embedder_factory
-            .create(&self.config.index.embedding_model)?;
 
         let indexable = GitIndexer::prepare_git_documents(&new_docs, &vec![true; new_docs.len()]);
-        let token_counter = embedder.token_counter();
-        let pipeline = IndexingPipeline::new(&self.config.index, token_counter);
-        let batch = pipeline.run(
+        let (batch, embedder) = runner::run_indexing_pipeline(
+            self.embedder_factory,
+            &self.config.index,
             &indexable,
-            &mut *embedder,
-            Some(pb2.as_ref()),
             self.config.search.bm25_k1,
             self.config.search.bm25_b,
+            Some(pb2.as_ref()),
         )?;
         pb2.finish();
         let embed_secs = embed_start.elapsed().as_secs_f64();
@@ -87,27 +83,14 @@ impl<'a> GitIndexWorkflow<'a> {
         );
 
         let (merged_vectors, merged_metadata) = merged;
-        let chunk_count = merged_metadata.len();
-        let doc_count = unique_doc_count(&merged_metadata);
-        let chunk_texts: Vec<&str> = merged_metadata.iter().map(|m| m.chunk_text.as_str()).collect();
-        let (bm25_embeddings, bm25_avgdl) = Bm25IndexBuilder {
-            k1: self.config.search.bm25_k1,
-            b: self.config.search.bm25_b,
-        }.build(&chunk_texts);
-        let store_batch = IndexedBatch {
-            vectors: merged_vectors,
-            metadata: merged_metadata,
-            bm25_embeddings,
-            bm25_k1: self.config.search.bm25_k1,
-            bm25_b: self.config.search.bm25_b,
-            bm25_avgdl,
-        };
-        repo.store(
+        let (chunk_count, doc_count) = repo.store_merged(
             SourceIndexKind::Git,
-            &store_batch,
+            merged_vectors,
+            merged_metadata,
             embedder.dims(),
-            doc_count,
             Some(head_commit),
+            self.config.search.bm25_k1,
+            self.config.search.bm25_b,
         )?;
 
         Ok(GitIndexOutcome::Indexed {
