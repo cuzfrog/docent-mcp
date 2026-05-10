@@ -18,6 +18,14 @@ use crate::interfaces::search_tool::SearchExecutor;
 use crate::support::fs;
 use crate::support::ui::{ConsoleUi, WorkflowUi};
 
+#[derive(Clone)]
+pub struct IndexRunRequest {
+    pub input_path: Option<PathBuf>,
+    pub config_path: PathBuf,
+    pub rebuild: bool,
+    pub verbose: bool,
+}
+
 pub struct Application {
     ui: Box<dyn WorkflowUi>,
     embedder_factory: Box<dyn EmbedderFactory>,
@@ -79,23 +87,20 @@ impl Application {
 
     pub fn run_index(
         &self,
-        dir: Option<PathBuf>,
-        config_path: &std::path::Path,
-        rebuild: bool,
-        verbose: bool,
+        req: &IndexRunRequest,
     ) -> anyhow::Result<()> {
-        let config = Config::load(config_path)?;
-        let dir = dir.unwrap_or_else(|| PathBuf::from("."));
+        let config = Config::load(&req.config_path)?;
+        let dir = req.input_path.clone().unwrap_or_else(|| PathBuf::from("."));
         let dir = dir.canonicalize()?;
 
         let file_enabled = config.file.as_ref().map(|f| f.enabled).unwrap_or(true);
         if file_enabled {
-            self.run_file_index_workflow(&config, dir.clone(), rebuild, verbose)?;
+            self.run_file_index_workflow(&config, dir.clone(), req.rebuild, req.verbose)?;
         }
 
         let git_enabled = config.git.as_ref().map(|g| g.enabled).unwrap_or(false);
         if git_enabled {
-            self.run_git_index_workflow(&config, dir, rebuild, verbose)?;
+            self.run_git_index_workflow(&config, dir, req.rebuild, req.verbose)?;
         }
 
         Ok(())
@@ -103,28 +108,22 @@ impl Application {
 
     pub fn run_index_file(
         &self,
-        file: Option<PathBuf>,
-        config_path: &std::path::Path,
-        rebuild: bool,
-        verbose: bool,
+        req: &IndexRunRequest,
     ) -> anyhow::Result<()> {
-        let config = Config::load(config_path)?;
-        let path = file.unwrap_or_else(|| PathBuf::from("."));
+        let config = Config::load(&req.config_path)?;
+        let path = req.input_path.clone().unwrap_or_else(|| PathBuf::from("."));
         let input_root = fs::resolve_input_root(&path)?;
-        self.run_file_index_workflow(&config, input_root, rebuild, verbose)
+        self.run_file_index_workflow(&config, input_root, req.rebuild, req.verbose)
     }
 
     pub fn run_index_git(
         &self,
-        file: Option<PathBuf>,
-        config_path: &std::path::Path,
-        rebuild: bool,
-        verbose: bool,
+        req: &IndexRunRequest,
     ) -> anyhow::Result<()> {
-        let config = Config::load(config_path)?;
-        let path = file.unwrap_or_else(|| PathBuf::from("."));
+        let config = Config::load(&req.config_path)?;
+        let path = req.input_path.clone().unwrap_or_else(|| PathBuf::from("."));
         let repo_path = fs::resolve_repo_root(&path)?;
-        self.run_git_index_workflow(&config, repo_path, rebuild, verbose)
+        self.run_git_index_workflow(&config, repo_path, req.rebuild, req.verbose)
     }
 
     pub async fn run_serve(&self, config_path: &std::path::Path) -> anyhow::Result<()> {
@@ -205,6 +204,15 @@ impl Application {
         Ok(PreparedServe { router })
     }
 
+    fn emit_outcome(&self, outcome: Vec<(&'static str, String)>) {
+        for (level, msg) in outcome {
+            match level {
+                "warn" => self.ui.warn(&msg),
+                _ => self.ui.info(&msg),
+            }
+        }
+    }
+
     fn run_file_index_workflow(
         &self,
         config: &Config,
@@ -219,12 +227,7 @@ impl Application {
         };
         let workflow = workflows::file_index::FileIndexWorkflow::new(config, &*self.ui, &*self.embedder_factory);
         let outcome = workflow.run(request)?;
-        for (level, msg) in outcome.format_for_ui() {
-            match level {
-                "warn" => self.ui.warn(&msg),
-                _ => self.ui.info(&msg),
-            }
-        }
+        self.emit_outcome(outcome.format_for_ui());
         Ok(())
     }
 
@@ -242,12 +245,7 @@ impl Application {
         };
         let workflow = workflows::git_index::GitIndexWorkflow::new(config, &*self.ui, &*self.embedder_factory);
         let outcome = workflow.run(request)?;
-        for (level, msg) in outcome.format_for_ui() {
-            match level {
-                "warn" => self.ui.warn(&msg),
-                _ => self.ui.info(&msg),
-            }
-        }
+        self.emit_outcome(outcome.format_for_ui());
         Ok(())
     }
 }
@@ -292,12 +290,12 @@ enabled = false
             .with_ui(Box::new(RecordingUi::always_confirm()))
             .with_embedder_factory(Box::new(FakeEmbedderFactory));
 
-        app.run_index(
-            Some(dir.clone()),
-            &config_path,
-            false,
-            false,
-        ).unwrap();
+        app.run_index(&IndexRunRequest {
+            input_path: Some(dir.clone()),
+            config_path: config_path.clone(),
+            rebuild: false,
+            verbose: false,
+        }).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
