@@ -9,7 +9,6 @@ use crate::index::sub_index::SubIndex;
 use crate::index::vector_store::VectorStore;
 use crate::index::SourceIndexKind;
 use crate::indexing::{Bm25IndexBuilder, IndexedBatch, unique_doc_count};
-use crate::support::fs::dir_size;
 
 pub(crate) struct MergedIndex {
     pub vectors: VectorStore,
@@ -132,30 +131,6 @@ impl IndexRepository {
 
         let merged = IndexMerger::merge(file, git)?;
         Ok(LoadMergedResult { merged, notices })
-    }
-
-    pub(crate) fn check_size(&self, max_size_mb: u64) -> anyhow::Result<Option<IndexSizeInfo>> {
-        let total_size = dir_size(&self.persist_path);
-        let max_bytes = max_size_mb * 1024 * 1024;
-        if total_size > max_bytes {
-            let file_bytes = if self.persist_path.join("file").exists() {
-                dir_size(&self.persist_path.join("file"))
-            } else {
-                0
-            };
-            let git_bytes = if self.persist_path.join("git").exists() {
-                dir_size(&self.persist_path.join("git"))
-            } else {
-                0
-            };
-            Ok(Some(IndexSizeInfo {
-                total_bytes: total_size,
-                file_bytes,
-                git_bytes,
-            }))
-        } else {
-            Ok(None)
-        }
     }
 
     /// Store merged vectors/metadata, rebuilding BM25 from the merged chunk texts.

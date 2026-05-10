@@ -30,8 +30,25 @@ impl ServeIndexAccess for RealServeIndexAccess {
         persist_path: &Path,
         max_size_mb: u64,
     ) -> anyhow::Result<Option<IndexSizeInfo>> {
-        let repo = IndexRepository::new(persist_path, &IndexConfig::default());
-        repo.check_size(max_size_mb)
+        let total_size = crate::support::fs::dir_size(persist_path);
+        let max_bytes = max_size_mb * 1024 * 1024;
+        if total_size > max_bytes {
+            Ok(Some(IndexSizeInfo {
+                total_bytes: total_size,
+                file_bytes: if persist_path.join("file").exists() {
+                    crate::support::fs::dir_size(&persist_path.join("file"))
+                } else {
+                    0
+                },
+                git_bytes: if persist_path.join("git").exists() {
+                    crate::support::fs::dir_size(&persist_path.join("git"))
+                } else {
+                    0
+                },
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     fn load_merged(

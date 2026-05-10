@@ -10,14 +10,15 @@ impl IndexMerger {
         file_index: Option<SubIndex>,
         git_index: Option<SubIndex>,
     ) -> anyhow::Result<MergedIndex> {
-        let file_vectors: Option<&VectorStore> = file_index.as_ref().map(|s| &s.vectors);
-        let git_vectors: Option<&VectorStore> = git_index.as_ref().map(|s| &s.vectors);
-        let empty_store = VectorStore::from_vec_vec(vec![])
-            .expect("empty vector store always succeeds");
-        let all_vectors = VectorStore::concat(
-            file_vectors.unwrap_or(&empty_store),
-            git_vectors.unwrap_or(&empty_store),
-        )?;
+        let all_vectors = match (
+            file_index.as_ref().map(|s| &s.vectors),
+            git_index.as_ref().map(|s| &s.vectors),
+        ) {
+            (Some(f), Some(g)) => VectorStore::concat(f, g)?,
+            (Some(f), None) => f.clone(),
+            (None, Some(g)) => g.clone(),
+            (None, None) => VectorStore::from_vec_vec(vec![])?,
+        };
 
         let all_metadata: Vec<ChunkMetadata> = file_index
             .as_ref()
