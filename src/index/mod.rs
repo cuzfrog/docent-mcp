@@ -28,5 +28,5 @@ pub(crate) use bm25_storage::read_bm25_index;
 pub use header::{IndexHeader, SCHEMA_VERSION};
 pub use storage::{read_index, write_index};
 pub use stored_metadata::{StoredChunkKind, StoredChunkMetadata};
-pub(crate) use repository::{IndexRepository, IndexSizeInfo, LoadMergedResult, MergedIndex};
+pub(crate) use repository::{IndexRepository, IndexSizeInfo, LoadMergedResult, MergedIndex, StoreMergedRequest};
 pub use vector_store::VectorStore;

@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use crate::app::workflows::runner;
 use crate::config::GitConfig;
-use crate::index::{IndexRepository, SourceIndexKind};
+use crate::index::{IndexRepository, SourceIndexKind, StoreMergedRequest};
 use crate::sources::git::GitIndexer;
 
 use super::{GitIndexOutcome, GitIndexRequest, GitIndexWorkflow};
@@ -83,15 +83,15 @@ impl<'a> GitIndexWorkflow<'a> {
         );
 
         let (merged_vectors, merged_metadata) = merged;
-        let (chunk_count, doc_count) = repo.store_merged(
-            SourceIndexKind::Git,
+        let (chunk_count, doc_count) = repo.store_merged(&StoreMergedRequest {
+            kind: SourceIndexKind::Git,
             merged_vectors,
             merged_metadata,
-            embedder.dims(),
-            Some(head_commit),
-            self.config.search.bm25.k1,
-            self.config.search.bm25.b,
-        )?;
+            dims: embedder.dims(),
+            last_indexed_commit: Some(head_commit),
+            bm25_k1: self.config.search.bm25.k1,
+            bm25_b: self.config.search.bm25.b,
+        })?;
 
         Ok(GitIndexOutcome::Indexed {
             rebuilt: false,

@@ -30,6 +30,16 @@ pub(crate) struct LoadMergedResult {
     pub notices: Vec<String>,
 }
 
+pub(crate) struct StoreMergedRequest {
+    pub kind: SourceIndexKind,
+    pub merged_vectors: Vec<Vec<f32>>,
+    pub merged_metadata: Vec<ChunkMetadata>,
+    pub dims: usize,
+    pub last_indexed_commit: Option<String>,
+    pub bm25_k1: f32,
+    pub bm25_b: f32,
+}
+
 pub(crate) struct IndexRepository {
     persist_path: PathBuf,
     config: IndexConfig,
@@ -80,9 +90,9 @@ impl IndexRepository {
             sub.header.validate_against(&self.config)?;
         }
         if sub.bm25.is_none() && !sub.metadata.is_empty() {
-            let notice = sub.rebuild_bm25(&self.persist_path, kind, k1, b)?;
+            let (bm25_sub, notice) = sub.rebuild_bm25(&self.persist_path, kind, k1, b)?;
             notices.push(notice);
-            sub = SubIndex::load(&self.persist_path, kind)?;
+            sub.bm25 = Some(bm25_sub);
         }
         Ok(Some(sub))
     }
@@ -150,30 +160,23 @@ impl IndexRepository {
 
     /// Store merged vectors/metadata, rebuilding BM25 from the merged chunk texts.
     /// This is the common persistence pattern shared by incremental workflows.
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn store_merged(
         &self,
-        kind: SourceIndexKind,
-        merged_vectors: Vec<Vec<f32>>,
-        merged_metadata: Vec<ChunkMetadata>,
-        dims: usize,
-        last_indexed_commit: Option<String>,
-        bm25_k1: f32,
-        bm25_b: f32,
+        req: &StoreMergedRequest,
     ) -> anyhow::Result<(usize, usize)> {
-        let chunk_texts: Vec<&str> = merged_metadata.iter().map(|m| m.chunk_text.as_str()).collect();
-        let (bm25_embeddings, bm25_avgdl) = Bm25IndexBuilder { k1: bm25_k1, b: bm25_b }.build(&chunk_texts);
-        let doc_count = unique_doc_count(&merged_metadata);
-        let chunk_count = merged_metadata.len();
+        let chunk_texts: Vec<&str> = req.merged_metadata.iter().map(|m| m.chunk_text.as_str()).collect();
+        let (bm25_embeddings, bm25_avgdl) = Bm25IndexBuilder { k1: req.bm25_k1, b: req.bm25_b }.build(&chunk_texts);
+        let doc_count = unique_doc_count(&req.merged_metadata);
+        let chunk_count = req.merged_metadata.len();
         let store_batch = IndexedBatch {
-            vectors: merged_vectors,
-            metadata: merged_metadata,
+            vectors: req.merged_vectors.clone(),
+            metadata: req.merged_metadata.clone(),
             bm25_embeddings,
-            bm25_k1,
-            bm25_b,
+            bm25_k1: req.bm25_k1,
+            bm25_b: req.bm25_b,
             bm25_avgdl,
         };
-        self.store(kind, &store_batch, dims, doc_count, last_indexed_commit)?;
+        self.store(req.kind, &store_batch, req.dims, doc_count, req.last_indexed_commit.clone())?;
         Ok((chunk_count, doc_count))
     }
 

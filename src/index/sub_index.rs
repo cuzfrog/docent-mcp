@@ -54,7 +54,8 @@ impl SubIndex {
     }
 
     /// Rebuild BM25 data from this sub-index's own metadata and persist it
-    /// to `persist_path/<kind>/bm25/`. Returns a notice string like
+    /// to `persist_path/<kind>/bm25/`. Returns the newly-built Bm25SubIndex
+    /// along with a notice string like
     /// "Rebuilt BM25 index for file/ from metadata (N chunks)."
     pub(crate) fn rebuild_bm25(
         &self,
@@ -62,7 +63,7 @@ impl SubIndex {
         kind: SourceIndexKind,
         k1: f32,
         b: f32,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<(Bm25SubIndex, String)> {
         let chunk_texts: Vec<&str> = self.metadata.iter().map(|m| m.chunk_text.as_str()).collect();
         let chunk_count = chunk_texts.len();
 
@@ -78,11 +79,16 @@ impl SubIndex {
         };
         bm25_storage::write_bm25_index(&bm25_dir, &bm25_header, &bm25_embeddings)?;
 
+        let bm25_sub = Bm25SubIndex {
+            header: bm25_header,
+            embeddings: bm25_embeddings,
+        };
+
         let kind_name = kind.subdir();
-        Ok(format!(
+        Ok((bm25_sub, format!(
             "Rebuilt BM25 index for {}/ from metadata ({} chunks).",
             kind_name, chunk_count
-        ))
+        )))
     }
 
     /// Store a sub-index for `kind` under `persist_path / kind.subdir()`.

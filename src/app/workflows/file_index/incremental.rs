@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use super::{FileIndexOutcome, FileIndexRequest, FileIndexWorkflow};
 use crate::app::workflows::runner;
 use crate::documents::ChunkMetadata;
-use crate::index::{IndexRepository, SourceIndexKind, VectorStore};
+use crate::index::{IndexRepository, SourceIndexKind, StoreMergedRequest, VectorStore};
 use crate::indexing::IndexedBatch;
 use crate::sources::file::FileIndexer;
 
@@ -67,15 +67,15 @@ impl<'a> FileIndexWorkflow<'a> {
     ) -> anyhow::Result<(usize, usize)> {
         let merged = FileIndexer::merge_incremental(all_files, &old_metadata, &old_vectors, &batch.metadata, &batch.vectors);
         let (merged_vectors, merged_metadata) = merged;
-        repo.store_merged(
-            SourceIndexKind::File,
+        repo.store_merged(&StoreMergedRequest {
+            kind: SourceIndexKind::File,
             merged_vectors,
             merged_metadata,
             dims,
-            None,
-            self.config.search.bm25.k1,
-            self.config.search.bm25.b,
-        )
+            last_indexed_commit: None,
+            bm25_k1: self.config.search.bm25.k1,
+            bm25_b: self.config.search.bm25.b,
+        })
     }
 
     pub(super) fn incremental(&self, request: &FileIndexRequest) -> anyhow::Result<FileIndexOutcome> {
