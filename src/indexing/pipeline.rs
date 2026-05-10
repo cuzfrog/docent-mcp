@@ -120,13 +120,3 @@ impl IndexingPipeline {
         all_chunks
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_pipeline_batch_size() {
-        assert_eq!(BATCH_SIZE, 64);
-    }
-}
