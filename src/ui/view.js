@@ -162,7 +162,8 @@ export class View {
   }
 
   /**
-   * Render a human-readable version of the MCP response content.
+   * Render a human-readable, formatted version of the MCP response content.
+   * Parses JSON text items and pretty-prints them with indentation.
    * @param {object} data
    * @private
    */
@@ -179,9 +180,15 @@ export class View {
     }
     const parts = [];
     for (const item of content) {
-      if (item.text) parts.push(item.text);
+      if (!item.text) continue;
+      try {
+        const parsed = JSON.parse(item.text);
+        parts.push(JSON.stringify(parsed, null, 2));
+      } catch {
+        parts.push(item.text);
+      }
     }
-    el.textContent = parts.join('\n---\n');
+    el.textContent = parts.join('\n\n---\n\n');
   }
 
   /**

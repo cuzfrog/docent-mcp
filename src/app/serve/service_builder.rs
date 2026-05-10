@@ -20,6 +20,9 @@ impl HybridServiceBuilder {
             .create(embedding_model)
             .map_err(|e| anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e))?;
 
+        // TODO: The single Arc<Mutex<...>> serializes all search requests on the
+        // embedder. For concurrent workloads, consider a thread-local or pool-based
+        // embedder strategy to improve throughput.
         Ok(Arc::new(Mutex::new(inner)))
     }
 

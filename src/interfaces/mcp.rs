@@ -11,6 +11,10 @@ use super::search_tool::SearchExecutor;
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct SearchDdrParams {
     pub query: String,
+    /// Result limit (1-10). The serde-deserialized value allows 0, but
+    /// `SearchExecutor::validate()` enforces the 1..=10 range at runtime.
+    /// This is intentional — MCP tool-level constraints are handled at
+    /// the executor boundary rather than the schema level.
     #[serde(default = "default_limit")]
     pub limit: u8,
     #[serde(default)]

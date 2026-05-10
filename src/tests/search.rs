@@ -173,7 +173,25 @@ fn test_search_empty_index_returns_empty() {
 }
 
 #[test]
+fn test_search_service_trait_dispatch() {
+    use std::sync::Arc;
+    use crate::search::SearchService;
+
+    let svc = build_hybrid_service(vec![0.9], vec![0.1], &["test"]);
+    let trait_obj: Arc<dyn SearchService> = Arc::new(svc);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let results = rt.block_on(trait_obj.search("test", 1, "")).unwrap();
+    assert_eq!(results.len(), 1);
+    assert!((results[0].semantic_score - 0.9).abs() < 1e-6);
+    assert!((results[0].bm25_score - 0.1).abs() < 1e-6);
+}
+
+#[test]
 fn test_search_limit_clamping() {
+    // Note: the public API (SearchExecutor::validate) rejects limit=0.
+    // This test exercises HybridSearchService.search directly and
+    // demonstrates the internal ranker's behavior: limit=0 is clamped to 3.
+    // This is intentional — the ranker is a lower-level component.
     let svc = build_hybrid_service(
         vec![0.9, 0.8, 0.7, 0.6, 0.5],
         vec![0.4, 0.3, 0.2, 0.1, 0.0],
