@@ -17,7 +17,7 @@ pub struct Chunk {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ChunkingConfig {
+pub(crate) struct ChunkingConfig {
     pub chunk_size: usize,
     pub chunk_overlap: usize,
 }
@@ -34,7 +34,7 @@ use crate::app::index::chunking::counter::TokenCounter;
 /// Splits the document body on H2/H3 heading boundaries, then applies
 /// a token-based sliding window to any section that exceeds `config.chunk_size`
 /// tokens. Returns chunks with globally incrementing `chunk_index` (0-based).
-pub fn chunk_document(
+pub(crate) fn chunk_document(
     body: &str,
     config: &ChunkingConfig,
     counter: &dyn TokenCounter,

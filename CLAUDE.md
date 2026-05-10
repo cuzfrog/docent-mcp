@@ -38,16 +38,17 @@ src/
 │   ├── mod.rs             #   Application struct (orchestrates, resolves Config slices)
 │   ├── init.rs            #   Config file generation & TOML merge
 │   ├── index/             #   Indexing workflows (file + git)
-│   │   ├── mod.rs, runner.rs
+│   │   ├── mod.rs         #     Unified Indexer trait, IndexKind, IndexRequest, IndexOutcome
 │   │   ├── file/          #     File indexing: discover, extract, diff, merge
-│   │   │   ├── mod.rs     #       FileIndexer trait + create_file_indexer() factory (FileIndexerImpl is pub(crate))
+│   │   │   ├── mod.rs     #       FileIndexer struct implementing Indexer + create_file_indexer() factory
 │   │   │   ├── rebuild.rs, incremental.rs
 │   │   │   ├── discover.rs, extract.rs, diff.rs, merge.rs
 │   │   ├── git/           #     Git indexing: history, estimate, freshness
-│   │   │   ├── mod.rs     #       GitIndexer trait + create_git_indexer() factory (GitIndexerImpl is pub(crate))
+│   │   │   ├── mod.rs     #       GitIndexer struct implementing Indexer + create_git_indexer() factory
 │   │   │   ├── rebuild.rs, incremental.rs, size_check.rs
 │   │   │   ├── extract.rs, history.rs, freshness.rs, estimate.rs, merge.rs
 │   │   ├── chunking/      #     Text splitting into embedding-sized chunks
+│   │   │   ├── mod.rs     #       Chunker trait (sole public interface) + DocumentChunker struct
 │   │   │   ├── engine.rs, sectioning.rs, counter.rs
 │   │   └── pipeline/      #     Indexing pipeline: types + engine
 │   │       ├── types.rs, engine.rs
@@ -86,16 +87,18 @@ src/
 └── tests/                 # Integration-style tests (compiled as crate unit tests)
 ```
 
-**Data flow (index):** `main.rs` → `Application::run_index()` resolves `&IndexConfig`, `&FileConfig`/`&GitConfig`, and BM25 params → `app/index/{file,git}/` extract documents → `app/index/chunking/` splits into chunks → `index/embedder.rs` creates embedder via `create_embedder()` → `app/index/pipeline/engine.rs` coordinates → `index/storage.rs` persists
+**Data flow (index):** `main.rs` → `Application::run_index()` resolves enabled kinds → `Indexer::run()` → `app/index/{file,git}/` extract documents → each `Indexer` creates its own `IndexingPipeline` with a `Chunker` → `index/embedder.rs` creates embedder via `create_embedder()` → `app/index/pipeline/engine.rs` coordinates → `index/storage.rs` persists
 
 **Data flow (search):** `mcp/mcp_handler.rs` receives query → `mcp/search/orchestrator.rs` scores (semantic + BM25) → `mcp/search/fusion.rs` fuses → `mcp/search/ranking.rs` ranks with decay + file_hint → response
 
-### Boundary rules (post IMPROVE-09/13)
+### Boundary rules (post IMPROVE-09/13, updated IMPROVE-14)
 
 - **Composition root** lives in `main.rs`. It only calls factory functions (`create_file_indexer`, `create_git_indexer`, `create_server`, `create_console`), never concrete struct constructors.
-- **`Application`** orchestrates and resolves `Config` slices, but does not construct dependencies (no `impl Default`).
+- **`Application`** orchestrates and resolves `Config` slices, but does not construct dependencies (no `impl Default`). Receives a `Vec<Box<dyn Indexer>>` and dispatches via `enabled_kinds`.
 - **Leaf modules** (`file`, `git`) receive only the config slices they need, never the root `Config`.
-- **Visibility**: concrete impl structs (`FileIndexerImpl`, `GitIndexerImpl`, `Progress`) are `pub(crate)` or private; public surface consists of traits, request/response types, and factory functions.
+- **`Indexer`** is the only public trait from `app/index/` (file and git modules expose only their factory functions and request/response types).
+- **`Chunker`** is the only public interface from `app/index/chunking`.
+- **Visibility**: concrete impl structs (`FileIndexer`, `GitIndexer`, `DocumentChunker`, `Progress`) are `pub(crate)` or private; public surface consists of traits and factory functions.
 - **Config resolution** happens in `Application` before calling indexers, never in the leaf modules themselves.
 
 ## Dependencies

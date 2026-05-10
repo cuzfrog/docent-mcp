@@ -40,16 +40,41 @@ struct ServeArgs {
     config: PathBuf,
 }
 
-fn make_app(verbose: bool) -> Application {
+fn make_app(config: &Config, verbose: bool) -> Application {
+    let console = Box::new(docent_mcp::support::ui::create_console(verbose));
+    let mut indexers: Vec<Box<dyn docent_mcp::app::index::Indexer>> = Vec::new();
+
+    if let Some(ref file_config) = config.file {
+        indexers.push(Box::new(docent_mcp::app::index::file::create_file_indexer(
+            config.index.clone(),
+            file_config.clone(),
+            config.search.bm25.k1,
+            config.search.bm25.b,
+            Box::new(docent_mcp::support::ui::create_console(verbose)),
+        )));
+    }
+    if let Some(ref git_config) = config.git {
+        indexers.push(Box::new(docent_mcp::app::index::git::create_git_indexer(
+            config.index.clone(),
+            git_config.clone(),
+            config.search.bm25.k1,
+            config.search.bm25.b,
+            Box::new(docent_mcp::support::ui::create_console(verbose)),
+        )));
+    }
+
+    Application::new(
+        console,
+        Box::new(docent_mcp::app::serve::server::create_server()),
+        indexers,
+    )
+}
+
+fn make_app_basic(verbose: bool) -> Application {
     Application::new(
         Box::new(docent_mcp::support::ui::create_console(verbose)),
         Box::new(docent_mcp::app::serve::server::create_server()),
-        Box::new(docent_mcp::app::index::file::create_file_indexer(
-            Box::new(docent_mcp::support::ui::create_console(verbose)),
-        )),
-        Box::new(docent_mcp::app::index::git::create_git_indexer(
-            Box::new(docent_mcp::support::ui::create_console(verbose)),
-        )),
+        vec![],
     )
 }
 
@@ -60,22 +85,22 @@ async fn main() -> anyhow::Result<()> {
         Commands::IndexFile(args) => {
             let mut config = Config::load(&args.config)?;
             config.git = None;
-            make_app(args.verbose).run_index(&config, args.path, args.rebuild, args.verbose)?;
+            make_app(&config, args.verbose).run_index(&config, args.path, args.rebuild, args.verbose)?;
         }
         Commands::IndexGit(args) => {
             let mut config = Config::load(&args.config)?;
             config.file = None;
-            make_app(args.verbose).run_index(&config, args.path, args.rebuild, args.verbose)?;
+            make_app(&config, args.verbose).run_index(&config, args.path, args.rebuild, args.verbose)?;
         }
         Commands::Serve(args) => {
             let config = Config::load(&args.config)?;
-            make_app(false).run_serve(&config).await?;
+            make_app(&config, false).run_serve(&config).await?;
         }
-        Commands::ListModels => make_app(false).list_models(),
-        Commands::Init => make_app(false).run_init()?,
+        Commands::ListModels => make_app_basic(false).list_models(),
+        Commands::Init => make_app_basic(false).run_init()?,
         Commands::Index(args) => {
             let config = Config::load(&args.config)?;
-            make_app(args.verbose).run_index(&config, args.path, args.rebuild, args.verbose)?;
+            make_app(&config, args.verbose).run_index(&config, args.path, args.rebuild, args.verbose)?;
         }
     }
     Ok(())

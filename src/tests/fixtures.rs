@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::app::index::chunking::TokenCounter;
+use crate::app::index::chunking::counter::TokenCounter;
 use crate::config::{Config, FileConfig, GitConfig, IndexConfig};
 use crate::domain::ChunkMetadata;
 use crate::index::embedder::Embedder;
@@ -150,7 +150,7 @@ impl Embedder for FakeEmbedder {
     }
 
     fn token_counter(&self) -> Box<dyn TokenCounter> {
-        Box::new(crate::app::index::chunking::WhitespaceTokenCounter)
+        Box::new(crate::app::index::chunking::counter::WhitespaceTokenCounter)
     }
 }
 

@@ -204,8 +204,9 @@ mod tests {
             is_fresh: None,
         };
 
-        let tok = embedder.token_counter();
-        let pipeline = crate::app::index::pipeline::IndexingPipeline::new(&config, tok);
+        let token_counter = embedder.token_counter();
+        let chunker = crate::app::index::chunking::DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
+        let pipeline = crate::app::index::pipeline::IndexingPipeline::new(Box::new(chunker));
         let batch = pipeline.run(&[doc], &mut embedder, None, 1.2, 0.75).unwrap();
         let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
         repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None)
@@ -240,8 +241,9 @@ mod tests {
             is_fresh: None,
         };
 
-        let tok = embedder.token_counter();
-        let pipeline = crate::app::index::pipeline::IndexingPipeline::new(&config, tok);
+        let token_counter = embedder.token_counter();
+        let chunker = crate::app::index::chunking::DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
+        let pipeline = crate::app::index::pipeline::IndexingPipeline::new(Box::new(chunker));
         let batch = pipeline.run(&[doc], &mut embedder, None, 1.2, 0.75).unwrap();
         let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
         repo.store(SourceIndexKind::Git, &batch, embedder.dims(), doc_count, None)
@@ -381,8 +383,9 @@ mod tests {
                 kind: ChunkKind::File,
                 is_fresh: None,
             };
-            let tok = embedder.token_counter();
-            let pipeline = crate::app::index::pipeline::IndexingPipeline::new(&config, tok);
+            let token_counter = embedder.token_counter();
+            let chunker = crate::app::index::chunking::DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
+            let pipeline = crate::app::index::pipeline::IndexingPipeline::new(Box::new(chunker));
             let batch = pipeline.run(&[doc], &mut embedder, None, 1.2, 0.75).unwrap();
             let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
             repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None).unwrap();

@@ -1,5 +1,4 @@
-use crate::app::index::chunking::{self, Chunk, ChunkingConfig};
-use crate::config::IndexConfig;
+use crate::app::index::chunking::{Chunk, Chunker};
 use crate::domain::ChunkMetadata;
 use crate::index::embedder::Embedder;
 use crate::app::index::pipeline::types::{Bm25IndexBuilder, IndexableDocument, IndexedBatch};
@@ -11,20 +10,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 const BATCH_SIZE: usize = 64;
 
 pub struct IndexingPipeline {
-    config: ChunkingConfig,
-    token_counter: Box<dyn crate::app::index::chunking::TokenCounter>,
+    chunker: Box<dyn Chunker>,
 }
 
 impl IndexingPipeline {
-    pub fn new(config: &IndexConfig, token_counter: Box<dyn crate::app::index::chunking::TokenCounter>) -> Self {
-        let chunking_config = ChunkingConfig {
-            chunk_size: config.chunk_size,
-            chunk_overlap: config.chunk_overlap,
-        };
-        Self {
-            config: chunking_config,
-            token_counter,
-        }
+    pub fn new(chunker: Box<dyn Chunker>) -> Self {
+        Self { chunker }
     }
 
     pub fn run(
@@ -98,7 +89,7 @@ impl IndexingPipeline {
             .par_iter()
             .enumerate()
             .map(|(i, doc)| {
-                let chunks = chunking::chunk_document(&doc.body, &self.config, &*self.token_counter);
+                let chunks = self.chunker.chunk(&doc.body);
                 let _ = doc_chunk_progress.fetch_add(1, Ordering::Relaxed);
                 DocChunksResult {
                     doc_index: i,

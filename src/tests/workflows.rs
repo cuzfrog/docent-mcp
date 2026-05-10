@@ -2,6 +2,7 @@ use crate::config::IndexConfig;
 use crate::domain::{ChunkKind, ChunkMetadata};
 use crate::index::embedder::Embedder;
 use crate::index::{IndexRepository, SourceIndexKind, SCHEMA_VERSION};
+use crate::app::index::chunking::DocumentChunker;
 use crate::app::index::pipeline::{IndexingPipeline, IndexableDocument};
 use crate::tests::fixtures::{make_temp_dir, read_index_at, FakeEmbedder};
 
@@ -58,8 +59,9 @@ fn test_index_and_store_round_trip() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let tok = embedder.token_counter();
-    let pipeline = IndexingPipeline::new(&config, tok);
+    let token_counter = embedder.token_counter();
+    let chunker = DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
+    let pipeline = IndexingPipeline::new(Box::new(chunker));
     let batch = pipeline.run(&docs, &mut embedder, None, 1.2, 0.75).unwrap();
 
     assert!(!batch.vectors.is_empty(), "Should produce vectors");
@@ -95,8 +97,9 @@ fn test_empty_document_list_produces_empty_index() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let tok = embedder.token_counter();
-    let pipeline = IndexingPipeline::new(&config, tok);
+    let token_counter = embedder.token_counter();
+    let chunker = DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
+    let pipeline = IndexingPipeline::new(Box::new(chunker));
     let batch = pipeline.run(&docs, &mut embedder, None, 1.2, 0.75).unwrap();
 
     assert!(batch.vectors.is_empty());
@@ -125,13 +128,15 @@ fn test_vectors_are_deterministic() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let tok = embedder.token_counter();
-    let pipeline = IndexingPipeline::new(&config, tok);
+    let token_counter = embedder.token_counter();
+    let chunker = DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
+    let pipeline = IndexingPipeline::new(Box::new(chunker));
     let batch1 = pipeline.run(&docs, &mut embedder, None, 1.2, 0.75).unwrap();
 
     let mut embedder2 = FakeEmbedder::new();
-    let tok2 = embedder2.token_counter();
-    let pipeline2 = IndexingPipeline::new(&config, tok2);
+    let token_counter2 = embedder2.token_counter();
+    let chunker2 = DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter2);
+    let pipeline2 = IndexingPipeline::new(Box::new(chunker2));
     let batch2 = pipeline2.run(&docs, &mut embedder2, None, 1.2, 0.75).unwrap();
 
     assert_eq!(batch1.vectors, batch2.vectors);
@@ -150,8 +155,9 @@ fn test_index_preserves_metadata_fields() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let tok = embedder.token_counter();
-    let pipeline = IndexingPipeline::new(&config, tok);
+    let token_counter = embedder.token_counter();
+    let chunker = DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
+    let pipeline = IndexingPipeline::new(Box::new(chunker));
     let batch = pipeline.run(&docs, &mut embedder, None, 1.2, 0.75).unwrap();
 
     let repo = IndexRepository::new(&index_dir, &config);

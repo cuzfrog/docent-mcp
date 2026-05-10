@@ -1,7 +1,5 @@
-use std::path::PathBuf;
-
+use crate::app::index::{IndexKind, IndexOutcome, IndexRequest, Indexer};
 use crate::config::{FileConfig, IndexConfig};
-
 use crate::support::ui::Console;
 
 pub(crate) mod rebuild;
@@ -17,102 +15,60 @@ pub(super) use diff::diff_files;
 pub(super) use extract::prepare_files;
 pub(super) use merge::{extract_old_hashes, merge_incremental};
 
-pub struct FileIndexRequest {
-    pub input_root: PathBuf,
-    pub rebuild: bool,
+pub(crate) struct FileIndexer {
+    pub console: Box<dyn Console>,
+    pub index_config: IndexConfig,
+    pub file_config: FileConfig,
+    pub bm25_k1: f32,
+    pub bm25_b: f32,
 }
 
-#[derive(Debug)]
-pub enum FileIndexOutcome {
-    Aborted,
-    UpToDate,
-    Indexed {
-        rebuilt: bool,
-        chunk_count: usize,
-        doc_count: usize,
-    },
-    NeedsRebuild {
-        reason: String,
-    },
-}
-
-impl FileIndexOutcome {
-    pub(crate) fn format_for_ui(&self) -> Vec<(&'static str, String)> {
-        match self {
-            FileIndexOutcome::Aborted => vec![("info", "Aborted.".to_string())],
-            FileIndexOutcome::UpToDate => {
-                vec![("info", "No changes detected. Index is up to date.".to_string())]
-            }
-            FileIndexOutcome::Indexed { rebuilt, chunk_count, doc_count } => {
-                if *rebuilt {
-                    vec![("info", format!(
-                        "File index written: {} chunks from {} docs", chunk_count, doc_count
-                    ))]
-                } else {
-                    vec![("info", format!(
-                        "File index updated: {} chunks from {} docs", chunk_count, doc_count
-                    ))]
-                }
-            }
-            FileIndexOutcome::NeedsRebuild { reason } => {
-                vec![("warn", reason.clone())]
-            }
-        }
+pub fn create_file_indexer(
+    index_config: IndexConfig,
+    file_config: FileConfig,
+    bm25_k1: f32,
+    bm25_b: f32,
+    console: Box<dyn Console>,
+) -> impl Indexer {
+    FileIndexer {
+        console,
+        index_config,
+        file_config,
+        bm25_k1,
+        bm25_b,
     }
 }
 
-pub trait FileIndexer: Send + Sync {
-    fn run(
-        &self,
-        index_config: &IndexConfig,
-        file_config: &FileConfig,
-        bm25_k1: f32,
-        bm25_b: f32,
-        request: FileIndexRequest,
-    ) -> anyhow::Result<FileIndexOutcome>;
-}
+impl Indexer for FileIndexer {
+    fn kind(&self) -> IndexKind {
+        IndexKind::File
+    }
 
-pub(crate) struct FileIndexerImpl {
-    pub console: Box<dyn Console>,
-}
-
-pub fn create_file_indexer(console: Box<dyn Console>) -> impl FileIndexer {
-    FileIndexerImpl { console }
-}
-
-impl FileIndexer for FileIndexerImpl {
-    fn run(
-        &self,
-        index_config: &IndexConfig,
-        file_config: &FileConfig,
-        bm25_k1: f32,
-        bm25_b: f32,
-        request: FileIndexRequest,
-    ) -> anyhow::Result<FileIndexOutcome> {
+    fn run(&self, request: &IndexRequest) -> anyhow::Result<IndexOutcome> {
         if request.rebuild {
-            self.rebuild(index_config, file_config, bm25_k1, bm25_b, &request)
+            self.rebuild(request)
         } else {
-            self.incremental(index_config, file_config, bm25_k1, bm25_b, &request)
+            self.incremental(request)
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
     use super::*;
     use crate::app::index::pipeline::{IndexingPipeline, unique_doc_count};
+    use crate::app::index::chunking::DocumentChunker;
     use crate::config::IndexConfig;
     use crate::domain::ChunkKind;
     use crate::index::embedder::Embedder;
     use crate::index::{IndexRepository, SourceIndexKind};
     use crate::tests::fixtures::{make_temp_dir, FakeEmbedder};
 
-    fn write_file(dir: &Path, name: &str, content: &str) {
+    fn write_file(dir: &std::path::Path, name: &str, content: &str) {
         std::fs::write(dir.join(name), content).unwrap();
     }
 
-    fn create_index_at(persist: &Path, config: &IndexConfig) {
+    fn create_index_at(persist: &std::path::Path, config: &IndexConfig) {
         let repo = IndexRepository::new(persist, config);
         let mut embedder = FakeEmbedder::new();
         let doc = crate::app::index::pipeline::IndexableDocument {
@@ -125,7 +81,8 @@ mod tests {
             is_fresh: None,
         };
         let token_counter = embedder.token_counter();
-        let pipeline = IndexingPipeline::new(config, token_counter);
+        let chunker = DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
+        let pipeline = IndexingPipeline::new(Box::new(chunker));
         let batch = pipeline.run(&[doc], &mut embedder, None, 1.2, 0.75).unwrap();
         let doc_count = unique_doc_count(&batch.metadata);
         repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None)
@@ -140,15 +97,20 @@ mod tests {
         create_index_at(&persist, &index_config);
 
         let ui = crate::tests::fixtures::RecordingUi::never_confirm();
-        let indexer = FileIndexerImpl {
+        let indexer = FileIndexer {
             console: Box::new(ui),
+            index_config: index_config.clone(),
+            file_config: file_config.clone(),
+            bm25_k1: 1.2,
+            bm25_b: 0.75,
         };
-        let request = FileIndexRequest {
-            input_root: persist.clone(),
+        let request = IndexRequest {
+            input_path: persist.clone(),
             rebuild: true,
+            verbose: false,
         };
-        let result = indexer.run(&index_config, &file_config, 1.2, 0.75, request).unwrap();
-        assert!(matches!(result, FileIndexOutcome::Aborted));
+        let result = indexer.run(&request).unwrap();
+        assert!(matches!(result, IndexOutcome::Aborted));
         let _ = std::fs::remove_dir_all(&persist);
     }
 
@@ -165,16 +127,21 @@ mod tests {
         write_file(&sources, "b.md", "# Second File\nmore content");
 
         let ui = crate::tests::fixtures::RecordingUi::always_confirm();
-        let indexer = FileIndexerImpl {
+        let indexer = FileIndexer {
             console: Box::new(ui),
+            index_config,
+            file_config,
+            bm25_k1: 1.2,
+            bm25_b: 0.75,
         };
-        let request = FileIndexRequest {
-            input_root: sources,
+        let request = IndexRequest {
+            input_path: sources,
             rebuild: true,
+            verbose: false,
         };
-        let result = indexer.run(&index_config, &file_config, 1.2, 0.75, request).unwrap();
-        assert!(matches!(result, FileIndexOutcome::Indexed { .. }));
-        if let FileIndexOutcome::Indexed { chunk_count, .. } = result {
+        let result = indexer.run(&request).unwrap();
+        assert!(matches!(result, IndexOutcome::Indexed { .. }));
+        if let IndexOutcome::Indexed { chunk_count, .. } = result {
             assert!(chunk_count > 0, "Should index at least some chunks");
         }
         let _ = std::fs::remove_dir_all(&persist);

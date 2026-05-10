@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use anyhow::Context;
 
-use crate::app::index::chunking::TokenCounter;
+use crate::app::index::chunking::counter::TokenCounter;
 
 pub trait Embedder: Send {
     fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>>;
@@ -99,7 +99,7 @@ impl Embedder for FastembedEmbedder {
     }
 
     fn token_counter(&self) -> Box<dyn TokenCounter> {
-        Box::new(crate::app::index::chunking::HuggingFaceTokenCounter::from_tokenizer(
+        Box::new(crate::app::index::chunking::counter::HuggingFaceTokenCounter::from_tokenizer(
             self.model.tokenizer.clone(),
         ))
     }
