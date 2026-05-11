@@ -45,14 +45,8 @@ fn make_app(config: &Config, verbose: bool) -> Application {
     let console = Box::new(docent_mcp::support::ui::create_console(verbose));
     let server_console = Box::new(docent_mcp::support::ui::create_console(verbose));
     let server = docent_mcp::app::serve::server::create_server(config.clone(), server_console);
-    let indexer = create_indexer(
-        config.index.clone(),
-        config.file.clone(),
-        config.git.clone(),
-        config.search.bm25.k1,
-        config.search.bm25.b,
-        verbose,
-    ).expect("Failed to create indexers");
+    let indexer = create_indexer(config, verbose)
+        .expect("Failed to create indexers");
 
     Application::new(console, Box::new(server), indexer)
 }
@@ -61,7 +55,7 @@ fn make_app_basic(verbose: bool) -> Application {
     let console = Box::new(docent_mcp::support::ui::create_console(verbose));
     let server_console = Box::new(docent_mcp::support::ui::create_console(verbose));
     let server = docent_mcp::app::serve::server::create_server(Config::default(), server_console);
-    let indexer = create_indexer(Config::default().index, None, None, 1.2, 0.75, verbose)
+    let indexer = create_indexer(&Config::default(), verbose)
         .expect("Failed to create indexers");
     Application::new(console, Box::new(server), indexer)
 }
