@@ -5,11 +5,7 @@ pub(crate) mod pipeline;
 
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IndexKind {
-    File,
-    Git,
-}
+pub use crate::domain::IndexKind;
 
 pub struct IndexRequest {
     pub input_path: PathBuf,
@@ -111,6 +107,24 @@ impl IndexOutcome {
 }
 
 pub trait Indexer: Send + Sync {
-    fn kind(&self) -> IndexKind;
     fn run(&self, request: &IndexRequest) -> anyhow::Result<IndexOutcome>;
+}
+
+use std::collections::HashMap;
+
+pub struct CompositeIndexer {
+    indexers: HashMap<IndexKind, Box<dyn Indexer>>,
+}
+
+impl CompositeIndexer {
+    pub fn new(indexers: HashMap<IndexKind, Box<dyn Indexer>>) -> Self {
+        Self { indexers }
+    }
+
+    pub fn run_kind(&self, kind: IndexKind, request: &IndexRequest) -> anyhow::Result<IndexOutcome> {
+        let indexer = self.indexers.get(&kind).ok_or_else(|| {
+            anyhow::anyhow!("No indexer registered for {:?}", kind)
+        })?;
+        indexer.run(request)
+    }
 }

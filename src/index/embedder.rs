@@ -18,19 +18,6 @@ pub fn list_supported_models() -> Vec<(String, usize)> {
         .collect()
 }
 
-pub fn dims_for_model(model_name: &str) -> anyhow::Result<usize> {
-    let embedding_model = fastembed::EmbeddingModel::from_str(model_name).map_err(|_| {
-        anyhow::anyhow!(
-            "Unknown embedding model '{}'. \
-            Run `docent list-models` to see available models.",
-            model_name
-        )
-    })?;
-    let model_info = fastembed::TextEmbedding::get_model_info(&embedding_model)
-        .map_err(|e| anyhow::anyhow!("Failed to get model info: {}", e))?;
-    Ok(model_info.dim)
-}
-
 pub fn create_embedder(model_name: &str) -> anyhow::Result<Box<dyn Embedder>> {
     Ok(Box::new(FastembedEmbedder::new(model_name)?))
 }
@@ -45,13 +32,13 @@ fn resolve_cache_dir(model_name: &str) -> anyhow::Result<PathBuf> {
         .join(model_name))
 }
 
-struct FastembedEmbedder {
+pub(crate) struct FastembedEmbedder {
     model: fastembed::TextEmbedding,
     dims: usize,
 }
 
 impl FastembedEmbedder {
-    fn new(model_name: &str) -> anyhow::Result<Self> {
+    pub(crate) fn new(model_name: &str) -> anyhow::Result<Self> {
         let cache_dir = resolve_cache_dir(model_name)?;
         std::fs::create_dir_all(&cache_dir).with_context(|| {
             format!("Failed to create cache directory '{}'", cache_dir.display())
@@ -78,7 +65,9 @@ impl FastembedEmbedder {
 
         Ok(Self { model, dims })
     }
+}
 
+impl Embedder for FastembedEmbedder {
     fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
         let strings: Vec<String> = texts.iter().map(|s| s.to_string()).collect();
         let embeddings = self
@@ -86,12 +75,6 @@ impl FastembedEmbedder {
             .embed(strings, None)
             .context("Embedding operation failed")?;
         Ok(embeddings)
-    }
-}
-
-impl Embedder for FastembedEmbedder {
-    fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
-        self.embed(texts)
     }
 
     fn dims(&self) -> usize {

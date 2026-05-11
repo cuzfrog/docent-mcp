@@ -1,6 +1,7 @@
 use crate::app::index::chunking::DocumentChunker;
 use crate::app::index::pipeline::{IndexingPipeline, unique_doc_count};
 use crate::app::index::{IndexKind, IndexOutcome, IndexRequest};
+use crate::index::embedder::Embedder;
 use crate::index::{IndexRepository, SourceIndexKind};
 use super::FileIndexer;
 
@@ -37,7 +38,7 @@ impl FileIndexer {
         let pb = self.console.progress(all_files.len() as u64, "Indexing files");
         let docs = super::prepare_files(&all_files, &request.input_path, self.file_config.file_size_limit_mb)?;
 
-        let mut embedder = crate::index::embedder::create_embedder(&self.index_config.embedding_model)?;
+        let mut embedder = self.embedder.lock().unwrap();
         let token_counter = embedder.token_counter();
         let chunker = DocumentChunker::new(
             self.index_config.chunk_size,
@@ -79,9 +80,12 @@ impl FileIndexer {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Mutex;
+
     use super::super::FileIndexer;
     use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
-    use crate::tests::fixtures::{make_temp_dir, RecordingUi};
+    use crate::index::embedder::Embedder;
+    use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi};
 
     fn write_file(dir: &std::path::Path, name: &str, content: &str) {
         std::fs::write(dir.join(name), content).unwrap();
@@ -96,12 +100,14 @@ mod tests {
         write_file(&sources, "a.md", "# Hello World\ntest content");
         write_file(&sources, "b.md", "# Second File\nmore content");
         let ui = RecordingUi::always_confirm();
+        let embedder: Box<dyn Embedder> = Box::new(FakeEmbedder::new());
         let indexer = FileIndexer {
             console: Box::new(ui),
             index_config,
             file_config,
             bm25_k1: 1.2,
             bm25_b: 0.75,
+            embedder: Mutex::new(embedder),
         };
         let req = IndexRequest {
             input_path: sources,

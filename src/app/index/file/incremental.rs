@@ -4,6 +4,7 @@ use crate::app::index::chunking::DocumentChunker;
 use crate::app::index::pipeline::{IndexedBatch, IndexingPipeline};
 use crate::app::index::{IndexKind, IndexOutcome, IndexRequest};
 use crate::domain::ChunkMetadata;
+use crate::index::embedder::Embedder;
 use crate::index::{IndexRepository, SourceIndexKind, StoreMergedRequest, VectorStore};
 use super::FileIndexer;
 
@@ -115,7 +116,7 @@ impl FileIndexer {
         let pb = self.console.progress(diff.to_index.len() as u64, "Indexing files");
         let docs = super::prepare_files(&diff.to_index, &request.input_path, self.file_config.file_size_limit_mb)?;
 
-        let mut embedder = crate::index::embedder::create_embedder(&self.index_config.embedding_model)?;
+        let mut embedder = self.embedder.lock().unwrap();
         let token_counter = embedder.token_counter();
         let chunker = DocumentChunker::new(
             self.index_config.chunk_size,
@@ -147,7 +148,9 @@ mod tests {
     use crate::app::index::pipeline::{IndexingPipeline, IndexableDocument, unique_doc_count};
     use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
     use crate::config::IndexConfig;
-    use crate::domain::ChunkKind;
+    use std::sync::Mutex;
+
+    use crate::domain::IndexKind;
     use crate::index::embedder::Embedder;
     use crate::index::{IndexRepository, SourceIndexKind};
     use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi};
@@ -165,7 +168,7 @@ mod tests {
             title: "Existing".to_string(),
             body: "Pre-existing content".to_string(),
             modified_at: None,
-            kind: ChunkKind::File,
+            kind: IndexKind::File,
             is_fresh: None,
         };
         let token_counter = embedder.token_counter();
@@ -191,6 +194,7 @@ mod tests {
             file_config: fc,
             bm25_k1: 1.2,
             bm25_b: 0.75,
+            embedder: Mutex::new(Box::new(FakeEmbedder::new())),
         };
         let req = IndexRequest {
             input_path: sources,
@@ -218,7 +222,7 @@ mod tests {
                 title: "Test".to_string(),
                 body: "Content".to_string(),
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             };
             let token_counter = embedder.token_counter();
@@ -240,6 +244,7 @@ mod tests {
             file_config: fc2,
             bm25_k1: 1.2,
             bm25_b: 0.75,
+            embedder: Mutex::new(Box::new(FakeEmbedder::new())),
         };
         let req = IndexRequest {
             input_path: sources,
@@ -264,7 +269,7 @@ mod tests {
                 title: "Existing".to_string(),
                 body: "Content".to_string(),
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             };
             let token_counter = embedder.token_counter();
@@ -287,6 +292,7 @@ mod tests {
             file_config: fc,
             bm25_k1: 1.2,
             bm25_b: 0.75,
+            embedder: Mutex::new(Box::new(FakeEmbedder::new())),
         };
         let req = IndexRequest {
             input_path: sources,
@@ -313,6 +319,7 @@ mod tests {
             file_config: fc,
             bm25_k1: 1.2,
             bm25_b: 0.75,
+            embedder: Mutex::new(Box::new(FakeEmbedder::new())),
         };
         let req = IndexRequest {
             input_path: sources,
@@ -346,6 +353,7 @@ mod tests {
             file_config: fc,
             bm25_k1: 1.2,
             bm25_b: 0.75,
+            embedder: Mutex::new(Box::new(FakeEmbedder::new())),
         };
         let req = IndexRequest {
             input_path: sources,

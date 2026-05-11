@@ -1,6 +1,11 @@
+use std::collections::HashMap;
+
 use clap::{Parser, Subcommand};
+use docent_mcp::app::index::{CompositeIndexer, Indexer};
 use docent_mcp::app::Application;
 use docent_mcp::config::Config;
+use docent_mcp::domain::IndexKind;
+use docent_mcp::index::embedder::{create_embedder, Embedder};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -42,39 +47,50 @@ struct ServeArgs {
 
 fn make_app(config: &Config, verbose: bool) -> Application {
     let console = Box::new(docent_mcp::support::ui::create_console(verbose));
-    let mut indexers: Vec<Box<dyn docent_mcp::app::index::Indexer>> = Vec::new();
+    let server_console = Box::new(docent_mcp::support::ui::create_console(verbose));
+    let server = docent_mcp::app::serve::server::create_server(config.clone(), server_console);
+    let mut indexers: HashMap<IndexKind, Box<dyn Indexer>> = HashMap::new();
 
     if let Some(ref file_config) = config.file {
-        indexers.push(Box::new(docent_mcp::app::index::file::create_file_indexer(
+        let embedder: Box<dyn Embedder> = create_embedder(&config.index.embedding_model)
+            .expect("Failed to create embedding model");
+        indexers.insert(IndexKind::File, Box::new(docent_mcp::app::index::file::create_file_indexer(
             config.index.clone(),
             file_config.clone(),
             config.search.bm25.k1,
             config.search.bm25.b,
             Box::new(docent_mcp::support::ui::create_console(verbose)),
+            embedder,
         )));
     }
     if let Some(ref git_config) = config.git {
-        indexers.push(Box::new(docent_mcp::app::index::git::create_git_indexer(
+        let embedder: Box<dyn Embedder> = create_embedder(&config.index.embedding_model)
+            .expect("Failed to create embedding model");
+        indexers.insert(IndexKind::Git, Box::new(docent_mcp::app::index::git::create_git_indexer(
             config.index.clone(),
             git_config.clone(),
             config.search.bm25.k1,
             config.search.bm25.b,
             Box::new(docent_mcp::support::ui::create_console(verbose)),
+            embedder,
         )));
     }
 
     Application::new(
         console,
-        Box::new(docent_mcp::app::serve::server::create_server()),
-        indexers,
+        Box::new(server),
+        CompositeIndexer::new(indexers),
     )
 }
 
 fn make_app_basic(verbose: bool) -> Application {
+    let console = Box::new(docent_mcp::support::ui::create_console(verbose));
+    let server_console = Box::new(docent_mcp::support::ui::create_console(verbose));
+    let server = docent_mcp::app::serve::server::create_server(Config::default(), server_console);
     Application::new(
-        Box::new(docent_mcp::support::ui::create_console(verbose)),
-        Box::new(docent_mcp::app::serve::server::create_server()),
-        vec![],
+        console,
+        Box::new(server),
+        CompositeIndexer::new(HashMap::new()),
     )
 }
 
@@ -94,7 +110,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Serve(args) => {
             let config = Config::load(&args.config)?;
-            make_app(&config, false).run_serve(&config).await?;
+            make_app(&config, false).run_serve().await?;
         }
         Commands::ListModels => make_app_basic(false).list_models(),
         Commands::Init => make_app_basic(false).run_init()?,

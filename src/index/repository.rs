@@ -173,7 +173,7 @@ mod tests {
 
     use crate::app::index::pipeline::IndexableDocument;
     use crate::config::IndexConfig;
-    use crate::domain::ChunkKind;
+    use crate::domain::IndexKind;
     use crate::index::{
         read_bm25_index, IndexRepository, SourceIndexKind,
     };
@@ -200,7 +200,7 @@ mod tests {
             title: "Test".to_string(),
             body: "Hello world".to_string(),
             modified_at: None,
-            kind: ChunkKind::File,
+            kind: IndexKind::File,
             is_fresh: None,
         };
 
@@ -237,7 +237,7 @@ mod tests {
             title: "Git Test".to_string(),
             body: "Git commit content for testing.".to_string(),
             modified_at: None,
-            kind: ChunkKind::Git,
+            kind: IndexKind::Git,
             is_fresh: None,
         };
 
@@ -380,7 +380,7 @@ mod tests {
                 title: "Test".to_string(),
                 body: "Hello world".to_string(),
                 modified_at: None,
-                kind: ChunkKind::File,
+            kind: IndexKind::File,
                 is_fresh: None,
             };
             let token_counter = embedder.token_counter();

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::domain::{ChunkKind, ChunkMetadata, DocumentContext};
+use crate::domain::{IndexKind, ChunkMetadata, DocumentContext};
 
 pub(crate) fn unique_doc_count(metadata: &[ChunkMetadata]) -> usize {
     metadata.iter().map(|m| &*m.doc_ctx.source_path).collect::<HashSet<_>>().len()
@@ -9,7 +9,7 @@ pub(crate) fn unique_doc_count(metadata: &[ChunkMetadata]) -> usize {
 
 #[derive(Clone)]
 pub struct IndexableDocument {
-    pub kind: ChunkKind,
+    pub kind: IndexKind,
     pub source_path: String,
     pub source_revision: String,
     pub title: String,
@@ -26,7 +26,7 @@ impl IndexableDocument {
             source_revision: Arc::from(self.source_revision.as_str()),
             title: Arc::from(self.title.as_str()),
             modified_at: self.modified_at.as_ref().map(|s| Arc::from(s.as_str())),
-            kind: self.kind.clone(),
+            kind: self.kind,
         }
     }
 }

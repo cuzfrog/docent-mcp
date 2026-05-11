@@ -1,4 +1,4 @@
-use crate::domain::ChunkKind;
+use crate::domain::IndexKind;
 use crate::app::index::pipeline::IndexableDocument;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -18,7 +18,7 @@ pub fn prepare_git_documents(
         .iter()
         .enumerate()
         .map(|(i, gdoc)| IndexableDocument {
-            kind: ChunkKind::Git,
+            kind: IndexKind::Git,
             source_path: gdoc.file_path.clone(),
             source_revision: gdoc.commit_hash.clone(),
             title: gdoc.title.clone(),

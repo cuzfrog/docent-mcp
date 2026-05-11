@@ -5,40 +5,38 @@ use rmcp::transport::streamable_http_server::{
     session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
 };
 
-use crate::app::serve::service_builder::HybridServiceBuilder;
+use std::sync::{Arc, Mutex};
+
+use crate::app::serve::search::create_search_service;
 use crate::app::serve::ServeIndexAccess;
 use crate::app::serve::ServeIndexAccessImpl;
 use crate::config::Config;
+use crate::index::embedder::{create_embedder, Embedder};
 use crate::mcp::DocentMcpServer;
 use crate::mcp::SearchExecutor;
 use crate::support::ui::Console;
 
 #[async_trait]
 pub trait Server: Send + Sync {
-    async fn serve(
-        &self,
-        config: &Config,
-        console: &dyn Console,
-    ) -> anyhow::Result<()>;
+    async fn serve(&self) -> anyhow::Result<()>;
 }
 
-pub fn create_server() -> impl Server {
-    TokioHttpServer
+pub fn create_server(config: Config, console: Box<dyn Console>) -> impl Server {
+    TokioHttpServer { config, console }
 }
 
-struct TokioHttpServer;
+struct TokioHttpServer {
+    config: Config,
+    console: Box<dyn Console>,
+}
 
 #[async_trait]
 impl Server for TokioHttpServer {
-    async fn serve(
-        &self,
-        config: &Config,
-        console: &dyn Console,
-    ) -> anyhow::Result<()> {
+    async fn serve(&self) -> anyhow::Result<()> {
         let index_access = ServeIndexAccessImpl;
-        let router = prepare_router(&index_access, config, console)?;
+        let router = prepare_router(&index_access, &self.config, &*self.console)?;
 
-        let addr = format!("127.0.0.1:{}", config.server.port);
+        let addr = format!("127.0.0.1:{}", self.config.server.port);
         let listener = tokio::net::TcpListener::bind(&addr)
             .await
             .context("Failed to bind TCP listener")?;
@@ -46,7 +44,7 @@ impl Server for TokioHttpServer {
             .local_addr()
             .context("Failed to get local address")?;
 
-        console.info(&format!(
+        self.console.info(&format!(
             "docent server listening on http://{} (open in browser for web UI)",
             local_addr,
         ));
@@ -92,13 +90,11 @@ fn prepare_router(
     }
     let merged = result.merged;
 
-    let builder = HybridServiceBuilder;
-    let embedder = builder.build_embedder(&config.index.embedding_model)?;
-    let search_service = std::sync::Arc::new(builder.build(
-        merged,
-        embedder,
-        &config.search,
-    )?);
+    let embedder: Arc<Mutex<dyn Embedder>> = Arc::new(Mutex::new(
+        create_embedder(&config.index.embedding_model)
+            .map_err(|e| anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e))?
+    ));
+    let search_service = create_search_service(merged, embedder, &config.search)?;
 
     let server = DocentMcpServer { search_executor: SearchExecutor::new(search_service) };
     let service: StreamableHttpService<DocentMcpServer, LocalSessionManager> =
@@ -121,7 +117,7 @@ mod tests {
 
     use crate::app::serve::server::prepare_router;
     use crate::app::serve::ServeIndexAccess;
-    use crate::config::{Config, IndexConfig};
+    use crate::config::{IndexConfig};
     use crate::index::embedder::Embedder;
     use crate::index::{
         IndexRepository, IndexSizeInfo, LoadMergedResult, MergedIndex, SourceIndexKind,
@@ -213,7 +209,7 @@ mod tests {
             title: "Test".to_string(),
             body: "Hello world".to_string(),
             modified_at: None,
-            kind: crate::domain::ChunkKind::File,
+            kind: crate::domain::IndexKind::File,
             is_fresh: None,
         };
 

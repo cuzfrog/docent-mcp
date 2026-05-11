@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use crate::domain::{ChunkKind, ChunkMetadata, DocumentContext};
-use crate::mcp::search::{
-    builder::HybridSearchServiceBuilder, create_fusion, DecayRanker, HybridSearchService,
+use crate::app::serve::search::{
+    create_fusion, DecayRanker, HybridSearchService,
     ScoreBackend, SearchService,
 };
+use crate::domain::{IndexKind, ChunkMetadata, DocumentContext};
 
 // ---------------------------------------------------------------------------
 // FakeScoreBackend — returns controllable scores for tests
@@ -36,7 +36,7 @@ fn make_meta(
             source_revision: std::sync::Arc::from("hash"),
             title: std::sync::Arc::from(title),
             modified_at: None,
-            kind: ChunkKind::File,
+            kind: IndexKind::File,
         },
         chunk_text: chunk_text.to_string(),
         section_heading: None,
@@ -80,15 +80,14 @@ fn build_hybrid_service_with_boost(
     let fusion = create_fusion("rrf", 60.0, 0.7).unwrap();
     let ranker = Arc::new(DecayRanker::new(0.9, file_hint_boost));
 
-    HybridSearchServiceBuilder::new()
-        .semantic_backend(semantic_backend)
-        .bm25_backend(bm25_backend)
-        .fusion(fusion)
-        .ranker(ranker)
-        .metadata(Arc::new(metadata))
-        .index_time("2026-01-01T00:00:00Z".into())
-        .build()
-        .unwrap()
+    HybridSearchService {
+        semantic_backend,
+        bm25_backend,
+        fusion,
+        ranker,
+        metadata: Arc::new(metadata),
+        index_time: "2026-01-01T00:00:00Z".into(),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -175,7 +174,7 @@ fn test_search_empty_index_returns_empty() {
 #[test]
 fn test_search_service_trait_dispatch() {
     use std::sync::Arc;
-    use crate::mcp::search::SearchService;
+    use crate::app::serve::search::SearchService;
 
     let svc = build_hybrid_service(vec![0.9], vec![0.1], &["test"]);
     let trait_obj: Arc<dyn SearchService> = Arc::new(svc);
@@ -278,15 +277,14 @@ fn test_file_hint_boost_with_decay_interaction() {
     let bm25_backend = Arc::new(FakeScoreBackend { scores: bm25_scores });
     let fusion = create_fusion("rrf", 60.0, 0.7).unwrap();
     let ranker = Arc::new(DecayRanker::new(0.5, 1.5));
-    let svc = HybridSearchServiceBuilder::new()
-        .semantic_backend(semantic_backend)
-        .bm25_backend(bm25_backend)
-        .fusion(fusion)
-        .ranker(ranker)
-        .metadata(Arc::new(metadata))
-        .index_time("now".into())
-        .build()
-        .unwrap();
+    let svc = HybridSearchService {
+        semantic_backend,
+        bm25_backend,
+        fusion,
+        ranker,
+        metadata: Arc::new(metadata),
+        index_time: "now".into(),
+    };
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     let results = rt.block_on(svc.search("test", 10, "same.md")).unwrap();

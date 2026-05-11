@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::domain::{ChunkKind, ChunkMetadata};
+use crate::domain::{IndexKind, ChunkMetadata};
 use crate::index::VectorStore;
 
 use crate::app::index::git::extract::GitDocument;
@@ -26,7 +26,7 @@ pub fn merge_git_incremental(
             pairs.push((doc.file_path.as_str(), doc.commit_hash.as_str()));
         }
         for m in &old_metadata {
-            if m.doc_ctx.kind == ChunkKind::Git {
+            if m.doc_ctx.kind == IndexKind::Git {
                 pairs.push((m.doc_ctx.source_path.as_ref(), m.doc_ctx.source_revision.as_ref()));
             }
         }
@@ -47,7 +47,7 @@ pub fn merge_git_incremental(
     combined_metadata.extend(new_metadata.iter().cloned());
 
     for m in &mut combined_metadata {
-        if m.doc_ctx.kind == ChunkKind::Git {
+        if m.doc_ctx.kind == IndexKind::Git {
             m.is_fresh = fresh_map
                 .get(&(
                     m.doc_ctx.source_path.to_string(),

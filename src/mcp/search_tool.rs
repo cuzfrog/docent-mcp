@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::mcp::search::SearchService;
+use crate::app::serve::search::SearchService;
 
 #[derive(Clone)]
 pub(crate) struct SearchExecutor {

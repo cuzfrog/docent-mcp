@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
-use crate::app::index::{IndexKind, IndexOutcome, IndexRequest, Indexer};
+use std::sync::Mutex;
+
+use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
 use crate::config::{GitConfig, IndexConfig};
-use crate::index::embedder::dims_for_model;
+use crate::index::embedder::Embedder;
 use crate::support::ui::Console;
 
 pub(crate) mod rebuild;
@@ -27,6 +29,7 @@ pub(crate) struct GitIndexer {
     pub git_config: GitConfig,
     pub bm25_k1: f32,
     pub bm25_b: f32,
+    pub embedder: Mutex<Box<dyn Embedder>>,
 }
 
 pub fn create_git_indexer(
@@ -35,6 +38,7 @@ pub fn create_git_indexer(
     bm25_k1: f32,
     bm25_b: f32,
     console: Box<dyn Console>,
+    embedder: Box<dyn Embedder>,
 ) -> impl Indexer {
     GitIndexer {
         console,
@@ -42,17 +46,14 @@ pub fn create_git_indexer(
         git_config,
         bm25_k1,
         bm25_b,
+        embedder: Mutex::new(embedder),
     }
 }
 
 impl Indexer for GitIndexer {
-    fn kind(&self) -> IndexKind {
-        IndexKind::Git
-    }
-
     fn run(&self, request: &IndexRequest) -> anyhow::Result<IndexOutcome> {
         let persist_path = PathBuf::from(&self.index_config.persist_path);
-        let dims = dims_for_model(&self.index_config.embedding_model)?;
+        let dims = self.embedder.lock().unwrap().dims();
 
         if request.rebuild {
             self.rebuild(request, &persist_path, dims)
@@ -72,19 +73,22 @@ impl Indexer for GitIndexer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::fixtures::{make_temp_dir, RecordingUi};
+    use crate::index::embedder::Embedder;
+    use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi};
 
     #[test]
     fn incremental_without_existing_index_returns_error() {
         let persist = make_temp_dir("git_inc_no_existing");
         let (index_config, git_config) = crate::tests::fixtures::git_index_fixtures(&persist, &["*.md"]);
         let ui = RecordingUi::always_confirm();
+        let embedder: Box<dyn Embedder> = Box::new(FakeEmbedder::new());
         let indexer = GitIndexer {
             console: Box::new(ui),
             index_config,
             git_config,
             bm25_k1: 1.2,
             bm25_b: 0.75,
+            embedder: Mutex::new(embedder),
         };
         let req = IndexRequest {
             input_path: persist.clone(),

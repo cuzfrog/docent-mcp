@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
 use crate::domain::ChunkMetadata;
-use crate::mcp::search::backend::ScoreBackend;
-use crate::mcp::search::fusion::ScoreFusion;
-use crate::mcp::search::ranking::Ranker;
-use crate::mcp::search::types::SearchResult;
-use crate::mcp::search::SearchService;
+use super::backend::ScoreBackend;
+use super::fusion::ScoreFusion;
+use super::ranking::Ranker;
+use super::types::SearchResult;
+use super::SearchService;
 
-/// Orchestrates hybrid search: scores from two backends → fused → ranked.
 pub(crate) struct HybridSearchService {
     pub(crate) semantic_backend: Arc<dyn ScoreBackend>,
     pub(crate) bm25_backend: Arc<dyn ScoreBackend>,
@@ -35,11 +34,9 @@ impl SearchService for HybridSearchService {
         let file_hint = file_hint.to_string();
 
         tokio::task::spawn_blocking(move || {
-            // Score from both backends
             let semantic_scores = semantic_backend.score(&query)?;
             let bm25_scores = bm25_backend.score(&query)?;
 
-            // Ensure both score vectors have the same length
             let chunk_count = metadata.len();
             anyhow::ensure!(
                 semantic_scores.len() == chunk_count,
@@ -54,15 +51,11 @@ impl SearchService for HybridSearchService {
                 chunk_count
             );
 
-            // Fuse scores (semantic and bm25 scores are passed raw — no boost here)
             let fused = fusion.fuse(&semantic_scores, &bm25_scores);
 
-            // Rank: apply file_hint boost, then decay, sort, format
             let file_hint: Option<&str> = if file_hint.is_empty() { None } else { Some(&file_hint) };
             let results = ranker.rank(&fused, &metadata, limit, &index_time, file_hint);
 
-            // Populate individual score fields using original indices from the ranker
-            // semantic_score and bm25_score are raw backend outputs (not boosted)
             let results: Vec<SearchResult> = results
                 .into_iter()
                 .map(|(orig_idx, mut result)| {

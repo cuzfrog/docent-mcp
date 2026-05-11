@@ -1,4 +1,4 @@
-use crate::domain::ChunkKind;
+use crate::domain::IndexKind;
 use crate::app::index::pipeline::IndexableDocument;
 use std::path::{Path, PathBuf};
 
@@ -85,7 +85,7 @@ fn prepare_single_file(
     let mtime = get_file_mtime(&full_path);
 
     Some(IndexableDocument {
-        kind: ChunkKind::File,
+        kind: IndexKind::File,
         source_path: relative_path,
         source_revision,
         title,

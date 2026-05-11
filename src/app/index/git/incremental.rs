@@ -4,6 +4,7 @@ use std::time::Instant;
 use crate::app::index::chunking::DocumentChunker;
 use crate::app::index::pipeline::IndexingPipeline;
 use crate::app::index::{IndexKind, IndexOutcome, IndexRequest};
+use crate::index::embedder::Embedder;
 use crate::index::{IndexRepository, SourceIndexKind, StoreMergedRequest};
 use super::GitIndexer;
 
@@ -44,7 +45,7 @@ impl GitIndexer {
         let pb2 = self.console.progress(total_new_docs as u64, "Embedding documents");
         let indexable = super::prepare_git_documents(&new_docs, &vec![true; new_docs.len()]);
 
-        let mut embedder = crate::index::embedder::create_embedder(&self.index_config.embedding_model)?;
+        let mut embedder = self.embedder.lock().unwrap();
         let token_counter = embedder.token_counter();
         let chunker = DocumentChunker::new(
             self.index_config.chunk_size,
@@ -85,21 +86,26 @@ impl GitIndexer {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Mutex;
+
     use super::super::GitIndexer;
     use crate::app::index::{IndexRequest, Indexer};
-    use crate::tests::fixtures::{make_temp_dir, RecordingUi};
+    use crate::index::embedder::Embedder;
+    use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi};
 
     #[test]
     fn incremental_without_index_returns_error() {
         let persist = make_temp_dir("git_inc_no_index");
         let (index_config, git_config) = crate::tests::fixtures::git_index_fixtures(&persist, &["*.md"]);
         let ui = RecordingUi::always_confirm();
+        let embedder: Box<dyn Embedder> = Box::new(FakeEmbedder::new());
         let indexer = GitIndexer {
             console: Box::new(ui),
             index_config,
             git_config,
             bm25_k1: 1.2,
             bm25_b: 0.75,
+            embedder: Mutex::new(embedder),
         };
         let req = IndexRequest {
             input_path: persist.clone(),

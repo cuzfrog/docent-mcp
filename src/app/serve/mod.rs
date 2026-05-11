@@ -4,8 +4,8 @@ use crate::config::IndexConfig;
 use crate::index::{IndexRepository, IndexSizeInfo, LoadMergedResult};
 
 pub mod bootstrap;
-pub(crate) mod service_builder;
 pub mod server;
+pub(crate) mod search;
 
 pub(crate) trait ServeIndexAccess: Send + Sync {
     fn check_size(

@@ -146,4 +146,15 @@ impl Config {
     pub(crate) fn persist_path_buf(&self) -> PathBuf {
         PathBuf::from(&self.index.persist_path)
     }
+
+    pub fn enabled_kinds(&self) -> Vec<crate::domain::IndexKind> {
+        let mut kinds = Vec::new();
+        if self.file.as_ref().is_some_and(|f| f.enabled) {
+            kinds.push(crate::domain::IndexKind::File);
+        }
+        if self.git.as_ref().is_some_and(|g| g.enabled) {
+            kinds.push(crate::domain::IndexKind::Git);
+        }
+        kinds
+    }
 }

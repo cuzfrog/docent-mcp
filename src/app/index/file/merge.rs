@@ -98,7 +98,7 @@ pub fn merge_incremental(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::ChunkKind;
+    use crate::domain::IndexKind;
     use crate::domain::DocumentContext;
     use std::sync::Arc;
 
@@ -115,7 +115,7 @@ mod tests {
                 source_revision: Arc::from(source_revision),
                 title: Arc::from(title),
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: IndexKind::File,
             },
             chunk_text: chunk_text.to_string(),
             section_heading: None,
@@ -150,7 +150,7 @@ mod tests {
                 source_revision: Arc::from("hash_b_new"),
                 title: Arc::from("B"),
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: IndexKind::File,
             },
             chunk_text: "chunk text".to_string(),
             section_heading: None,
@@ -165,7 +165,7 @@ mod tests {
                 source_revision: Arc::from("hash_b_new"),
                 title: Arc::from("B"),
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: IndexKind::File,
             },
             chunk_text: "chunk text".to_string(),
             section_heading: Some("Section".to_string()),
@@ -236,7 +236,7 @@ mod tests {
                 source_revision: Arc::from("hash_b"),
                 title: Arc::from("B"),
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: IndexKind::File,
             },
             chunk_text: "chunk text".to_string(),
             section_heading: None,
@@ -251,7 +251,7 @@ mod tests {
                 source_revision: Arc::from("hash_b"),
                 title: Arc::from("B"),
                 modified_at: None,
-                kind: ChunkKind::File,
+                kind: IndexKind::File,
             },
             chunk_text: "chunk text".to_string(),
             section_heading: Some("Section".to_string()),

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::app::index::{IndexKind, IndexRequest, Indexer};
+use crate::app::index::{CompositeIndexer, IndexRequest};
 use crate::app::serve::server::Server;
 use crate::config::{defaults::DEFAULT_TEMPLATE, Config};
 use crate::index::embedder::list_supported_models;
@@ -13,16 +13,16 @@ pub mod serve;
 pub struct Application {
     console: Box<dyn Console>,
     server: Box<dyn Server>,
-    indexers: Vec<Box<dyn Indexer>>,
+    indexer: CompositeIndexer,
 }
 
 impl Application {
     pub fn new(
         console: Box<dyn Console>,
         server: Box<dyn Server>,
-        indexers: Vec<Box<dyn Indexer>>,
+        indexer: CompositeIndexer,
     ) -> Self {
-        Self { console, server, indexers }
+        Self { console, server, indexer }
     }
 
     pub fn run_init(&self) -> anyhow::Result<()> {
@@ -55,31 +55,26 @@ impl Application {
         let dir = input_path.unwrap_or_else(|| PathBuf::from("."));
         let dir = dir.canonicalize()?;
 
-        let enabled_kinds = resolve_enabled_kinds(config);
+        let enabled_kinds = config.enabled_kinds();
         if enabled_kinds.is_empty() {
             return Ok(());
         }
 
         for kind in &enabled_kinds {
-            let indexer = self
-                .indexers
-                .iter()
-                .find(|i| i.kind() == *kind)
-                .ok_or_else(|| anyhow::anyhow!("No indexer registered for {:?}", kind))?;
             let request = IndexRequest {
                 input_path: dir.clone(),
                 rebuild,
                 verbose,
             };
-            let outcome = indexer.run(&request)?;
+            let outcome = self.indexer.run_kind(*kind, &request)?;
             self.emit_outcome(outcome.format_for_ui());
         }
 
         Ok(())
     }
 
-    pub async fn run_serve(&self, config: &Config) -> anyhow::Result<()> {
-        self.server.serve(config, &*self.console).await
+    pub async fn run_serve(&self) -> anyhow::Result<()> {
+        self.server.serve().await
     }
 
     fn emit_outcome(&self, outcome: Vec<(&'static str, String)>) {
@@ -92,22 +87,13 @@ impl Application {
     }
 }
 
-fn resolve_enabled_kinds(config: &Config) -> Vec<IndexKind> {
-    let mut kinds = Vec::new();
-    if config.file.as_ref().is_some_and(|f| f.enabled) {
-        kinds.push(IndexKind::File);
-    }
-    if config.git.as_ref().is_some_and(|g| g.enabled) {
-        kinds.push(IndexKind::Git);
-    }
-    kinds
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::index::IndexKind;
     use crate::app::serve::server::create_server;
     use crate::tests::fixtures::{make_temp_dir, serve_config_fixture};
+    use std::collections::HashMap;
 
     #[test]
     fn format_supported_models_returns_expected_strings() {
@@ -141,8 +127,8 @@ mod tests {
 
         let app = Application::new(
             Box::new(crate::support::ui::create_console(false)),
-            Box::new(create_server()),
-            vec![],
+            Box::new(create_server(Config::default(), Box::new(crate::support::ui::create_console(false)))),
+            CompositeIndexer::new(HashMap::new()),
         );
 
         app.run_index(&config, Some(dir.clone()), false, false).unwrap();
@@ -150,19 +136,19 @@ mod tests {
     }
 
     #[test]
-    fn resolve_enabled_kinds_returns_file_when_enabled() {
+    fn enabled_kinds_returns_file_when_enabled() {
         let mut config = Config::default();
         config.file = Some(crate::config::FileConfig {
             enabled: true,
             glob_patterns: vec![],
             file_size_limit_mb: 0,
         });
-        let kinds = resolve_enabled_kinds(&config);
+        let kinds = config.enabled_kinds();
         assert_eq!(kinds, vec![IndexKind::File]);
     }
 
     #[test]
-    fn resolve_enabled_kinds_returns_git_when_enabled() {
+    fn enabled_kinds_returns_git_when_enabled() {
         let mut config = Config::default();
         config.git = Some(crate::config::GitConfig {
             depth_limit: 100,
@@ -170,12 +156,12 @@ mod tests {
             enabled: true,
             glob_patterns: vec![],
         });
-        let kinds = resolve_enabled_kinds(&config);
+        let kinds = config.enabled_kinds();
         assert_eq!(kinds, vec![IndexKind::Git]);
     }
 
     #[test]
-    fn resolve_enabled_kinds_returns_both_when_enabled() {
+    fn enabled_kinds_returns_both_when_enabled() {
         let mut config = Config::default();
         config.file = Some(crate::config::FileConfig {
             enabled: true,
@@ -188,19 +174,19 @@ mod tests {
             enabled: true,
             glob_patterns: vec![],
         });
-        let kinds = resolve_enabled_kinds(&config);
+        let kinds = config.enabled_kinds();
         assert_eq!(kinds, vec![IndexKind::File, IndexKind::Git]);
     }
 
     #[test]
-    fn resolve_enabled_kinds_returns_empty_when_disabled() {
+    fn enabled_kinds_returns_empty_when_disabled() {
         let mut config = Config::default();
         config.file = Some(crate::config::FileConfig {
             enabled: false,
             glob_patterns: vec![],
             file_size_limit_mb: 0,
         });
-        let kinds = resolve_enabled_kinds(&config);
+        let kinds = config.enabled_kinds();
         assert!(kinds.is_empty());
     }
 }

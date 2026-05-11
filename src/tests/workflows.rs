@@ -1,5 +1,5 @@
 use crate::config::IndexConfig;
-use crate::domain::{ChunkKind, ChunkMetadata};
+use crate::domain::{IndexKind, ChunkMetadata};
 use crate::index::embedder::Embedder;
 use crate::index::{IndexRepository, SourceIndexKind, SCHEMA_VERSION};
 use crate::app::index::chunking::DocumentChunker;
@@ -27,7 +27,7 @@ fn sample_doc_a() -> IndexableDocument {
         title: "Doc A".to_string(),
         body: "## Introduction\nThis is document A.".to_string(),
         modified_at: None,
-        kind: ChunkKind::File,
+        kind: IndexKind::File,
         is_fresh: None,
     }
 }
@@ -40,7 +40,7 @@ fn sample_doc_b() -> IndexableDocument {
         body: "## Details\nDocument B has longer content with numbers 123."
             .to_string(),
         modified_at: None,
-        kind: ChunkKind::File,
+        kind: IndexKind::File,
         is_fresh: None,
     }
 }

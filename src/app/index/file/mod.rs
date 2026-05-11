@@ -1,5 +1,8 @@
-use crate::app::index::{IndexKind, IndexOutcome, IndexRequest, Indexer};
+use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
+use std::sync::Mutex;
+
 use crate::config::{FileConfig, IndexConfig};
+use crate::index::embedder::Embedder;
 use crate::support::ui::Console;
 
 pub(crate) mod rebuild;
@@ -21,6 +24,7 @@ pub(crate) struct FileIndexer {
     pub file_config: FileConfig,
     pub bm25_k1: f32,
     pub bm25_b: f32,
+    pub embedder: Mutex<Box<dyn Embedder>>,
 }
 
 pub fn create_file_indexer(
@@ -29,6 +33,7 @@ pub fn create_file_indexer(
     bm25_k1: f32,
     bm25_b: f32,
     console: Box<dyn Console>,
+    embedder: Box<dyn Embedder>,
 ) -> impl Indexer {
     FileIndexer {
         console,
@@ -36,14 +41,11 @@ pub fn create_file_indexer(
         file_config,
         bm25_k1,
         bm25_b,
+        embedder: Mutex::new(embedder),
     }
 }
 
 impl Indexer for FileIndexer {
-    fn kind(&self) -> IndexKind {
-        IndexKind::File
-    }
-
     fn run(&self, request: &IndexRequest) -> anyhow::Result<IndexOutcome> {
         if request.rebuild {
             self.rebuild(request)
@@ -59,7 +61,7 @@ mod tests {
     use crate::app::index::pipeline::{IndexingPipeline, unique_doc_count};
     use crate::app::index::chunking::DocumentChunker;
     use crate::config::IndexConfig;
-    use crate::domain::ChunkKind;
+    use crate::domain::IndexKind;
     use crate::index::embedder::Embedder;
     use crate::index::{IndexRepository, SourceIndexKind};
     use crate::tests::fixtures::{make_temp_dir, FakeEmbedder};
@@ -77,7 +79,7 @@ mod tests {
             title: "Existing".to_string(),
             body: "Pre-existing content".to_string(),
             modified_at: None,
-            kind: ChunkKind::File,
+            kind: IndexKind::File,
             is_fresh: None,
         };
         let token_counter = embedder.token_counter();
@@ -97,12 +99,14 @@ mod tests {
         create_index_at(&persist, &index_config);
 
         let ui = crate::tests::fixtures::RecordingUi::never_confirm();
+        let embedder: Box<dyn Embedder> = Box::new(FakeEmbedder::new());
         let indexer = FileIndexer {
             console: Box::new(ui),
             index_config: index_config.clone(),
             file_config: file_config.clone(),
             bm25_k1: 1.2,
             bm25_b: 0.75,
+            embedder: Mutex::new(embedder),
         };
         let request = IndexRequest {
             input_path: persist.clone(),
@@ -127,12 +131,14 @@ mod tests {
         write_file(&sources, "b.md", "# Second File\nmore content");
 
         let ui = crate::tests::fixtures::RecordingUi::always_confirm();
+        let embedder: Box<dyn Embedder> = Box::new(FakeEmbedder::new());
         let indexer = FileIndexer {
             console: Box::new(ui),
             index_config,
             file_config,
             bm25_k1: 1.2,
             bm25_b: 0.75,
+            embedder: Mutex::new(embedder),
         };
         let request = IndexRequest {
             input_path: sources,
