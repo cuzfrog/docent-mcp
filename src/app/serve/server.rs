@@ -11,7 +11,7 @@ use crate::app::serve::search::create_search_service;
 use crate::app::serve::ServeIndexAccess;
 use crate::app::serve::ServeIndexAccessImpl;
 use crate::config::Config;
-use crate::index::embedder::Embedder;
+use crate::index::embedder::{create_embedder, Embedder};
 use crate::mcp::DocentMcpServer;
 use crate::mcp::SearchExecutor;
 use crate::support::ui::Console;
@@ -95,9 +95,10 @@ fn prepare_router(
         std::path::Path::new(&config.index.cache_dir),
     )
     .map_err(|e| anyhow::anyhow!("Failed to create model factory: {}", e))?;
+    let (model, dims) = factory.build_embedder_model()
+        .map_err(|e| anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e))?;
     let embedder: Arc<Mutex<dyn Embedder>> = Arc::new(Mutex::new(
-        factory.build_embedder()
-            .map_err(|e| anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e))?
+        create_embedder(model, dims)
     ));
     let search_service = create_search_service(merged, embedder, &config.search)?;
 
@@ -123,7 +124,7 @@ mod tests {
     use crate::app::serve::server::prepare_router;
     use crate::app::serve::ServeIndexAccess;
     use crate::config::{IndexConfig};
-    use crate::index::embedder::Embedder;
+use crate::index::embedder::{create_embedder, Embedder};
     use crate::index::{
         IndexRepository, IndexSizeInfo, LoadMergedResult, MergedIndex, SourceIndexKind,
     };

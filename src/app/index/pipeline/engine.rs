@@ -4,7 +4,7 @@ use crate::app::index::chunking::counter::create_token_counter;
 use crate::app::index::chunking::{create_chunker, Chunk, Chunker};
 use crate::config::IndexConfig;
 use crate::domain::ChunkMetadata;
-use crate::index::embedder::Embedder;
+use crate::index::embedder::{create_embedder, Embedder};
 use crate::index::model_factory::ModelFactory;
 use crate::app::index::pipeline::types::{IndexableDocument, IndexedBatch};
 use crate::support::progress::ProgressSink;
@@ -46,7 +46,8 @@ impl ParallelBatchIndexingProcessor {
     pub fn new(factory: &dyn ModelFactory, index_config: &IndexConfig) -> anyhow::Result<Self> {
         let token_counter = create_token_counter(factory.tokenizer());
         let chunker = create_chunker(index_config.chunk_size, index_config.chunk_overlap, token_counter);
-        let embedder = factory.build_embedder()?;
+        let (model, dims) = factory.build_embedder_model()?;
+        let embedder = create_embedder(model, dims);
         Ok(Self { chunker, embedder: Mutex::new(embedder) })
     }
 

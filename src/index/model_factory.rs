@@ -6,7 +6,7 @@ use anyhow::Context;
 pub trait ModelFactory: Send + Sync {
     fn dims(&self) -> usize;
     fn tokenizer(&self) -> tokenizers::Tokenizer;
-    fn build_embedder(&self) -> anyhow::Result<Box<dyn crate::index::embedder::Embedder>>;
+    fn build_embedder_model(&self) -> anyhow::Result<(fastembed::TextEmbedding, usize)>;
 }
 
 pub(crate) struct ModelFactoryImpl {
@@ -25,13 +25,6 @@ impl ModelFactory for ModelFactoryImpl {
         self.tokenizer.clone()
     }
 
-    fn build_embedder(&self) -> anyhow::Result<Box<dyn crate::index::embedder::Embedder>> {
-        let (model, dims) = self.build_embedder_model()?;
-        Ok(crate::index::embedder::create_embedder(model, dims))
-    }
-}
-
-impl ModelFactoryImpl {
     fn build_embedder_model(&self) -> anyhow::Result<(fastembed::TextEmbedding, usize)> {
         let embedding_model = fastembed::EmbeddingModel::from_str(&self.model_name)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
