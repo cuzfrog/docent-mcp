@@ -11,13 +11,6 @@ pub trait Embedder: Send {
     fn token_counter(&self) -> Box<dyn TokenCounter>;
 }
 
-pub fn list_supported_models() -> Vec<(String, usize)> {
-    fastembed::TextEmbedding::list_supported_models()
-        .iter()
-        .map(|m| (format!("{}", m.model), m.dim))
-        .collect()
-}
-
 pub fn create_embedder(model_name: &str) -> anyhow::Result<impl Embedder> {
     let cache_dir = resolve_cache_dir(model_name)?;
     std::fs::create_dir_all(&cache_dir).with_context(|| {
