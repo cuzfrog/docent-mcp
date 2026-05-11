@@ -46,7 +46,7 @@ impl ParallelBatchIndexingProcessor {
     pub fn new(factory: &dyn ModelFactory, index_config: &IndexConfig) -> anyhow::Result<Self> {
         let token_counter = create_token_counter(factory.tokenizer());
         let chunker = create_chunker(index_config.chunk_size, index_config.chunk_overlap, token_counter);
-        let (model, dims) = factory.build_embedder_model()?;
+        let (model, dims) = factory.build_model()?;
         let embedder = create_embedder(model, dims);
         Ok(Self { chunker, embedder: Mutex::new(embedder) })
     }

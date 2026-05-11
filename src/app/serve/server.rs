@@ -95,7 +95,7 @@ fn prepare_router(
         std::path::Path::new(&config.index.cache_dir),
     )
     .map_err(|e| anyhow::anyhow!("Failed to create model factory: {}", e))?;
-    let (model, dims) = factory.build_embedder_model()
+    let (model, dims) = factory.build_model()
         .map_err(|e| anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e))?;
     let embedder: Arc<Mutex<dyn Embedder>> = Arc::new(Mutex::new(
         create_embedder(model, dims)

@@ -6,7 +6,7 @@ use anyhow::Context;
 pub trait ModelFactory: Send + Sync {
     fn dims(&self) -> usize;
     fn tokenizer(&self) -> tokenizers::Tokenizer;
-    fn build_embedder_model(&self) -> anyhow::Result<(fastembed::TextEmbedding, usize)>;
+    fn build_model(&self) -> anyhow::Result<(fastembed::TextEmbedding, usize)>;
 }
 
 pub(crate) struct ModelFactoryImpl {
@@ -25,7 +25,7 @@ impl ModelFactory for ModelFactoryImpl {
         self.tokenizer.clone()
     }
 
-    fn build_embedder_model(&self) -> anyhow::Result<(fastembed::TextEmbedding, usize)> {
+    fn build_model(&self) -> anyhow::Result<(fastembed::TextEmbedding, usize)> {
         let embedding_model = fastembed::EmbeddingModel::from_str(&self.model_name)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
         let cache_dir = self.cache_dir.join("models").join(&self.model_name);

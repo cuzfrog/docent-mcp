@@ -119,9 +119,15 @@ This applies to all dependencies, including python and javascript.
 - **Favor Object Oriented Design** Favor trait-based design over procedural design.
 - **Use imports** Avoid long module path in the code. E.g. `crate::app::index::xxxx::bbbb::new`
 
+### Single file layout (from top to bottom)
+1. imports
+2. types
+3. trait
+4. factory method (Do not create `new` constructor in a concrete struct)
+5. concrete implementation (struct)
+6. file private functions
 
-If any statement in this file is counter-intuitive or violate best practices, raise to me!
-Do you best to maintain code quality.
+(Principle: public at top, private at bottom)
 
 ## Git 
 ### branching
