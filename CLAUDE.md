@@ -156,6 +156,13 @@ types:
 - a function's parameters should be data it consumes, parameters should not be its dependencies. A high-order function should only be used for transformation instead of procedural processing.
 - a responsibility should belong to an earlier performer. E.g. if type `Config` can parse the configuration into ready-to-use types, it shouldn't pass raw strings to its clients. A producer should produce the best output for its consumers.
 
+### Module visibility
+- A module should only has a trait and its factory method that are public.
+- For a single file module, all other things in the file should be file private.
+- For multi-file module, since each file is its own module, all other things must be file private or `pub(super)`
+- Unit tests should be collocated with its prod code.
+- Integration tests outside the module should only test the exposed trait.
+
 ### SOLID principles:
 - **Single Responsibility Principle**: A function, class, or module should have one, and only one, reason to change.
 - **Open/Closed Principle**: Hide implementations behind interfaces. So that modifications happen without the client code needing to know.
