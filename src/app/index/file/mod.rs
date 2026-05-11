@@ -1,7 +1,6 @@
 use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
+use crate::config::Config;
 use std::sync::Mutex;
-
-use crate::config::{FileConfig, IndexConfig};
 use crate::index::embedder::Embedder;
 use crate::support::ui::Console;
 
@@ -20,27 +19,25 @@ pub(super) use merge::{extract_old_hashes, merge_incremental};
 
 pub(crate) struct FileIndexer {
     pub console: Box<dyn Console>,
-    pub index_config: IndexConfig,
-    pub file_config: FileConfig,
+    pub index_config: crate::config::IndexConfig,
+    pub file_config: crate::config::FileConfig,
     pub bm25_k1: f32,
     pub bm25_b: f32,
     pub embedder: Mutex<Box<dyn Embedder>>,
 }
 
 pub(crate) fn create_file_indexer(
-    index_config: IndexConfig,
-    file_config: FileConfig,
-    bm25_k1: f32,
-    bm25_b: f32,
+    config: &Config,
     console: Box<dyn Console>,
     embedder: Box<dyn Embedder>,
 ) -> impl Indexer {
+    let fc = config.file.as_ref().expect("FileIndexer requires file config");
     FileIndexer {
         console,
-        index_config,
-        file_config,
-        bm25_k1,
-        bm25_b,
+        index_config: config.index.clone(),
+        file_config: fc.clone(),
+        bm25_k1: config.search.bm25.k1,
+        bm25_b: config.search.bm25.b,
         embedder: Mutex::new(embedder),
     }
 }

@@ -91,10 +91,9 @@ impl Application {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::index::{CompositeIndexer, IndexKind};
+    use crate::app::index::{empty_indexer, IndexKind};
     use crate::app::serve::server::create_server;
     use crate::tests::fixtures::{make_temp_dir, serve_config_fixture};
-    use std::collections::HashMap;
 
     #[test]
     fn format_supported_models_returns_expected_strings() {
@@ -129,7 +128,7 @@ mod tests {
         let app = Application::new(
             Box::new(crate::support::ui::create_console(false)),
             Box::new(create_server(Config::default(), Box::new(crate::support::ui::create_console(false)))),
-            Box::new(CompositeIndexer::new(HashMap::new())),
+            empty_indexer(),
         );
 
         app.run_index(&config, Some(dir.clone()), false, false).unwrap();

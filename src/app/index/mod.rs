@@ -118,49 +118,33 @@ pub fn create_indexer(config: &Config, verbose: bool) -> anyhow::Result<Box<dyn 
     use crate::support::ui::create_console;
 
     let mut indexers: HashMap<IndexKind, Box<dyn Indexer>> = HashMap::new();
+    let make_console = || Box::new(create_console(verbose));
 
-    if let Some(ref fc) = config.file {
+    if config.file.is_some() {
         let embedder: Box<dyn Embedder> = Box::new(create_embedder(&config.index.embedding_model)?);
         indexers.insert(
             IndexKind::File,
-            Box::new(file::create_file_indexer(
-                config.index.clone(),
-                fc.clone(),
-                config.search.bm25.k1,
-                config.search.bm25.b,
-                Box::new(create_console(verbose)),
-                embedder,
-            )),
+            Box::new(file::create_file_indexer(config, make_console(), embedder)),
         );
     }
-    if let Some(ref gc) = config.git {
+    if config.git.is_some() {
         let embedder: Box<dyn Embedder> = Box::new(create_embedder(&config.index.embedding_model)?);
         indexers.insert(
             IndexKind::Git,
-            Box::new(git::create_git_indexer(
-                config.index.clone(),
-                gc.clone(),
-                config.search.bm25.k1,
-                config.search.bm25.b,
-                Box::new(create_console(verbose)),
-                embedder,
-            )),
+            Box::new(git::create_git_indexer(config, make_console(), embedder)),
         );
     }
 
-    Ok(Box::new(CompositeIndexer::new(indexers)))
+    Ok(Box::new(CompositeIndexer { indexers }))
 }
 
+#[cfg(test)]
+pub(crate) fn empty_indexer() -> Box<dyn Indexer> {
+    Box::new(CompositeIndexer { indexers: HashMap::new() })
+}
 
-
-pub(crate) struct CompositeIndexer {
+struct CompositeIndexer {
     indexers: HashMap<IndexKind, Box<dyn Indexer>>,
-}
-
-impl CompositeIndexer {
-    pub(crate) fn new(indexers: HashMap<IndexKind, Box<dyn Indexer>>) -> Self {
-        Self { indexers }
-    }
 }
 
 impl Indexer for CompositeIndexer {

@@ -1,9 +1,8 @@
 use std::path::PathBuf;
-
 use std::sync::Mutex;
 
 use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
-use crate::config::{GitConfig, IndexConfig};
+use crate::config::Config;
 use crate::index::embedder::Embedder;
 use crate::support::ui::Console;
 
@@ -25,27 +24,25 @@ pub(crate) use merge::merge_git_incremental;
 
 pub(crate) struct GitIndexer {
     pub console: Box<dyn Console>,
-    pub index_config: IndexConfig,
-    pub git_config: GitConfig,
+    pub index_config: crate::config::IndexConfig,
+    pub git_config: crate::config::GitConfig,
     pub bm25_k1: f32,
     pub bm25_b: f32,
     pub embedder: Mutex<Box<dyn Embedder>>,
 }
 
 pub(crate) fn create_git_indexer(
-    index_config: IndexConfig,
-    git_config: GitConfig,
-    bm25_k1: f32,
-    bm25_b: f32,
+    config: &Config,
     console: Box<dyn Console>,
     embedder: Box<dyn Embedder>,
 ) -> impl Indexer {
+    let gc = config.git.as_ref().expect("GitIndexer requires git config");
     GitIndexer {
         console,
-        index_config,
-        git_config,
-        bm25_k1,
-        bm25_b,
+        index_config: config.index.clone(),
+        git_config: gc.clone(),
+        bm25_k1: config.search.bm25.k1,
+        bm25_b: config.search.bm25.b,
         embedder: Mutex::new(embedder),
     }
 }
