@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::app::index::chunking::counter::HuggingFaceTokenCounter;
 use crate::app::index::chunking::{Chunk, Chunker, DocumentChunker};
 use crate::config::IndexConfig;
@@ -25,7 +27,7 @@ impl IndexingPipeline {
             index_config.chunk_overlap,
             token_counter,
         ));
-        let embedder = create_embedder(&index_config.embedding_model)?;
+        let embedder = create_embedder(&index_config.embedding_model, &PathBuf::from(&index_config.cache_dir))?;
         Ok(Self { chunker, embedder })
     }
 

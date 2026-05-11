@@ -2,6 +2,12 @@ pub(crate) fn default_persist_path() -> String {
     "./.docent-index".to_string()
 }
 
+pub(crate) fn default_cache_dir() -> String {
+    let home = dirs_next::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    home.join(".cache").join("docent").to_string_lossy().to_string()
+}
+
 pub(crate) const fn default_chunk_size() -> usize {
     512
 }

@@ -10,6 +10,7 @@ fn test_config(index_dir: &std::path::Path) -> IndexConfig {
     IndexConfig {
         embedding_model: "test".to_string(),
         persist_path: index_dir.to_string_lossy().to_string(),
+        cache_dir: std::env::temp_dir().join("docent_cache").to_string_lossy().to_string(),
         chunk_size: 512,
         chunk_overlap: 64,
         max_size_mb: 512,

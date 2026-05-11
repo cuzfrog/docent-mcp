@@ -23,6 +23,8 @@ pub struct IndexConfig {
     pub embedding_model: String,
     #[serde(default = "super::defaults::default_persist_path")]
     pub persist_path: String,
+    #[serde(default = "super::defaults::default_cache_dir")]
+    pub cache_dir: String,
     #[serde(default = "super::defaults::default_chunk_size")]
     pub chunk_size: usize,
     #[serde(default = "super::defaults::default_chunk_overlap")]
@@ -100,6 +102,7 @@ impl Default for IndexConfig {
         Self {
             embedding_model: String::new(),
             persist_path: super::defaults::default_persist_path(),
+            cache_dir: super::defaults::default_cache_dir(),
             chunk_size: super::defaults::default_chunk_size(),
             chunk_overlap: super::defaults::default_chunk_overlap(),
             max_size_mb: super::defaults::default_max_size_mb(),

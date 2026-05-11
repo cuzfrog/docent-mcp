@@ -17,6 +17,7 @@ pub fn file_index_fixtures(persist: &Path, globs: &[&str]) -> (IndexConfig, File
     let index_config = IndexConfig {
         embedding_model: "BGESmallENV15Q".to_string(),
         persist_path: persist.to_string_lossy().to_string(),
+        cache_dir: std::env::temp_dir().join("docent_cache").to_string_lossy().to_string(),
         chunk_size: 256,
         chunk_overlap: 32,
         max_size_mb: 512,
@@ -34,6 +35,7 @@ pub fn git_index_fixtures(persist: &Path, globs: &[&str]) -> (IndexConfig, GitCo
     let index_config = IndexConfig {
         embedding_model: "BGESmallENV15Q".to_string(),
         persist_path: persist.to_string_lossy().to_string(),
+        cache_dir: std::env::temp_dir().join("docent_cache").to_string_lossy().to_string(),
         chunk_size: 256,
         chunk_overlap: 32,
         max_size_mb: 512,
@@ -48,7 +50,8 @@ pub fn git_index_fixtures(persist: &Path, globs: &[&str]) -> (IndexConfig, GitCo
 }
 
 pub fn test_model_factory() -> Arc<dyn ModelFactory> {
-    Arc::from(create_model_factory("BGESmallENV15Q").expect("Failed to create test model factory"))
+    let cache_dir = std::env::temp_dir().join("docent_test_cache");
+    Arc::from(create_model_factory("BGESmallENV15Q", &cache_dir).expect("Failed to create test model factory"))
 }
 
 /// Build a valid full `Config` for serve/search tests with explicit search params.
@@ -57,6 +60,7 @@ pub fn serve_config_fixture(persist: &Path) -> Config {
         index: IndexConfig {
             embedding_model: "BGESmallENV15Q".to_string(),
             persist_path: persist.to_string_lossy().to_string(),
+            cache_dir: std::env::temp_dir().join("docent_cache").to_string_lossy().to_string(),
             chunk_size: 256,
             chunk_overlap: 32,
             max_size_mb: 512,
@@ -106,6 +110,7 @@ pub fn read_index_at(
     let config = IndexConfig {
         embedding_model: "BGESmallENV15Q".to_string(),
         persist_path: path.to_string_lossy().to_string(),
+        cache_dir: std::env::temp_dir().join("docent_cache").to_string_lossy().to_string(),
         chunk_size: 256,
         chunk_overlap: 32,
         max_size_mb: 512,

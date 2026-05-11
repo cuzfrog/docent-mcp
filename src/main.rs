@@ -49,7 +49,7 @@ fn make_app(config: &Config) -> Application {
     let server = docent_mcp::app::serve::server::create_server(config.clone(), server_console);
 
     let factory: Arc<dyn ModelFactory> =
-        Arc::from(create_model_factory(&config.index.embedding_model)
+        Arc::from(create_model_factory(&config.index.embedding_model, &PathBuf::from(&config.index.cache_dir))
             .expect("Failed to create model factory"));
     let mut indexers: Vec<Box<dyn Indexer>> = Vec::new();
     if config.file.is_some() {

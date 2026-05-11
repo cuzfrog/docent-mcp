@@ -197,6 +197,7 @@ mod tests {
         let config = IndexConfig {
             embedding_model: "BGESmallENV15Q".to_string(),
             persist_path: persist_path.to_string_lossy().to_string(),
+            cache_dir: std::env::temp_dir().join("docent_cache").to_string_lossy().to_string(),
             chunk_size: 256,
             chunk_overlap: 32,
             max_size_mb: 512,
@@ -214,7 +215,6 @@ mod tests {
             kind: IndexKind::File,
             is_fresh: None,
         };
-
         let chunker = Box::new(crate::app::index::chunking::DocumentChunker::new(
             config.chunk_size,
             config.chunk_overlap,
@@ -240,11 +240,11 @@ mod tests {
         let config = IndexConfig {
             embedding_model: "BGESmallENV15Q".to_string(),
             persist_path: persist_path.to_string_lossy().to_string(),
+            cache_dir: std::env::temp_dir().join("docent_cache").to_string_lossy().to_string(),
             chunk_size: 256,
             chunk_overlap: 32,
             max_size_mb: 512,
         };
-
         let repo = IndexRepository::new(persist_path, &config, 1.2, 0.75);
 
         let embedder = FakeEmbedder::new();
@@ -280,7 +280,7 @@ mod tests {
     fn file_only_missing_bm25_rebuilds_on_load() {
         let persist = make_temp_dir("rebuild_file_bm25");
         create_file_index_without_bm25(&persist);
-
+        create_git_index_without_bm25(&persist);
         assert!(
             !persist.join("file").join("bm25").join("header.json").exists(),
             "BM25 should be absent before load"
@@ -289,6 +289,7 @@ mod tests {
         let config = IndexConfig {
             embedding_model: "BGESmallENV15Q".to_string(),
             persist_path: persist.to_string_lossy().to_string(),
+            cache_dir: std::env::temp_dir().join("docent_cache").to_string_lossy().to_string(),
             chunk_size: 256,
             chunk_overlap: 32,
             max_size_mb: 512,
@@ -326,6 +327,7 @@ mod tests {
         let config = IndexConfig {
             embedding_model: "BGESmallENV15Q".to_string(),
             persist_path: persist.to_string_lossy().to_string(),
+            cache_dir: std::env::temp_dir().join("docent_cache").to_string_lossy().to_string(),
             chunk_size: 256,
             chunk_overlap: 32,
             max_size_mb: 512,
@@ -356,6 +358,7 @@ mod tests {
         let config = IndexConfig {
             embedding_model: "BGESmallENV15Q".to_string(),
             persist_path: persist.to_string_lossy().to_string(),
+            cache_dir: std::env::temp_dir().join("docent_cache").to_string_lossy().to_string(),
             chunk_size: 256,
             chunk_overlap: 32,
             max_size_mb: 512,
@@ -388,36 +391,36 @@ mod tests {
         let config = IndexConfig {
             embedding_model: "BGESmallENV15Q".to_string(),
             persist_path: persist.to_string_lossy().to_string(),
+            cache_dir: std::env::temp_dir().join("docent_cache").to_string_lossy().to_string(),
             chunk_size: 256,
             chunk_overlap: 32,
             max_size_mb: 512,
         };
 
         let repo = IndexRepository::new(&persist, &config, 1.2, 0.75);
-        {
-            let embedder = FakeEmbedder::new();
-            let doc = IndexableDocument {
-                source_path: "test.md".to_string(),
-                source_revision: "abc".to_string(),
-                title: "Test".to_string(),
-                body: "Hello world".to_string(),
-                modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
-            };
-            let chunker = Box::new(crate::app::index::chunking::DocumentChunker::new(
-                config.chunk_size,
-                config.chunk_overlap,
-                Box::new(crate::app::index::chunking::counter::WhitespaceTokenCounter),
-            ));
-            let mut pipeline = crate::app::index::pipeline::IndexingPipeline::with_embedder_and_chunker(
-                Box::new(embedder),
-                chunker,
-            );
-            let (batch, dims) = pipeline.run(&[doc], None).unwrap();
-            let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
-            repo.store(SourceIndexKind::File, &batch, dims, doc_count, None).unwrap();
-        }
+
+        let embedder = FakeEmbedder::new();
+        let doc = IndexableDocument {
+            source_path: "test.md".to_string(),
+            source_revision: "abc".to_string(),
+            title: "Test".to_string(),
+            body: "Hello world".to_string(),
+            modified_at: None,
+            kind: IndexKind::File,
+            is_fresh: None,
+        };
+        let chunker = Box::new(crate::app::index::chunking::DocumentChunker::new(
+            config.chunk_size,
+            config.chunk_overlap,
+            Box::new(crate::app::index::chunking::counter::WhitespaceTokenCounter),
+        ));
+        let mut pipeline = crate::app::index::pipeline::IndexingPipeline::with_embedder_and_chunker(
+            Box::new(embedder),
+            chunker,
+        );
+        let (batch, dims) = pipeline.run(&[doc], None).unwrap();
+        let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
+        repo.store(SourceIndexKind::File, &batch, dims, doc_count, None).unwrap();
         let bm25_dir = persist.join("file").join("bm25");
         let _ = std::fs::remove_dir_all(&bm25_dir);
 

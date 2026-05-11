@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use anyhow::Context;
@@ -23,8 +23,8 @@ impl ModelFactory for ModelFactoryImpl {
     }
 }
 
-pub fn create_model_factory(model_name: &str) -> anyhow::Result<Box<dyn ModelFactory>> {
-    let cache_dir = resolve_cache_dir(model_name)?;
+pub fn create_model_factory(model_name: &str, cache_base: &Path) -> anyhow::Result<Box<dyn ModelFactory>> {
+    let cache_dir = cache_base.join("models").join(model_name);
     std::fs::create_dir_all(&cache_dir)
         .with_context(|| format!("Failed to create cache directory '{}'", cache_dir.display()))?;
 
@@ -59,10 +59,4 @@ pub fn create_model_factory(model_name: &str) -> anyhow::Result<Box<dyn ModelFac
         dims: model_info.dim,
         tokenizer,
     }))
-}
-
-fn resolve_cache_dir(model_name: &str) -> anyhow::Result<PathBuf> {
-    let home =
-        dirs_next::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
-    Ok(home.join(".cache").join("docent").join("models").join(model_name))
 }

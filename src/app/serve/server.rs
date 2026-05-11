@@ -11,6 +11,8 @@ use crate::app::serve::search::create_search_service;
 use crate::app::serve::ServeIndexAccess;
 use crate::app::serve::ServeIndexAccessImpl;
 use crate::config::Config;
+use std::path::PathBuf;
+
 use crate::index::embedder::{create_embedder, Embedder};
 use crate::mcp::DocentMcpServer;
 use crate::mcp::SearchExecutor;
@@ -91,7 +93,7 @@ fn prepare_router(
     let merged = result.merged;
 
     let embedder: Arc<Mutex<dyn Embedder>> = Arc::new(Mutex::new(
-        create_embedder(&config.index.embedding_model)
+        create_embedder(&config.index.embedding_model, &PathBuf::from(&config.index.cache_dir))
             .map_err(|e| anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e))?
     ));
     let search_service = create_search_service(merged, embedder, &config.search)?;
@@ -195,6 +197,7 @@ mod tests {
         let config = IndexConfig {
             embedding_model: "BGESmallENV15Q".to_string(),
             persist_path: persist_path.to_string_lossy().to_string(),
+            cache_dir: std::env::temp_dir().join("docent_cache").to_string_lossy().to_string(),
             chunk_size: 256,
             chunk_overlap: 32,
             max_size_mb: 512,

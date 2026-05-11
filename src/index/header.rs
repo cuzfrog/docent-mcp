@@ -80,6 +80,7 @@ mod tests {
         IndexConfig {
             embedding_model: "test-model".to_string(),
             persist_path: "/tmp/test-index".to_string(),
+            cache_dir: "/tmp/docent_cache".to_string(),
             chunk_size: 256,
             chunk_overlap: 32,
             max_size_mb: 512,
