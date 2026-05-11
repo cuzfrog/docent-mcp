@@ -47,7 +47,7 @@ fn make_app(config: &Config) -> Application {
     let server = docent_mcp::app::serve::server::create_server(config.clone(), server_console);
     let indexer = create_indexer(config)
         .expect("Failed to create indexers");
-    Application::new(console, Box::new(server), indexer)
+    Application::new(config.clone(), console, Box::new(server), indexer)
 }
 
 #[tokio::main]
@@ -57,12 +57,12 @@ async fn main() -> anyhow::Result<()> {
         Commands::IndexFile(args) => {
             let mut config = Config::load(&args.config, args.verbose)?;
             config.git = None;
-            make_app(&config).run_index(&config, args.path, args.rebuild)?;
+            make_app(&config).run_index(args.path, args.rebuild)?;
         }
         Commands::IndexGit(args) => {
             let mut config = Config::load(&args.config, args.verbose)?;
             config.file = None;
-            make_app(&config).run_index(&config, args.path, args.rebuild)?;
+            make_app(&config).run_index(args.path, args.rebuild)?;
         }
         Commands::Serve(args) => {
             let config = Config::load(&args.config, false)?;
@@ -78,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Index(args) => {
             let config = Config::load(&args.config, args.verbose)?;
-            make_app(&config).run_index(&config, args.path, args.rebuild)?;
+            make_app(&config).run_index(args.path, args.rebuild)?;
         }
     }
     Ok(())

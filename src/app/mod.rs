@@ -11,6 +11,7 @@ pub mod list_models;
 pub mod serve;
 
 pub struct Application {
+    config: Config,
     console: Box<dyn Console>,
     server: Box<dyn Server>,
     indexer: Box<dyn Indexer>,
@@ -18,23 +19,23 @@ pub struct Application {
 
 impl Application {
     pub fn new(
+        config: Config,
         console: Box<dyn Console>,
         server: Box<dyn Server>,
         indexer: Box<dyn Indexer>,
     ) -> Self {
-        Self { console, server, indexer }
+        Self { config, console, server, indexer }
     }
 
     pub fn run_index(
         &self,
-        config: &Config,
         input_path: Option<PathBuf>,
         rebuild: bool,
     ) -> anyhow::Result<()> {
         let dir = input_path.unwrap_or_else(|| PathBuf::from("."));
         let dir = dir.canonicalize()?;
 
-        let enabled_kinds = config.enabled_kinds();
+        let enabled_kinds = self.config.enabled_kinds();
         if enabled_kinds.is_empty() {
             return Ok(());
         }
@@ -44,7 +45,7 @@ impl Application {
                 kind: *kind,
                 input_path: dir.clone(),
                 rebuild,
-                verbose: config.verbose,
+                verbose: self.config.verbose,
             };
             let outcome = self.indexer.run(&request)?;
             self.emit_outcome(outcome.format_for_ui());
@@ -105,12 +106,13 @@ mod tests {
         config.git = None;
 
         let app = Application::new(
+            config.clone(),
             Box::new(crate::support::ui::create_console(false)),
             Box::new(create_server(Config::default(), Box::new(crate::support::ui::create_console(false)))),
             empty_indexer(),
         );
 
-        app.run_index(&config, Some(dir.clone()), false).unwrap();
+        app.run_index(Some(dir.clone()), false).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
     }
 
