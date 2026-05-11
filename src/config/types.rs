@@ -13,6 +13,8 @@ pub struct Config {
     #[serde(default)]
     pub file: Option<FileConfig>,
     pub git: Option<GitConfig>,
+    #[serde(default)]
+    pub verbose: bool,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]

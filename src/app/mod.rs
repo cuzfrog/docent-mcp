@@ -50,7 +50,6 @@ impl Application {
         config: &Config,
         input_path: Option<PathBuf>,
         rebuild: bool,
-        verbose: bool,
     ) -> anyhow::Result<()> {
         let dir = input_path.unwrap_or_else(|| PathBuf::from("."));
         let dir = dir.canonicalize()?;
@@ -65,7 +64,7 @@ impl Application {
                 kind: *kind,
                 input_path: dir.clone(),
                 rebuild,
-                verbose,
+                verbose: config.verbose,
             };
             let outcome = self.indexer.run(&request)?;
             self.emit_outcome(outcome.format_for_ui());
@@ -131,7 +130,7 @@ mod tests {
             empty_indexer(),
         );
 
-        app.run_index(&config, Some(dir.clone()), false, false).unwrap();
+        app.run_index(&config, Some(dir.clone()), false).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
     }
 

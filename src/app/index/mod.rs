@@ -113,12 +113,12 @@ pub trait Indexer: Send + Sync {
     fn run(&self, request: &IndexRequest) -> anyhow::Result<IndexOutcome>;
 }
 
-pub fn create_indexer(config: &Config, verbose: bool) -> anyhow::Result<Box<dyn Indexer>> {
+pub fn create_indexer(config: &Config) -> anyhow::Result<Box<dyn Indexer>> {
     use crate::index::embedder::{create_embedder, Embedder};
     use crate::support::ui::create_console;
 
     let mut indexers: HashMap<IndexKind, Box<dyn Indexer>> = HashMap::new();
-    let make_console = || Box::new(create_console(verbose));
+    let make_console = || Box::new(create_console(config.verbose));
 
     if config.file.is_some() {
         let embedder: Box<dyn Embedder> = Box::new(create_embedder(&config.index.embedding_model)?);

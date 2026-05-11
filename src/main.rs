@@ -41,23 +41,17 @@ struct ServeArgs {
     config: PathBuf,
 }
 
-fn make_app(config: &Config, verbose: bool) -> Application {
-    let console = Box::new(docent_mcp::support::ui::create_console(verbose));
-    let server_console = Box::new(docent_mcp::support::ui::create_console(verbose));
+fn make_app(config: &Config) -> Application {
+    let console = Box::new(docent_mcp::support::ui::create_console(config.verbose));
+    let server_console = Box::new(docent_mcp::support::ui::create_console(config.verbose));
     let server = docent_mcp::app::serve::server::create_server(config.clone(), server_console);
-    let indexer = create_indexer(config, verbose)
+    let indexer = create_indexer(config)
         .expect("Failed to create indexers");
-
     Application::new(console, Box::new(server), indexer)
 }
 
 fn make_app_basic(verbose: bool) -> Application {
-    let console = Box::new(docent_mcp::support::ui::create_console(verbose));
-    let server_console = Box::new(docent_mcp::support::ui::create_console(verbose));
-    let server = docent_mcp::app::serve::server::create_server(Config::default(), server_console);
-    let indexer = create_indexer(&Config::default(), verbose)
-        .expect("Failed to create indexers");
-    Application::new(console, Box::new(server), indexer)
+    make_app(&Config { verbose, ..Default::default() })
 }
 
 #[tokio::main]
@@ -65,24 +59,24 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Commands::IndexFile(args) => {
-            let mut config = Config::load(&args.config)?;
+            let mut config = Config::load(&args.config, args.verbose)?;
             config.git = None;
-            make_app(&config, args.verbose).run_index(&config, args.path, args.rebuild, args.verbose)?;
+            make_app(&config).run_index(&config, args.path, args.rebuild)?;
         }
         Commands::IndexGit(args) => {
-            let mut config = Config::load(&args.config)?;
+            let mut config = Config::load(&args.config, args.verbose)?;
             config.file = None;
-            make_app(&config, args.verbose).run_index(&config, args.path, args.rebuild, args.verbose)?;
+            make_app(&config).run_index(&config, args.path, args.rebuild)?;
         }
         Commands::Serve(args) => {
-            let config = Config::load(&args.config)?;
-            make_app(&config, false).run_serve().await?;
+            let config = Config::load(&args.config, false)?;
+            make_app(&config).run_serve().await?;
         }
         Commands::ListModels => make_app_basic(false).list_models(),
         Commands::Init => make_app_basic(false).run_init()?,
         Commands::Index(args) => {
-            let config = Config::load(&args.config)?;
-            make_app(&config, args.verbose).run_index(&config, args.path, args.rebuild, args.verbose)?;
+            let config = Config::load(&args.config, args.verbose)?;
+            make_app(&config).run_index(&config, args.path, args.rebuild)?;
         }
     }
     Ok(())

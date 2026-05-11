@@ -77,6 +77,7 @@ pub fn serve_config_fixture(persist: &Path) -> Config {
         },
         git: None,
         file: None,
+        ..Default::default()
     }
 }
 

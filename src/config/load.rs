@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::config::types::Config;
 
 impl Config {
-    pub fn load(path: &Path) -> anyhow::Result<Self> {
+    pub fn load(path: &Path, verbose: bool) -> anyhow::Result<Self> {
         let content = match std::fs::read_to_string(path) {
             Ok(c) => c,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -13,9 +13,10 @@ impl Config {
                 anyhow::bail!("Failed to read config file at '{}': {}", path.display(), e);
             }
         };
-        let config: Config = toml::from_str(&content)
+        let mut config: Config = toml::from_str(&content)
             .map_err(|e| anyhow::anyhow!("Failed to parse config file: {}", e))?;
         config.validate()?;
+        config.verbose = verbose;
         Ok(config)
     }
 }
@@ -43,7 +44,7 @@ same_src_score_decay = 0.95
         let temp_path = std::env::temp_dir().join("docent_test_config.toml");
         std::fs::write(&temp_path, toml_str).unwrap();
 
-        let config = Config::load(&temp_path).unwrap();
+        let config = Config::load(&temp_path, false).unwrap();
         assert_eq!(config.index.embedding_model, "BGESmallENV15Q");
         assert_eq!(config.index.persist_path, "/tmp/test-index");
         assert_eq!(config.index.chunk_size, 256);
@@ -57,7 +58,7 @@ same_src_score_decay = 0.95
     #[test]
     fn test_load_nonexistent_path() {
         let path = Path::new("/nonexistent/path/docent.toml");
-        let err = Config::load(path).unwrap_err();
+        let err = Config::load(path, false).unwrap_err();
         assert!(err.to_string().contains("Config file not found at"));
     }
 
