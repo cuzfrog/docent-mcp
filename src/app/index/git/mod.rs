@@ -73,6 +73,7 @@ impl Indexer for GitIndexer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::index::IndexKind;
     use crate::index::embedder::Embedder;
     use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi};
 
@@ -91,6 +92,7 @@ mod tests {
             embedder: Mutex::new(embedder),
         };
         let req = IndexRequest {
+            kind: IndexKind::Git,
             input_path: persist.clone(),
             rebuild: false,
             verbose: false,

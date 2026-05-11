@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use clap::{Parser, Subcommand};
-use docent_mcp::app::index::{CompositeIndexer, Indexer};
+use docent_mcp::app::index::Indexer;
 use docent_mcp::app::Application;
 use docent_mcp::config::Config;
 use docent_mcp::domain::IndexKind;
@@ -79,7 +79,7 @@ fn make_app(config: &Config, verbose: bool) -> Application {
     Application::new(
         console,
         Box::new(server),
-        CompositeIndexer::new(indexers),
+        indexers,
     )
 }
 
@@ -90,7 +90,7 @@ fn make_app_basic(verbose: bool) -> Application {
     Application::new(
         console,
         Box::new(server),
-        CompositeIndexer::new(HashMap::new()),
+        HashMap::new(),
     )
 }
 

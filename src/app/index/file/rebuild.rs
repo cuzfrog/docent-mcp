@@ -82,7 +82,7 @@ mod tests {
     use std::sync::Mutex;
 
     use super::super::FileIndexer;
-    use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
+    use crate::app::index::{IndexKind, IndexOutcome, IndexRequest, Indexer};
     use crate::index::embedder::Embedder;
     use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi};
 
@@ -109,6 +109,7 @@ mod tests {
             embedder: Mutex::new(embedder),
         };
         let req = IndexRequest {
+            kind: IndexKind::File,
             input_path: sources,
             rebuild: true,
             verbose: false,

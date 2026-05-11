@@ -196,6 +196,7 @@ mod tests {
             embedder: Mutex::new(Box::new(FakeEmbedder::new())),
         };
         let req = IndexRequest {
+            kind: IndexKind::File,
             input_path: sources,
             rebuild: false,
             verbose: false,
@@ -246,6 +247,7 @@ mod tests {
             embedder: Mutex::new(Box::new(FakeEmbedder::new())),
         };
         let req = IndexRequest {
+            kind: IndexKind::File,
             input_path: sources,
             rebuild: false,
             verbose: false,
@@ -294,6 +296,7 @@ mod tests {
             embedder: Mutex::new(Box::new(FakeEmbedder::new())),
         };
         let req = IndexRequest {
+            kind: IndexKind::File,
             input_path: sources,
             rebuild: false,
             verbose: false,
@@ -321,6 +324,7 @@ mod tests {
             embedder: Mutex::new(Box::new(FakeEmbedder::new())),
         };
         let req = IndexRequest {
+            kind: IndexKind::File,
             input_path: sources,
             rebuild: false,
             verbose: false,
@@ -355,6 +359,7 @@ mod tests {
             embedder: Mutex::new(Box::new(FakeEmbedder::new())),
         };
         let req = IndexRequest {
+            kind: IndexKind::File,
             input_path: sources,
             rebuild: false,
             verbose: false,

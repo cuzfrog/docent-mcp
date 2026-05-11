@@ -109,6 +109,7 @@ mod tests {
             embedder: Mutex::new(embedder),
         };
         let request = IndexRequest {
+            kind: IndexKind::File,
             input_path: persist.clone(),
             rebuild: true,
             verbose: false,
@@ -141,6 +142,7 @@ mod tests {
             embedder: Mutex::new(embedder),
         };
         let request = IndexRequest {
+            kind: IndexKind::File,
             input_path: sources,
             rebuild: true,
             verbose: false,

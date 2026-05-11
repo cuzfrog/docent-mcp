@@ -8,6 +8,7 @@ use std::path::PathBuf;
 pub use crate::domain::IndexKind;
 
 pub struct IndexRequest {
+    pub kind: IndexKind,
     pub input_path: PathBuf,
     pub rebuild: bool,
     pub verbose: bool,
@@ -112,18 +113,20 @@ pub trait Indexer: Send + Sync {
 
 use std::collections::HashMap;
 
-pub struct CompositeIndexer {
+pub(crate) struct CompositeIndexer {
     indexers: HashMap<IndexKind, Box<dyn Indexer>>,
 }
 
 impl CompositeIndexer {
-    pub fn new(indexers: HashMap<IndexKind, Box<dyn Indexer>>) -> Self {
+    pub(crate) fn new(indexers: HashMap<IndexKind, Box<dyn Indexer>>) -> Self {
         Self { indexers }
     }
+}
 
-    pub fn run_kind(&self, kind: IndexKind, request: &IndexRequest) -> anyhow::Result<IndexOutcome> {
-        let indexer = self.indexers.get(&kind).ok_or_else(|| {
-            anyhow::anyhow!("No indexer registered for {:?}", kind)
+impl Indexer for CompositeIndexer {
+    fn run(&self, request: &IndexRequest) -> anyhow::Result<IndexOutcome> {
+        let indexer = self.indexers.get(&request.kind).ok_or_else(|| {
+            anyhow::anyhow!("No indexer registered for {:?}", request.kind)
         })?;
         indexer.run(request)
     }

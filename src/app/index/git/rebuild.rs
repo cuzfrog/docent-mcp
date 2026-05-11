@@ -91,7 +91,7 @@ mod tests {
     use std::sync::Mutex;
 
     use super::super::GitIndexer;
-    use crate::app::index::{IndexRequest, Indexer};
+    use crate::app::index::{IndexKind, IndexRequest, Indexer};
     use crate::index::embedder::Embedder;
     use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi};
 
@@ -110,6 +110,7 @@ mod tests {
             embedder: Mutex::new(embedder),
         };
         let req = IndexRequest {
+            kind: IndexKind::Git,
             input_path: persist.clone(),
             rebuild: true,
             verbose: false,
