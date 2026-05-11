@@ -15,10 +15,11 @@ pub use types::SearchResult;
 
 pub(crate) use backend::{ScoreBackend, VectorScoreBackend, ZeroScoreBackend};
 pub(crate) use fusion::create_fusion;
-pub(crate) use orchestrator::HybridSearchService;
+
 pub(crate) use ranking::DecayRanker;
 
 use backend::build_bm25_backend;
+use orchestrator::HybridSearchService;
 
 #[async_trait::async_trait]
 pub trait SearchService: Send + Sync {
