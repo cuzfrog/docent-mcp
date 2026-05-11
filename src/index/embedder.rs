@@ -18,8 +18,8 @@ pub fn list_supported_models() -> Vec<(String, usize)> {
         .collect()
 }
 
-pub fn create_embedder(model_name: &str) -> anyhow::Result<Box<dyn Embedder>> {
-    Ok(Box::new(FastembedEmbedder::new(model_name)?))
+pub fn create_embedder(model_name: &str) -> anyhow::Result<impl Embedder> {
+    FastembedEmbedder::new(model_name)
 }
 
 fn resolve_cache_dir(model_name: &str) -> anyhow::Result<PathBuf> {
@@ -85,20 +85,6 @@ impl Embedder for FastembedEmbedder {
         Box::new(crate::app::index::chunking::counter::HuggingFaceTokenCounter::from_tokenizer(
             self.model.tokenizer.clone(),
         ))
-    }
-}
-
-impl Embedder for Box<dyn Embedder> {
-    fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
-        self.as_mut().embed(texts)
-    }
-
-    fn dims(&self) -> usize {
-        self.as_ref().dims()
-    }
-
-    fn token_counter(&self) -> Box<dyn TokenCounter> {
-        self.as_ref().token_counter()
     }
 }
 

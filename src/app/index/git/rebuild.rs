@@ -4,7 +4,6 @@ use std::time::Instant;
 use crate::app::index::chunking::DocumentChunker;
 use crate::app::index::pipeline::{IndexingPipeline, unique_doc_count};
 use crate::app::index::{IndexKind, IndexOutcome, IndexRequest};
-use crate::index::embedder::Embedder;
 use crate::index::{IndexRepository, SourceIndexKind};
 use super::GitIndexer;
 
@@ -47,7 +46,7 @@ impl GitIndexer {
             token_counter,
         );
         let pipeline = IndexingPipeline::new(Box::new(chunker));
-        let batch = pipeline.run(&indexable, &mut *embedder, Some(pb_embed.as_ref()), self.bm25_k1, self.bm25_b)?;
+        let batch = pipeline.run(&indexable, &mut **embedder, Some(pb_embed.as_ref()), self.bm25_k1, self.bm25_b)?;
         let dims = embedder.dims();
 
         pb_embed.finish();

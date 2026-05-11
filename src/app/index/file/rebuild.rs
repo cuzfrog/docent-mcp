@@ -1,7 +1,6 @@
 use crate::app::index::chunking::DocumentChunker;
 use crate::app::index::pipeline::{IndexingPipeline, unique_doc_count};
 use crate::app::index::{IndexKind, IndexOutcome, IndexRequest};
-use crate::index::embedder::Embedder;
 use crate::index::{IndexRepository, SourceIndexKind};
 use super::FileIndexer;
 
@@ -46,7 +45,7 @@ impl FileIndexer {
             token_counter,
         );
         let pipeline = IndexingPipeline::new(Box::new(chunker));
-        let batch = pipeline.run(&docs, &mut *embedder, Some(pb.as_ref()), self.bm25_k1, self.bm25_b)?;
+        let batch = pipeline.run(&docs, &mut **embedder, Some(pb.as_ref()), self.bm25_k1, self.bm25_b)?;
         let dims = embedder.dims();
 
         pb.finish();

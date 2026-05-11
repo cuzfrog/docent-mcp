@@ -52,8 +52,8 @@ fn make_app(config: &Config, verbose: bool) -> Application {
     let mut indexers: HashMap<IndexKind, Box<dyn Indexer>> = HashMap::new();
 
     if let Some(ref file_config) = config.file {
-        let embedder: Box<dyn Embedder> = create_embedder(&config.index.embedding_model)
-            .expect("Failed to create embedding model");
+        let embedder: Box<dyn Embedder> = Box::new(create_embedder(&config.index.embedding_model)
+            .expect("Failed to create embedding model"));
         indexers.insert(IndexKind::File, Box::new(docent_mcp::app::index::file::create_file_indexer(
             config.index.clone(),
             file_config.clone(),
@@ -64,8 +64,8 @@ fn make_app(config: &Config, verbose: bool) -> Application {
         )));
     }
     if let Some(ref git_config) = config.git {
-        let embedder: Box<dyn Embedder> = create_embedder(&config.index.embedding_model)
-            .expect("Failed to create embedding model");
+        let embedder: Box<dyn Embedder> = Box::new(create_embedder(&config.index.embedding_model)
+            .expect("Failed to create embedding model"));
         indexers.insert(IndexKind::Git, Box::new(docent_mcp::app::index::git::create_git_indexer(
             config.index.clone(),
             git_config.clone(),
