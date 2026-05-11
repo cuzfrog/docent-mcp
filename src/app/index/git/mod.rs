@@ -1,9 +1,8 @@
 use std::path::PathBuf;
-use std::sync::Mutex;
 
 use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
 use crate::config::Config;
-use crate::index::embedder::Embedder;
+use crate::index::model_factory::ModelFactory;
 use crate::support::ui::Console;
 
 pub(crate) mod rebuild;
@@ -28,13 +27,13 @@ pub(crate) struct GitIndexer {
     pub git_config: crate::config::GitConfig,
     pub bm25_k1: f32,
     pub bm25_b: f32,
-    pub embedder: Mutex<Box<dyn Embedder>>,
+    pub model_factory: ModelFactory,
 }
 
 pub(crate) fn create_git_indexer(
     config: &Config,
     console: Box<dyn Console>,
-    embedder: Box<dyn Embedder>,
+    model_factory: ModelFactory,
 ) -> impl Indexer {
     let gc = config.git.as_ref().expect("GitIndexer requires git config");
     GitIndexer {
@@ -43,19 +42,19 @@ pub(crate) fn create_git_indexer(
         git_config: gc.clone(),
         bm25_k1: config.search.bm25.k1,
         bm25_b: config.search.bm25.b,
-        embedder: Mutex::new(embedder),
+        model_factory,
     }
 }
 
 impl Indexer for GitIndexer {
     fn run(&self, request: &IndexRequest) -> anyhow::Result<IndexOutcome> {
         let persist_path = PathBuf::from(&self.index_config.persist_path);
-        let dims = self.embedder.lock().unwrap().dims();
+        let dims = self.model_factory.dims();
 
         if request.rebuild {
             self.rebuild(request, &persist_path, dims)
         } else {
-            let repo = crate::index::IndexRepository::new(&persist_path, &self.index_config);
+            let repo = crate::index::IndexRepository::new(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
             if !repo.exists(crate::index::SourceIndexKind::Git) {
                 anyhow::bail!(
                     "No existing Git index found at '{}'. Use `docent index-git --rebuild` to create one.",
@@ -71,22 +70,20 @@ impl Indexer for GitIndexer {
 mod tests {
     use super::*;
     use crate::app::index::IndexKind;
-    use crate::index::embedder::Embedder;
-    use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi};
+    use crate::tests::fixtures::{make_temp_dir, RecordingUi, test_model_factory};
 
     #[test]
     fn incremental_without_existing_index_returns_error() {
         let persist = make_temp_dir("git_inc_no_existing");
         let (index_config, git_config) = crate::tests::fixtures::git_index_fixtures(&persist, &["*.md"]);
         let ui = RecordingUi::always_confirm();
-        let embedder: Box<dyn Embedder> = Box::new(FakeEmbedder::new());
         let indexer = GitIndexer {
             console: Box::new(ui),
             index_config,
             git_config,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            embedder: Mutex::new(embedder),
+            model_factory: crate::tests::fixtures::test_model_factory(),
         };
         let req = IndexRequest {
             kind: IndexKind::Git,

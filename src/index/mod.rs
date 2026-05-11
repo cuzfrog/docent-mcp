@@ -7,6 +7,8 @@ mod bm25_storage;
 mod storage;
 mod repository;
 mod sub_index;
+pub(crate) mod bm25_builder;
+pub(crate) mod model_factory;
 
 #[derive(Clone, Copy)]
 pub enum SourceIndexKind {

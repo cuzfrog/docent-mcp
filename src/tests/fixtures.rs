@@ -4,6 +4,7 @@ use crate::app::index::chunking::counter::TokenCounter;
 use crate::config::{Config, FileConfig, GitConfig, IndexConfig};
 use crate::domain::ChunkMetadata;
 use crate::index::embedder::Embedder;
+use crate::index::model_factory::ModelFactory;
 use crate::index::VectorStore;
 use crate::index::{IndexRepository, SourceIndexKind};
 
@@ -44,6 +45,10 @@ pub fn git_index_fixtures(persist: &Path, globs: &[&str]) -> (IndexConfig, GitCo
         glob_patterns: globs.iter().map(|s| s.to_string()).collect(),
     };
     (index_config, git_config)
+}
+
+pub fn test_model_factory() -> ModelFactory {
+    ModelFactory::new("BGESmallENV15Q").expect("Failed to create test model factory")
 }
 
 /// Build a valid full `Config` for serve/search tests with explicit search params.
@@ -105,7 +110,7 @@ pub fn read_index_at(
         chunk_overlap: 32,
         max_size_mb: 512,
     };
-    let repo = IndexRepository::new(path, &config);
+    let repo = IndexRepository::new(path, &config, 1.2, 0.75);
     let stored = repo.load_one(SourceIndexKind::File).unwrap();
     (stored.header, stored.vectors, stored.metadata)
 }

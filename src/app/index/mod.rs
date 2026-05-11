@@ -114,24 +114,23 @@ pub trait Indexer: Send + Sync {
 }
 
 pub fn create_indexer(config: &Config) -> anyhow::Result<Box<dyn Indexer>> {
-    use crate::index::embedder::{create_embedder, Embedder};
+    use crate::index::model_factory::ModelFactory;
     use crate::support::ui::create_console;
 
+    let factory = ModelFactory::new(&config.index.embedding_model)?;
     let mut indexers: HashMap<IndexKind, Box<dyn Indexer>> = HashMap::new();
     let make_console = || Box::new(create_console(config.verbose));
 
     if config.file.is_some() {
-        let embedder: Box<dyn Embedder> = Box::new(create_embedder(&config.index.embedding_model)?);
         indexers.insert(
             IndexKind::File,
-            Box::new(file::create_file_indexer(config, make_console(), embedder)),
+            Box::new(file::create_file_indexer(config, make_console(), factory.clone())),
         );
     }
     if config.git.is_some() {
-        let embedder: Box<dyn Embedder> = Box::new(create_embedder(&config.index.embedding_model)?);
         indexers.insert(
             IndexKind::Git,
-            Box::new(git::create_git_indexer(config, make_console(), embedder)),
+            Box::new(git::create_git_indexer(config, make_console(), factory.clone())),
         );
     }
 

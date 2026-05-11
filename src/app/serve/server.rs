@@ -200,7 +200,7 @@ mod tests {
             max_size_mb: 512,
         };
 
-        let repo = IndexRepository::new(persist_path, &config);
+        let repo = IndexRepository::new(persist_path, &config, 1.2, 0.75);
 
         let mut embedder = FakeEmbedder::new();
         let doc = crate::app::index::pipeline::IndexableDocument {
@@ -213,12 +213,14 @@ mod tests {
             is_fresh: None,
         };
 
-        let token_counter = embedder.token_counter();
-        let chunker = crate::app::index::chunking::DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
-        let pipeline = crate::app::index::pipeline::IndexingPipeline::new(Box::new(chunker));
-        let batch = pipeline.run(&[doc], &mut embedder, None, 1.2, 0.75).unwrap();
+        let mut pipeline = crate::app::index::pipeline::IndexingPipeline::with_embedder(
+            Box::new(embedder),
+            config.chunk_size,
+            config.chunk_overlap,
+        );
+        let (batch, dims) = pipeline.run(&[doc], None).unwrap();
         let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
-        repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None)
+        repo.store(SourceIndexKind::File, &batch, dims, doc_count, None)
             .unwrap();
     }
 

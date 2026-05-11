@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use crate::app::index::chunking::DocumentChunker;
-use crate::app::index::pipeline::{IndexedBatch, IndexingPipeline};
+use crate::app::index::pipeline::IndexingPipeline;
 use crate::app::index::{IndexKind, IndexOutcome, IndexRequest};
 use crate::domain::ChunkMetadata;
 use crate::index::{IndexRepository, SourceIndexKind, StoreMergedRequest, VectorStore};
@@ -37,7 +36,7 @@ impl From<anyhow::Error> for IndexLoadError {
 impl FileIndexer {
     fn load_existing_index(&self) -> Result<ExistingIndex, IndexLoadError> {
         let persist_path = std::path::PathBuf::from(&self.index_config.persist_path);
-        let repo = IndexRepository::new(&persist_path, &self.index_config);
+        let repo = IndexRepository::new(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
         match repo.load_one(SourceIndexKind::File) {
             Ok(stored) => {
                 if let Err(e) = stored.header.validate_against(&self.index_config) {
@@ -57,40 +56,12 @@ impl FileIndexer {
         }
     }
 
-    fn merge_and_store(
-        &self,
-        repo: &IndexRepository,
-        all_files: &[std::path::PathBuf],
-        old_metadata: Vec<ChunkMetadata>,
-        old_vectors: VectorStore,
-        batch: &IndexedBatch,
-        dims: usize,
-    ) -> anyhow::Result<(usize, usize)> {
-        let merged = super::merge_incremental(
-            all_files,
-            &old_metadata,
-            &old_vectors,
-            &batch.metadata,
-            &batch.vectors,
-        );
-        let (merged_vectors, merged_metadata) = merged;
-        repo.store_merged(&StoreMergedRequest {
-            kind: SourceIndexKind::File,
-            merged_vectors,
-            merged_metadata,
-            dims,
-            last_indexed_commit: None,
-            bm25_k1: self.bm25_k1,
-            bm25_b: self.bm25_b,
-        })
-    }
-
     pub(super) fn incremental(
         &self,
         request: &IndexRequest,
     ) -> anyhow::Result<IndexOutcome> {
         let persist_path = std::path::PathBuf::from(&self.index_config.persist_path);
-        let repo = IndexRepository::new(&persist_path, &self.index_config);
+        let repo = IndexRepository::new(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
         let (old_hashes, old_metadata, old_vectors, index_exists) = match self.load_existing_index() {
             Ok(v) => v,
             Err(IndexLoadError::NeedsRebuild(reason)) => {
@@ -115,19 +86,21 @@ impl FileIndexer {
         let pb = self.console.progress(diff.to_index.len() as u64, "Indexing files");
         let docs = super::prepare_files(&diff.to_index, &request.input_path, self.file_config.file_size_limit_mb)?;
 
-        let mut embedder = self.embedder.lock().unwrap();
-        let token_counter = embedder.token_counter();
-        let chunker = DocumentChunker::new(
-            self.index_config.chunk_size,
-            self.index_config.chunk_overlap,
-            token_counter,
-        );
-        let pipeline = IndexingPipeline::new(Box::new(chunker));
-        let batch = pipeline.run(&docs, &mut **embedder, Some(pb.as_ref()), self.bm25_k1, self.bm25_b)?;
-        let dims = embedder.dims();
+        let mut pipeline = IndexingPipeline::new(&self.model_factory, &self.index_config)?;
+        let (batch, dims) = pipeline.run(&docs, Some(pb.as_ref()))?;
 
         pb.finish();
-        let (chunk_count, doc_count) = self.merge_and_store(&repo, &all_files, old_metadata, old_vectors, &batch, dims)?;
+        let merged = super::merge_incremental(
+            &all_files, &old_metadata, &old_vectors, &batch.metadata, &batch.vectors,
+        );
+        let (merged_vectors, merged_metadata) = merged;
+        let (chunk_count, doc_count) = repo.store_merged(&StoreMergedRequest {
+            kind: SourceIndexKind::File,
+            merged_vectors,
+            merged_metadata,
+            dims,
+            last_indexed_commit: None,
+        })?;
         Ok(IndexOutcome::Indexed {
             kind: IndexKind::File,
             rebuilt: false,
@@ -143,23 +116,20 @@ impl FileIndexer {
 #[cfg(test)]
 mod tests {
     use super::super::FileIndexer;
-    use crate::app::index::chunking::DocumentChunker;
     use crate::app::index::pipeline::{IndexingPipeline, IndexableDocument, unique_doc_count};
     use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
     use crate::config::IndexConfig;
-    use std::sync::Mutex;
-
     use crate::domain::IndexKind;
     use crate::index::embedder::Embedder;
     use crate::index::{IndexRepository, SourceIndexKind};
-    use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi};
+    use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi, test_model_factory};
 
     fn write_file(dir: &std::path::Path, name: &str, content: &str) {
         std::fs::write(dir.join(name), content).unwrap();
     }
 
-    fn create_index_at(persist: &std::path::Path, config: &IndexConfig) {
-        let repo = IndexRepository::new(persist, config);
+    fn create_index_at(persist: &std::path::Path, config: &IndexConfig, bm25_k1: f32, bm25_b: f32) {
+        let repo = IndexRepository::new(persist, config, bm25_k1, bm25_b);
         let mut embedder = FakeEmbedder::new();
         let doc = IndexableDocument {
             source_path: "existing.md".to_string(),
@@ -170,13 +140,12 @@ mod tests {
             kind: IndexKind::File,
             is_fresh: None,
         };
-        let token_counter = embedder.token_counter();
-        let chunker = DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
-        let pipeline = IndexingPipeline::new(Box::new(chunker));
-        let batch = pipeline.run(&[doc], &mut embedder, None, 1.2, 0.75).unwrap();
-        let doc_count = unique_doc_count(&batch.metadata);
-        repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None)
-            .unwrap();
+        let mut pipeline = IndexingPipeline::with_embedder(
+            Box::new(embedder),
+            config.chunk_size,
+            config.chunk_overlap,
+        );
+        let (_batch, _dims) = pipeline.run(&[doc], None).unwrap();
     }
 
     #[test]
@@ -193,7 +162,7 @@ mod tests {
             file_config: fc,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            embedder: Mutex::new(Box::new(FakeEmbedder::new())),
+            model_factory: test_model_factory(),
         };
         let req = IndexRequest {
             kind: IndexKind::File,
@@ -211,7 +180,7 @@ mod tests {
         let persist = make_temp_dir("wf_inc_rebuild_needed");
         let (ic, _fc) = crate::tests::fixtures::file_index_fixtures(&persist, &["*.md"]);
         std::fs::create_dir_all(persist.join("file")).unwrap();
-        create_index_at(&persist, &ic);
+        create_index_at(&persist, &ic, 1.2, 0.75);
         {
             let mut altered_config = ic.clone();
             altered_config.chunk_size = 999;
@@ -225,13 +194,14 @@ mod tests {
                 kind: IndexKind::File,
                 is_fresh: None,
             };
-            let token_counter = embedder.token_counter();
-            let chunker = DocumentChunker::new(altered_config.chunk_size, altered_config.chunk_overlap, token_counter);
-            let pipeline = IndexingPipeline::new(Box::new(chunker));
-            let batch = pipeline.run(&[doc], &mut embedder, None, 1.2, 0.75).unwrap();
-            let doc_count = unique_doc_count(&batch.metadata);
-            let repo = IndexRepository::new(&persist, &altered_config);
-            repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None).unwrap();
+            let mut pipeline = IndexingPipeline::with_embedder(
+                Box::new(embedder),
+                altered_config.chunk_size,
+                altered_config.chunk_overlap,
+            );
+            let (_batch, _dims) = pipeline.run(&[doc], None).unwrap();
+            let repo = IndexRepository::new(&persist, &altered_config, 1.2, 0.75);
+            repo.store(SourceIndexKind::File, &_batch, _dims, 1, None).unwrap();
         }
         let sources = persist.join("src");
         std::fs::create_dir_all(&sources).unwrap();
@@ -244,7 +214,7 @@ mod tests {
             file_config: fc2,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            embedder: Mutex::new(Box::new(FakeEmbedder::new())),
+            model_factory: test_model_factory(),
         };
         let req = IndexRequest {
             kind: IndexKind::File,
@@ -273,13 +243,14 @@ mod tests {
                 kind: IndexKind::File,
                 is_fresh: None,
             };
-            let token_counter = embedder.token_counter();
-            let chunker = DocumentChunker::new(ic.chunk_size, ic.chunk_overlap, token_counter);
-            let pipeline = IndexingPipeline::new(Box::new(chunker));
-            let batch = pipeline.run(&[doc], &mut embedder, None, 1.2, 0.75).unwrap();
-            let repo = IndexRepository::new(&persist, &ic);
-            let doc_count = unique_doc_count(&batch.metadata);
-            repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None).unwrap();
+            let mut pipeline = IndexingPipeline::with_embedder(
+                Box::new(embedder),
+                ic.chunk_size,
+                ic.chunk_overlap,
+            );
+            let (_batch, _dims) = pipeline.run(&[doc], None).unwrap();
+            let repo = IndexRepository::new(&persist, &ic, 1.2, 0.75);
+            repo.store(SourceIndexKind::File, &_batch, _dims, 1, None).unwrap();
             let vectors_path = persist.join("file").join("vectors.bin");
             std::fs::write(&vectors_path, vec![0u8; 4]).unwrap();
         }
@@ -293,7 +264,7 @@ mod tests {
             file_config: fc,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            embedder: Mutex::new(Box::new(FakeEmbedder::new())),
+            model_factory: test_model_factory(),
         };
         let req = IndexRequest {
             kind: IndexKind::File,
@@ -321,7 +292,7 @@ mod tests {
             file_config: fc,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            embedder: Mutex::new(Box::new(FakeEmbedder::new())),
+            model_factory: test_model_factory(),
         };
         let req = IndexRequest {
             kind: IndexKind::File,
@@ -347,7 +318,7 @@ mod tests {
         std::fs::create_dir_all(&sources).unwrap();
         write_file(&sources, "a.md", "# Doc A\n\nContent A.");
         write_file(&sources, "b.md", "# Doc B\n\nContent B.");
-        create_index_at(&persist, &ic);
+        create_index_at(&persist, &ic, 1.2, 0.75);
         write_file(&sources, "c.md", "# Doc C\n\nContent C.");
         let ui = RecordingUi::always_confirm();
         let indexer = FileIndexer {
@@ -356,7 +327,7 @@ mod tests {
             file_config: fc,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            embedder: Mutex::new(Box::new(FakeEmbedder::new())),
+            model_factory: test_model_factory(),
         };
         let req = IndexRequest {
             kind: IndexKind::File,
@@ -366,7 +337,7 @@ mod tests {
         };
         let result = indexer.run(&req).unwrap();
         assert!(matches!(result, IndexOutcome::Indexed { .. }));
-        let repo = IndexRepository::new(&persist, &ic);
+        let repo = IndexRepository::new(&persist, &ic, 1.2, 0.75);
         let stored = repo.load_one(SourceIndexKind::File).unwrap();
         assert!(stored.bm25.is_some(), "BM25 data should be present after incremental indexing");
         let _ = std::fs::remove_dir_all(&persist);

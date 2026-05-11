@@ -1,4 +1,3 @@
-use crate::app::index::chunking::DocumentChunker;
 use crate::app::index::pipeline::{IndexingPipeline, unique_doc_count};
 use crate::app::index::{IndexKind, IndexOutcome, IndexRequest};
 use crate::index::{IndexRepository, SourceIndexKind};
@@ -6,7 +5,7 @@ use super::FileIndexer;
 
 impl FileIndexer {
     fn confirm_rebuild(&self, persist_path: &std::path::Path) -> anyhow::Result<bool> {
-        let repo = IndexRepository::new(persist_path, &self.index_config);
+        let repo = IndexRepository::new(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
         match repo.load_one(SourceIndexKind::File) {
             Ok(_) => {
                 self.console.warn(&format!(
@@ -37,16 +36,8 @@ impl FileIndexer {
         let pb = self.console.progress(all_files.len() as u64, "Indexing files");
         let docs = super::prepare_files(&all_files, &request.input_path, self.file_config.file_size_limit_mb)?;
 
-        let mut embedder = self.embedder.lock().unwrap();
-        let token_counter = embedder.token_counter();
-        let chunker = DocumentChunker::new(
-            self.index_config.chunk_size,
-            self.index_config.chunk_overlap,
-            token_counter,
-        );
-        let pipeline = IndexingPipeline::new(Box::new(chunker));
-        let batch = pipeline.run(&docs, &mut **embedder, Some(pb.as_ref()), self.bm25_k1, self.bm25_b)?;
-        let dims = embedder.dims();
+        let mut pipeline = IndexingPipeline::new(&self.model_factory, &self.index_config)?;
+        let (batch, dims) = pipeline.run(&docs, Some(pb.as_ref()))?;
 
         pb.finish();
         Ok((batch, dims))
@@ -60,7 +51,7 @@ impl FileIndexer {
         if !self.confirm_rebuild(&persist_path)? {
             return Ok(IndexOutcome::Aborted);
         }
-        let repo = IndexRepository::new(&persist_path, &self.index_config);
+        let repo = IndexRepository::new(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
         let (batch, dims) = self.index_files(request)?;
         let chunk_count = batch.metadata.len();
         let doc_count = unique_doc_count(&batch.metadata);
@@ -79,12 +70,9 @@ impl FileIndexer {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
-
     use super::super::FileIndexer;
     use crate::app::index::{IndexKind, IndexOutcome, IndexRequest, Indexer};
-    use crate::index::embedder::Embedder;
-    use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi};
+    use crate::tests::fixtures::{make_temp_dir, RecordingUi, test_model_factory};
 
     fn write_file(dir: &std::path::Path, name: &str, content: &str) {
         std::fs::write(dir.join(name), content).unwrap();
@@ -99,14 +87,13 @@ mod tests {
         write_file(&sources, "a.md", "# Hello World\ntest content");
         write_file(&sources, "b.md", "# Second File\nmore content");
         let ui = RecordingUi::always_confirm();
-        let embedder: Box<dyn Embedder> = Box::new(FakeEmbedder::new());
         let indexer = FileIndexer {
             console: Box::new(ui),
             index_config,
             file_config,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            embedder: Mutex::new(embedder),
+            model_factory: test_model_factory(),
         };
         let req = IndexRequest {
             kind: IndexKind::File,

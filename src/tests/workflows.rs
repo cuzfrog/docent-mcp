@@ -6,10 +6,6 @@ use crate::app::index::chunking::DocumentChunker;
 use crate::app::index::pipeline::{IndexingPipeline, IndexableDocument};
 use crate::tests::fixtures::{make_temp_dir, read_index_at, FakeEmbedder};
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 fn test_config(index_dir: &std::path::Path) -> IndexConfig {
     IndexConfig {
         embedding_model: "test".to_string(),
@@ -45,10 +41,6 @@ fn sample_doc_b() -> IndexableDocument {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Indexing pipeline tests (workflow-level)
-// ---------------------------------------------------------------------------
-
 #[test]
 fn test_index_and_store_round_trip() {
     let base = make_temp_dir("wf_index_store");
@@ -59,22 +51,23 @@ fn test_index_and_store_round_trip() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let token_counter = embedder.token_counter();
-    let chunker = DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
-    let pipeline = IndexingPipeline::new(Box::new(chunker));
-    let batch = pipeline.run(&docs, &mut embedder, None, 1.2, 0.75).unwrap();
+    let mut pipeline = IndexingPipeline::with_embedder(
+        Box::new(embedder),
+        config.chunk_size,
+        config.chunk_overlap,
+    );
+    let (batch, dims) = pipeline.run(&docs, None).unwrap();
 
     assert!(!batch.vectors.is_empty(), "Should produce vectors");
     assert_eq!(batch.vectors.len(), batch.metadata.len());
 
-    // All vectors should be 4-dimensional (FakeEmbedder dims)
     for vec in &batch.vectors {
         assert_eq!(vec.len(), 4);
     }
 
-    let repo = IndexRepository::new(&index_dir, &config);
+    let repo = IndexRepository::new(&index_dir, &config, 1.2, 0.75);
     let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
-    repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None).unwrap();
+    repo.store(SourceIndexKind::File, &batch, dims, doc_count, None).unwrap();
 
     let (header, vectors, metadata) = read_index_at(&index_dir);
 
@@ -97,17 +90,18 @@ fn test_empty_document_list_produces_empty_index() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let token_counter = embedder.token_counter();
-    let chunker = DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
-    let pipeline = IndexingPipeline::new(Box::new(chunker));
-    let batch = pipeline.run(&docs, &mut embedder, None, 1.2, 0.75).unwrap();
+    let mut pipeline = IndexingPipeline::with_embedder(
+        Box::new(embedder),
+        config.chunk_size,
+        config.chunk_overlap,
+    );
+    let (batch, dims) = pipeline.run(&docs, None).unwrap();
 
     assert!(batch.vectors.is_empty());
     assert!(batch.metadata.is_empty());
 
-    let repo = IndexRepository::new(&index_dir, &config);
-    let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
-    repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None).unwrap();
+    let repo = IndexRepository::new(&index_dir, &config, 1.2, 0.75);
+    repo.store(SourceIndexKind::File, &batch, dims, 0, None).unwrap();
 
     let (header, vectors, metadata) = read_index_at(&index_dir);
     assert_eq!(header.chunk_count, 0);
@@ -128,16 +122,20 @@ fn test_vectors_are_deterministic() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let token_counter = embedder.token_counter();
-    let chunker = DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
-    let pipeline = IndexingPipeline::new(Box::new(chunker));
-    let batch1 = pipeline.run(&docs, &mut embedder, None, 1.2, 0.75).unwrap();
+    let mut pipeline = IndexingPipeline::with_embedder(
+        Box::new(embedder),
+        config.chunk_size,
+        config.chunk_overlap,
+    );
+    let (batch1, _dims) = pipeline.run(&docs, None).unwrap();
 
     let mut embedder2 = FakeEmbedder::new();
-    let token_counter2 = embedder2.token_counter();
-    let chunker2 = DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter2);
-    let pipeline2 = IndexingPipeline::new(Box::new(chunker2));
-    let batch2 = pipeline2.run(&docs, &mut embedder2, None, 1.2, 0.75).unwrap();
+    let mut pipeline2 = IndexingPipeline::with_embedder(
+        Box::new(embedder2),
+        config.chunk_size,
+        config.chunk_overlap,
+    );
+    let (batch2, _dims) = pipeline2.run(&docs, None).unwrap();
 
     assert_eq!(batch1.vectors, batch2.vectors);
     assert_eq!(batch1.metadata.len(), batch2.metadata.len());
@@ -155,18 +153,19 @@ fn test_index_preserves_metadata_fields() {
     let config = test_config(&index_dir);
 
     let mut embedder = FakeEmbedder::new();
-    let token_counter = embedder.token_counter();
-    let chunker = DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
-    let pipeline = IndexingPipeline::new(Box::new(chunker));
-    let batch = pipeline.run(&docs, &mut embedder, None, 1.2, 0.75).unwrap();
+    let mut pipeline = IndexingPipeline::with_embedder(
+        Box::new(embedder),
+        config.chunk_size,
+        config.chunk_overlap,
+    );
+    let (batch, dims) = pipeline.run(&docs, None).unwrap();
 
-    let repo = IndexRepository::new(&index_dir, &config);
+    let repo = IndexRepository::new(&index_dir, &config, 1.2, 0.75);
     let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
-    repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None).unwrap();
+    repo.store(SourceIndexKind::File, &batch, dims, doc_count, None).unwrap();
 
     let (_header, _vectors, metadata) = read_index_at(&index_dir);
 
-    // Verify metadata fields are preserved
     let a_meta: Vec<&ChunkMetadata> = metadata.iter().filter(|m| &*m.doc_ctx.source_path == "a.md").collect();
     assert!(!a_meta.is_empty(), "Doc A should have metadata entries");
     assert_eq!(&*a_meta[0].doc_ctx.source_revision, "hash1");

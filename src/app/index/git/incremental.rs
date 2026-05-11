@@ -1,7 +1,6 @@
 use std::path::Path;
 use std::time::Instant;
 
-use crate::app::index::chunking::DocumentChunker;
 use crate::app::index::pipeline::IndexingPipeline;
 use crate::app::index::{IndexKind, IndexOutcome, IndexRequest};
 use crate::index::{IndexRepository, SourceIndexKind, StoreMergedRequest};
@@ -14,7 +13,7 @@ impl GitIndexer {
         persist_path: &Path,
         dims: usize,
     ) -> anyhow::Result<IndexOutcome> {
-        let repo = IndexRepository::new(persist_path, &self.index_config);
+        let repo = IndexRepository::new(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
         let stored = repo.load_one(SourceIndexKind::Git)?;
         let old_header = stored.header;
         let old_vectors = stored.vectors;
@@ -44,16 +43,8 @@ impl GitIndexer {
         let pb2 = self.console.progress(total_new_docs as u64, "Embedding documents");
         let indexable = super::prepare_git_documents(&new_docs, &vec![true; new_docs.len()]);
 
-        let mut embedder = self.embedder.lock().unwrap();
-        let token_counter = embedder.token_counter();
-        let chunker = DocumentChunker::new(
-            self.index_config.chunk_size,
-            self.index_config.chunk_overlap,
-            token_counter,
-        );
-        let pipeline = IndexingPipeline::new(Box::new(chunker));
-        let batch = pipeline.run(&indexable, &mut **embedder, Some(pb2.as_ref()), self.bm25_k1, self.bm25_b)?;
-        let dims = embedder.dims();
+        let mut pipeline = IndexingPipeline::new(&self.model_factory, &self.index_config)?;
+        let (batch, dims) = pipeline.run(&indexable, Some(pb2.as_ref()))?;
 
         pb2.finish();
         let embed_secs = embed_start.elapsed().as_secs_f64();
@@ -68,8 +59,6 @@ impl GitIndexer {
             merged_metadata,
             dims,
             last_indexed_commit: Some(head_commit),
-            bm25_k1: self.bm25_k1,
-            bm25_b: self.bm25_b,
         })?;
         Ok(IndexOutcome::Indexed {
             kind: IndexKind::Git,
@@ -85,26 +74,22 @@ impl GitIndexer {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
-
     use super::super::GitIndexer;
     use crate::app::index::{IndexKind, IndexRequest, Indexer};
-    use crate::index::embedder::Embedder;
-    use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi};
+    use crate::tests::fixtures::{make_temp_dir, RecordingUi, test_model_factory};
 
     #[test]
     fn incremental_without_index_returns_error() {
         let persist = make_temp_dir("git_inc_no_index");
         let (index_config, git_config) = crate::tests::fixtures::git_index_fixtures(&persist, &["*.md"]);
         let ui = RecordingUi::always_confirm();
-        let embedder: Box<dyn Embedder> = Box::new(FakeEmbedder::new());
         let indexer = GitIndexer {
             console: Box::new(ui),
             index_config,
             git_config,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            embedder: Mutex::new(embedder),
+            model_factory: test_model_factory(),
         };
         let req = IndexRequest {
             kind: IndexKind::Git,

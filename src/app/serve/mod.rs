@@ -59,7 +59,7 @@ impl ServeIndexAccess for ServeIndexAccessImpl {
         k1: f32,
         b: f32,
     ) -> anyhow::Result<LoadMergedResult> {
-        let repo = IndexRepository::new(persist_path, config);
-        repo.load_merged(k1, b)
+        let repo = IndexRepository::new(persist_path, config, k1, b);
+        repo.load_merged()
     }
 }

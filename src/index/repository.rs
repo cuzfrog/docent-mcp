@@ -8,7 +8,7 @@ use crate::index::merger::IndexMerger;
 use crate::index::sub_index::SubIndex;
 use crate::index::vector_store::VectorStore;
 use crate::index::SourceIndexKind;
-use crate::app::index::pipeline::{Bm25IndexBuilder, IndexedBatch, unique_doc_count};
+use crate::app::index::pipeline::{IndexedBatch, unique_doc_count};
 
 pub struct MergedIndex {
     pub vectors: VectorStore,
@@ -35,20 +35,22 @@ pub(crate) struct StoreMergedRequest {
     pub merged_metadata: Vec<ChunkMetadata>,
     pub dims: usize,
     pub last_indexed_commit: Option<String>,
-    pub bm25_k1: f32,
-    pub bm25_b: f32,
 }
 
 pub(crate) struct IndexRepository {
     persist_path: PathBuf,
     config: IndexConfig,
+    bm25_k1: f32,
+    bm25_b: f32,
 }
 
 impl IndexRepository {
-    pub fn new(persist_path: &Path, config: &IndexConfig) -> Self {
+    pub fn new(persist_path: &Path, config: &IndexConfig, bm25_k1: f32, bm25_b: f32) -> Self {
         Self {
             persist_path: persist_path.to_path_buf(),
             config: config.clone(),
+            bm25_k1,
+            bm25_b,
         }
     }
 
@@ -67,14 +69,21 @@ impl IndexRepository {
             last_indexed_commit.clone(),
             doc_count,
         );
-        SubIndex::store(&self.persist_path, kind, &header, batch, doc_count, last_indexed_commit)
+        let vector_store = VectorStore::from_vec_vec(batch.vectors.clone())?;
+        SubIndex::store(
+            &self.persist_path,
+            kind,
+            &header,
+            &vector_store,
+            &batch.metadata,
+            self.bm25_k1,
+            self.bm25_b,
+        )
     }
 
     fn load_and_repair_sub_index(
         &self,
         kind: SourceIndexKind,
-        k1: f32,
-        b: f32,
         notices: &mut Vec<String>,
     ) -> anyhow::Result<Option<SubIndex>> {
         if !self.exists(kind) {
@@ -89,17 +98,17 @@ impl IndexRepository {
             sub.header.validate_against(&self.config)?;
         }
         if sub.bm25.is_none() && !sub.metadata.is_empty() {
-            let (bm25_sub, notice) = sub.rebuild_bm25(&self.persist_path, kind, k1, b)?;
+            let (bm25_sub, notice) = sub.rebuild_bm25(&self.persist_path, kind, self.bm25_k1, self.bm25_b)?;
             notices.push(notice);
             sub.bm25 = Some(bm25_sub);
         }
         Ok(Some(sub))
     }
 
-    pub(crate) fn load_merged(&self, k1: f32, b: f32) -> anyhow::Result<LoadMergedResult> {
+    pub(crate) fn load_merged(&self) -> anyhow::Result<LoadMergedResult> {
         let mut notices = Vec::new();
-        let file = self.load_and_repair_sub_index(SourceIndexKind::File, k1, b, &mut notices)?;
-        let git = self.load_and_repair_sub_index(SourceIndexKind::Git, k1, b, &mut notices)?;
+        let file = self.load_and_repair_sub_index(SourceIndexKind::File, &mut notices)?;
+        let git = self.load_and_repair_sub_index(SourceIndexKind::Git, &mut notices)?;
 
         if file.is_none() && git.is_none() {
             anyhow::bail!(
@@ -107,8 +116,6 @@ impl IndexRepository {
                 self.persist_path.display()
             );
         }
-
-
 
         if let (Some(ref f), Some(ref g)) = (&file, &git) {
             if f.header.embedding_model != g.header.embedding_model {
@@ -133,25 +140,29 @@ impl IndexRepository {
         Ok(LoadMergedResult { merged, notices })
     }
 
-    /// Store merged vectors/metadata, rebuilding BM25 from the merged chunk texts.
-    /// This is the common persistence pattern shared by incremental workflows.
     pub(crate) fn store_merged(
         &self,
         req: &StoreMergedRequest,
     ) -> anyhow::Result<(usize, usize)> {
-        let chunk_texts: Vec<&str> = req.merged_metadata.iter().map(|m| m.chunk_text.as_str()).collect();
-        let (bm25_embeddings, bm25_avgdl) = Bm25IndexBuilder { k1: req.bm25_k1, b: req.bm25_b }.build(&chunk_texts);
         let doc_count = unique_doc_count(&req.merged_metadata);
         let chunk_count = req.merged_metadata.len();
-        let store_batch = IndexedBatch {
-            vectors: req.merged_vectors.clone(),
-            metadata: req.merged_metadata.clone(),
-            bm25_embeddings,
-            bm25_k1: req.bm25_k1,
-            bm25_b: req.bm25_b,
-            bm25_avgdl,
-        };
-        self.store(req.kind, &store_batch, req.dims, doc_count, req.last_indexed_commit.clone())?;
+        let header = IndexHeader::from_config(
+            &self.config,
+            req.dims,
+            &req.merged_metadata,
+            req.last_indexed_commit.clone(),
+            doc_count,
+        );
+        let vector_store = VectorStore::from_vec_vec(req.merged_vectors.clone())?;
+        SubIndex::store(
+            &self.persist_path,
+            req.kind,
+            &header,
+            &vector_store,
+            &req.merged_metadata,
+            self.bm25_k1,
+            self.bm25_b,
+        )?;
         Ok((chunk_count, doc_count))
     }
 
@@ -191,7 +202,7 @@ mod tests {
             max_size_mb: 512,
         };
 
-        let repo = IndexRepository::new(persist_path, &config);
+        let repo = IndexRepository::new(persist_path, &config, 1.2, 0.75);
 
         let mut embedder = FakeEmbedder::new();
         let doc = IndexableDocument {
@@ -204,12 +215,14 @@ mod tests {
             is_fresh: None,
         };
 
-        let token_counter = embedder.token_counter();
-        let chunker = crate::app::index::chunking::DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
-        let pipeline = crate::app::index::pipeline::IndexingPipeline::new(Box::new(chunker));
-        let batch = pipeline.run(&[doc], &mut embedder, None, 1.2, 0.75).unwrap();
+        let mut pipeline = crate::app::index::pipeline::IndexingPipeline::with_embedder(
+            Box::new(embedder),
+            config.chunk_size,
+            config.chunk_overlap,
+        );
+        let (batch, dims) = pipeline.run(&[doc], None).unwrap();
         let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
-        repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None)
+        repo.store(SourceIndexKind::File, &batch, dims, doc_count, None)
             .unwrap();
     }
 
@@ -228,7 +241,7 @@ mod tests {
             max_size_mb: 512,
         };
 
-        let repo = IndexRepository::new(persist_path, &config);
+        let repo = IndexRepository::new(persist_path, &config, 1.2, 0.75);
 
         let mut embedder = FakeEmbedder::new();
         let doc = IndexableDocument {
@@ -241,12 +254,14 @@ mod tests {
             is_fresh: None,
         };
 
-        let token_counter = embedder.token_counter();
-        let chunker = crate::app::index::chunking::DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
-        let pipeline = crate::app::index::pipeline::IndexingPipeline::new(Box::new(chunker));
-        let batch = pipeline.run(&[doc], &mut embedder, None, 1.2, 0.75).unwrap();
+        let mut pipeline = crate::app::index::pipeline::IndexingPipeline::with_embedder(
+            Box::new(embedder),
+            config.chunk_size,
+            config.chunk_overlap,
+        );
+        let (batch, dims) = pipeline.run(&[doc], None).unwrap();
         let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
-        repo.store(SourceIndexKind::Git, &batch, embedder.dims(), doc_count, None)
+        repo.store(SourceIndexKind::Git, &batch, dims, doc_count, None)
             .unwrap();
 
         let bm25_dir = persist_path.join("git").join("bm25");
@@ -270,8 +285,8 @@ mod tests {
             chunk_overlap: 32,
             max_size_mb: 512,
         };
-        let repo = IndexRepository::new(&persist, &config);
-        let result = repo.load_merged(1.2, 0.75).unwrap();
+        let repo = IndexRepository::new(&persist, &config, 1.2, 0.75);
+        let result = repo.load_merged().unwrap();
 
         assert!(
             persist.join("file").join("bm25").join("header.json").exists(),
@@ -307,8 +322,8 @@ mod tests {
             chunk_overlap: 32,
             max_size_mb: 512,
         };
-        let repo = IndexRepository::new(&persist, &config);
-        let result = repo.load_merged(1.2, 0.75).unwrap();
+        let repo = IndexRepository::new(&persist, &config, 1.2, 0.75);
+        let result = repo.load_merged().unwrap();
 
         assert!(
             persist.join("git").join("bm25").join("header.json").exists(),
@@ -337,8 +352,8 @@ mod tests {
             chunk_overlap: 32,
             max_size_mb: 512,
         };
-        let repo = IndexRepository::new(&persist, &config);
-        let result = repo.load_merged(1.2, 0.75).unwrap();
+        let repo = IndexRepository::new(&persist, &config, 1.2, 0.75);
+        let result = repo.load_merged().unwrap();
 
         assert!(
             persist.join("file").join("bm25").join("header.json").exists(),
@@ -370,8 +385,7 @@ mod tests {
             max_size_mb: 512,
         };
 
-        let repo = IndexRepository::new(&persist, &config);
-        // Store a file index first (no BM25)
+        let repo = IndexRepository::new(&persist, &config, 1.2, 0.75);
         {
             let mut embedder = FakeEmbedder::new();
             let doc = IndexableDocument {
@@ -380,24 +394,25 @@ mod tests {
                 title: "Test".to_string(),
                 body: "Hello world".to_string(),
                 modified_at: None,
-            kind: IndexKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             };
-            let token_counter = embedder.token_counter();
-            let chunker = crate::app::index::chunking::DocumentChunker::new(config.chunk_size, config.chunk_overlap, token_counter);
-            let pipeline = crate::app::index::pipeline::IndexingPipeline::new(Box::new(chunker));
-            let batch = pipeline.run(&[doc], &mut embedder, None, 1.2, 0.75).unwrap();
+            let mut pipeline = crate::app::index::pipeline::IndexingPipeline::with_embedder(
+                Box::new(embedder),
+                config.chunk_size,
+                config.chunk_overlap,
+            );
+            let (batch, dims) = pipeline.run(&[doc], None).unwrap();
             let doc_count = crate::app::index::pipeline::unique_doc_count(&batch.metadata);
-            repo.store(SourceIndexKind::File, &batch, embedder.dims(), doc_count, None).unwrap();
+            repo.store(SourceIndexKind::File, &batch, dims, doc_count, None).unwrap();
         }
-        // Remove BM25
         let bm25_dir = persist.join("file").join("bm25");
         let _ = std::fs::remove_dir_all(&bm25_dir);
 
-        let first = repo.load_merged(1.2, 0.75).unwrap();
+        let first = repo.load_merged().unwrap();
         assert_eq!(first.notices.len(), 1, "First load should emit 1 notice");
 
-        let second = repo.load_merged(1.2, 0.75).unwrap();
+        let second = repo.load_merged().unwrap();
         assert!(
             second.notices.is_empty(),
             "Second load should NOT emit any notices, got: {:?}",

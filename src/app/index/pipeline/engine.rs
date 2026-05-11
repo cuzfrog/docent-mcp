@@ -1,7 +1,9 @@
 use crate::app::index::chunking::{Chunk, Chunker};
+use crate::config::IndexConfig;
 use crate::domain::ChunkMetadata;
 use crate::index::embedder::Embedder;
-use crate::app::index::pipeline::types::{Bm25IndexBuilder, IndexableDocument, IndexedBatch};
+use crate::index::model_factory::ModelFactory;
+use crate::app::index::pipeline::types::{IndexableDocument, IndexedBatch};
 use crate::support::progress::ProgressSink;
 
 use rayon::prelude::*;
@@ -11,21 +13,37 @@ const BATCH_SIZE: usize = 64;
 
 pub struct IndexingPipeline {
     chunker: Box<dyn Chunker>,
+    embedder: Box<dyn Embedder>,
 }
 
 impl IndexingPipeline {
-    pub fn new(chunker: Box<dyn Chunker>) -> Self {
-        Self { chunker }
+    pub fn new(factory: &ModelFactory, index_config: &IndexConfig) -> anyhow::Result<Self> {
+        Ok(Self {
+            chunker: factory.create_chunker(index_config.chunk_size, index_config.chunk_overlap),
+            embedder: factory.create_embedder()?,
+        })
+    }
+
+    #[cfg(test)]
+    pub fn with_embedder(
+        embedder: Box<dyn Embedder>,
+        chunk_size: usize,
+        chunk_overlap: usize,
+    ) -> Self {
+        let token_counter = embedder.token_counter();
+        let chunker = crate::app::index::chunking::DocumentChunker::new(
+            chunk_size,
+            chunk_overlap,
+            token_counter,
+        );
+        Self { chunker: Box::new(chunker), embedder }
     }
 
     pub fn run(
-        &self,
+        &mut self,
         docs: &[IndexableDocument],
-        embedder: &mut dyn Embedder,
         progress: Option<&dyn ProgressSink>,
-        bm25_k1: f32,
-        bm25_b: f32,
-    ) -> anyhow::Result<IndexedBatch> {
+    ) -> anyhow::Result<(IndexedBatch, usize)> {
         let all_chunks = self.chunk_documents(docs, progress);
 
         let chunk_texts: Vec<&str> = all_chunks.iter().map(|(_, c)| c.text.as_str()).collect();
@@ -33,7 +51,8 @@ impl IndexingPipeline {
         let mut all_vectors: Vec<Vec<f32>> = Vec::with_capacity(chunk_texts.len());
         for batch in chunk_texts.chunks(BATCH_SIZE) {
             let batch_size = batch.len() as u64;
-            let vectors = embedder
+            let vectors = self
+                .embedder
                 .embed(batch)
                 .map_err(|e| anyhow::anyhow!("Embedding operation failed: {}", e))?;
             if let Some(p) = progress {
@@ -57,20 +76,12 @@ impl IndexingPipeline {
             });
         }
 
-        let (bm25_embeddings, bm25_avgdl) = Bm25IndexBuilder {
-            k1: bm25_k1,
-            b: bm25_b,
-        }
-        .build(&chunk_texts);
-
-        Ok(IndexedBatch {
+        let batch = IndexedBatch {
             vectors: all_vectors,
             metadata: batch_metadata,
-            bm25_embeddings,
-            bm25_k1,
-            bm25_b,
-            bm25_avgdl,
-        })
+        };
+        let dims = self.embedder.dims();
+        Ok((batch, dims))
     }
 
     fn chunk_documents(
