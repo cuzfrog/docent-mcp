@@ -1,8 +1,8 @@
 use crate::config::IndexConfig;
 use crate::domain::{IndexKind, ChunkMetadata};
 use crate::index::{IndexRepository, SourceIndexKind, SCHEMA_VERSION};
-use crate::app::index::chunking::counter::WhitespaceTokenCounter;
-use crate::app::index::chunking::{Chunker, DocumentChunker};
+use crate::app::index::chunking::counter::create_test_token_counter;
+use crate::app::index::chunking::create_chunker;
 use crate::app::index::pipeline::{create_test_processor, IndexableDocument};
 use crate::tests::fixtures::{make_temp_dir, read_index_at, FakeEmbedder};
 
@@ -52,11 +52,7 @@ fn test_index_and_store_round_trip() {
     let config = test_config(&index_dir);
 
     let embedder = FakeEmbedder::new();
-    let chunker = Box::new(DocumentChunker::new(
-        config.chunk_size,
-        config.chunk_overlap,
-        Box::new(WhitespaceTokenCounter),
-    ));
+    let chunker = create_chunker(config.chunk_size, config.chunk_overlap, create_test_token_counter());
     let processor = create_test_processor(
         Box::new(embedder),
         chunker,
@@ -95,11 +91,7 @@ fn test_empty_document_list_produces_empty_index() {
     let config = test_config(&index_dir);
 
     let embedder = FakeEmbedder::new();
-    let chunker = Box::new(DocumentChunker::new(
-        config.chunk_size,
-        config.chunk_overlap,
-        Box::new(WhitespaceTokenCounter),
-    ));
+    let chunker = create_chunker(config.chunk_size, config.chunk_overlap, create_test_token_counter());
     let processor = create_test_processor(
         Box::new(embedder),
         chunker,
@@ -131,11 +123,7 @@ fn test_vectors_are_deterministic() {
     let config = test_config(&index_dir);
 
     let embedder = FakeEmbedder::new();
-    let chunker = Box::new(DocumentChunker::new(
-        config.chunk_size,
-        config.chunk_overlap,
-        Box::new(WhitespaceTokenCounter),
-    ));
+    let chunker = create_chunker(config.chunk_size, config.chunk_overlap, create_test_token_counter());
     let processor = create_test_processor(
         Box::new(embedder),
         chunker,
@@ -143,11 +131,7 @@ fn test_vectors_are_deterministic() {
     let (batch1, _dims) = processor.run(&docs, None).unwrap();
 
     let embedder2 = FakeEmbedder::new();
-    let chunker2 = Box::new(DocumentChunker::new(
-        config.chunk_size,
-        config.chunk_overlap,
-        Box::new(WhitespaceTokenCounter),
-    ));
+    let chunker2 = create_chunker(config.chunk_size, config.chunk_overlap, create_test_token_counter());
     let processor2 = create_test_processor(
         Box::new(embedder2),
         chunker2,
@@ -170,11 +154,7 @@ fn test_index_preserves_metadata_fields() {
     let config = test_config(&index_dir);
 
     let embedder = FakeEmbedder::new();
-    let chunker = Box::new(DocumentChunker::new(
-        config.chunk_size,
-        config.chunk_overlap,
-        Box::new(WhitespaceTokenCounter),
-    ));
+    let chunker = create_chunker(config.chunk_size, config.chunk_overlap, create_test_token_counter());
     let processor = create_test_processor(
         Box::new(embedder),
         chunker,

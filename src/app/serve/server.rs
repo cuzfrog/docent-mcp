@@ -11,9 +11,7 @@ use crate::app::serve::search::create_search_service;
 use crate::app::serve::ServeIndexAccess;
 use crate::app::serve::ServeIndexAccessImpl;
 use crate::config::Config;
-use std::path::PathBuf;
-
-use crate::index::embedder::{create_embedder, Embedder};
+use crate::index::embedder::Embedder;
 use crate::mcp::DocentMcpServer;
 use crate::mcp::SearchExecutor;
 use crate::support::ui::Console;
@@ -92,8 +90,13 @@ fn prepare_router(
     }
     let merged = result.merged;
 
+    let factory = crate::index::model_factory::create_model_factory(
+        &config.index.embedding_model,
+        std::path::Path::new(&config.index.cache_dir),
+    )
+    .map_err(|e| anyhow::anyhow!("Failed to create model factory: {}", e))?;
     let embedder: Arc<Mutex<dyn Embedder>> = Arc::new(Mutex::new(
-        create_embedder(&config.index.embedding_model, &PathBuf::from(&config.index.cache_dir))
+        factory.build_embedder()
             .map_err(|e| anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e))?
     ));
     let search_service = create_search_service(merged, embedder, &config.search)?;
@@ -216,11 +219,11 @@ mod tests {
             is_fresh: None,
         };
 
-        let chunker = Box::new(crate::app::index::chunking::DocumentChunker::new(
+        let chunker = crate::app::index::chunking::create_chunker(
             config.chunk_size,
             config.chunk_overlap,
-            Box::new(crate::app::index::chunking::counter::WhitespaceTokenCounter),
-        ));
+            crate::app::index::chunking::counter::create_test_token_counter(),
+        );
         let processor = crate::app::index::pipeline::create_test_processor(
             Box::new(embedder),
             chunker,

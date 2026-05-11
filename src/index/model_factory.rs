@@ -6,9 +6,12 @@ use anyhow::Context;
 pub trait ModelFactory: Send + Sync {
     fn dims(&self) -> usize;
     fn tokenizer(&self) -> tokenizers::Tokenizer;
+    fn build_embedder(&self) -> anyhow::Result<Box<dyn crate::index::embedder::Embedder>>;
 }
 
 pub(crate) struct ModelFactoryImpl {
+    model_name: String,
+    cache_dir: PathBuf,
     dims: usize,
     tokenizer: tokenizers::Tokenizer,
 }
@@ -20,6 +23,25 @@ impl ModelFactory for ModelFactoryImpl {
 
     fn tokenizer(&self) -> tokenizers::Tokenizer {
         self.tokenizer.clone()
+    }
+
+    fn build_embedder(&self) -> anyhow::Result<Box<dyn crate::index::embedder::Embedder>> {
+        let (model, dims) = self.build_embedder_model()?;
+        Ok(crate::index::embedder::create_embedder(model, dims))
+    }
+}
+
+impl ModelFactoryImpl {
+    fn build_embedder_model(&self) -> anyhow::Result<(fastembed::TextEmbedding, usize)> {
+        let embedding_model = fastembed::EmbeddingModel::from_str(&self.model_name)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        let cache_dir = self.cache_dir.join("models").join(&self.model_name);
+        let options = fastembed::InitOptions::new(embedding_model)
+            .with_show_download_progress(true)
+            .with_cache_dir(cache_dir);
+        let model = fastembed::TextEmbedding::try_new(options)
+            .with_context(|| format!("Failed to initialize embedding model '{}'", self.model_name))?;
+        Ok((model, self.dims))
     }
 }
 
@@ -56,6 +78,8 @@ pub fn create_model_factory(model_name: &str, cache_base: &Path) -> anyhow::Resu
     };
 
     Ok(Box::new(ModelFactoryImpl {
+        model_name: model_name.to_string(),
+        cache_dir: cache_base.to_path_buf(),
         dims: model_info.dim,
         tokenizer,
     }))

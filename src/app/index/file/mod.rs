@@ -64,8 +64,8 @@ impl Indexer for FileIndexer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::index::chunking::counter::WhitespaceTokenCounter;
-    use crate::app::index::chunking::{Chunker, DocumentChunker};
+    use crate::app::index::chunking::counter::create_test_token_counter;
+    use crate::app::index::chunking::create_chunker;
     use crate::app::index::pipeline::{create_test_processor, IndexingProcessor};
     use crate::domain::ChunkMetadata;
     use crate::config::IndexConfig;
@@ -75,9 +75,7 @@ mod tests {
 
     fn test_processor() -> Box<dyn IndexingProcessor> {
         let embedder = FakeEmbedder::new();
-        let chunker = Box::new(DocumentChunker::new(
-            256, 32, Box::new(WhitespaceTokenCounter),
-        ));
+        let chunker = create_chunker(256, 32, create_test_token_counter());
         create_test_processor(Box::new(embedder), chunker)
     }
 
@@ -97,11 +95,7 @@ mod tests {
             kind: IndexKind::File,
             is_fresh: None,
         };
-        let chunker = Box::new(DocumentChunker::new(
-            config.chunk_size,
-            config.chunk_overlap,
-            Box::new(WhitespaceTokenCounter),
-        ));
+        let chunker = create_chunker(config.chunk_size, config.chunk_overlap, create_test_token_counter());
         let processor = create_test_processor(
             Box::new(embedder),
             chunker,

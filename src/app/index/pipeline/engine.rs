@@ -1,11 +1,10 @@
-use std::path::PathBuf;
 use std::sync::Mutex;
 
-use crate::app::index::chunking::counter::HuggingFaceTokenCounter;
-use crate::app::index::chunking::{Chunk, Chunker, DocumentChunker};
+use crate::app::index::chunking::counter::create_token_counter;
+use crate::app::index::chunking::{create_chunker, Chunk, Chunker};
 use crate::config::IndexConfig;
 use crate::domain::ChunkMetadata;
-use crate::index::embedder::{create_embedder, Embedder};
+use crate::index::embedder::Embedder;
 use crate::index::model_factory::ModelFactory;
 use crate::app::index::pipeline::types::{IndexableDocument, IndexedBatch};
 use crate::support::progress::ProgressSink;
@@ -45,13 +44,9 @@ struct ParallelBatchIndexingProcessor {
 
 impl ParallelBatchIndexingProcessor {
     pub fn new(factory: &dyn ModelFactory, index_config: &IndexConfig) -> anyhow::Result<Self> {
-        let token_counter = Box::new(HuggingFaceTokenCounter::from_tokenizer(factory.tokenizer()));
-        let chunker: Box<dyn Chunker> = Box::new(DocumentChunker::new(
-            index_config.chunk_size,
-            index_config.chunk_overlap,
-            token_counter,
-        ));
-        let embedder = create_embedder(&index_config.embedding_model, &PathBuf::from(&index_config.cache_dir))?;
+        let token_counter = create_token_counter(factory.tokenizer());
+        let chunker = create_chunker(index_config.chunk_size, index_config.chunk_overlap, token_counter);
+        let embedder = factory.build_embedder()?;
         Ok(Self { chunker, embedder: Mutex::new(embedder) })
     }
 

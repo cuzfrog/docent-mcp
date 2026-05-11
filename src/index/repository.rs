@@ -215,11 +215,11 @@ mod tests {
             kind: IndexKind::File,
             is_fresh: None,
         };
-        let chunker = Box::new(crate::app::index::chunking::DocumentChunker::new(
+        let chunker = crate::app::index::chunking::create_chunker(
             config.chunk_size,
             config.chunk_overlap,
-            Box::new(crate::app::index::chunking::counter::WhitespaceTokenCounter),
-        ));
+            crate::app::index::chunking::counter::create_test_token_counter(),
+        );
         let processor = crate::app::index::pipeline::create_test_processor(
             Box::new(embedder),
             chunker,
@@ -258,11 +258,11 @@ mod tests {
             is_fresh: None,
         };
 
-        let chunker = Box::new(crate::app::index::chunking::DocumentChunker::new(
+        let chunker = crate::app::index::chunking::create_chunker(
             config.chunk_size,
             config.chunk_overlap,
-            Box::new(crate::app::index::chunking::counter::WhitespaceTokenCounter),
-        ));
+            crate::app::index::chunking::counter::create_test_token_counter(),
+        );
         let processor = crate::app::index::pipeline::create_test_processor(
             Box::new(embedder),
             chunker,
@@ -409,11 +409,11 @@ mod tests {
             kind: IndexKind::File,
             is_fresh: None,
         };
-        let chunker = Box::new(crate::app::index::chunking::DocumentChunker::new(
+        let chunker = crate::app::index::chunking::create_chunker(
             config.chunk_size,
             config.chunk_overlap,
-            Box::new(crate::app::index::chunking::counter::WhitespaceTokenCounter),
-        ));
+            crate::app::index::chunking::counter::create_test_token_counter(),
+        );
         let processor = crate::app::index::pipeline::create_test_processor(
             Box::new(embedder),
             chunker,

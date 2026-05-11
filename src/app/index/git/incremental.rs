@@ -79,9 +79,9 @@ mod tests {
 
     fn test_processor() -> Box<dyn IndexingProcessor> {
         let embedder = FakeEmbedder::new();
-        let chunker = Box::new(crate::app::index::chunking::DocumentChunker::new(
-            256, 32, Box::new(crate::app::index::chunking::counter::WhitespaceTokenCounter),
-        ));
+        let chunker = crate::app::index::chunking::create_chunker(
+            256, 32, crate::app::index::chunking::counter::create_test_token_counter(),
+        );
         create_test_processor(Box::new(embedder), chunker)
     }
 

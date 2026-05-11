@@ -16,7 +16,7 @@ pub trait TokenCounter: Send + Sync {
 // WhitespaceTokenCounter — mock for unit tests
 // ---------------------------------------------------------------------------
 
-pub(crate) struct WhitespaceTokenCounter;
+struct WhitespaceTokenCounter;
 
 impl TokenCounter for WhitespaceTokenCounter {
     #[cfg(test)]
@@ -49,19 +49,17 @@ impl TokenCounter for WhitespaceTokenCounter {
 // HuggingFaceTokenCounter — real tokenizer using the embedding model's tokenizer
 // ---------------------------------------------------------------------------
 
-pub struct HuggingFaceTokenCounter {
+struct HuggingFaceTokenCounter {
     tokenizer: tokenizers::Tokenizer,
 }
 
-impl HuggingFaceTokenCounter {
-    /// Create a new instance from a pre-loaded tokenizer.
-    ///
-    /// This is the preferred constructor when an [`Embedder`](crate::index::embedder::Embedder)
-    /// is available — the embedder already has the tokenizer loaded, so there is
-    /// no need to resolve the cache path independently.
-    pub fn from_tokenizer(tokenizer: tokenizers::Tokenizer) -> Self {
-        Self { tokenizer }
-    }
+pub fn create_token_counter(tokenizer: tokenizers::Tokenizer) -> Box<dyn TokenCounter> {
+    Box::new(HuggingFaceTokenCounter { tokenizer })
+}
+
+#[cfg(test)]
+pub(crate) fn create_test_token_counter() -> Box<dyn TokenCounter> {
+    Box::new(WhitespaceTokenCounter)
 }
 
 impl TokenCounter for HuggingFaceTokenCounter {
