@@ -19,7 +19,31 @@ pub fn list_supported_models() -> Vec<(String, usize)> {
 }
 
 pub fn create_embedder(model_name: &str) -> anyhow::Result<impl Embedder> {
-    FastembedEmbedder::new(model_name)
+    let cache_dir = resolve_cache_dir(model_name)?;
+    std::fs::create_dir_all(&cache_dir).with_context(|| {
+        format!("Failed to create cache directory '{}'", cache_dir.display())
+    })?;
+
+    let embedding_model = fastembed::EmbeddingModel::from_str(model_name).map_err(|_| {
+        anyhow::anyhow!(
+            "Unknown embedding model '{}'. \
+            Run `docent list-models` to see available models.",
+            model_name
+        )
+    })?;
+
+    let options = fastembed::InitOptions::new(embedding_model.clone())
+        .with_show_download_progress(true)
+        .with_cache_dir(cache_dir);
+
+    let model = fastembed::TextEmbedding::try_new(options)
+        .with_context(|| format!("Failed to initialize embedding model '{}'", model_name))?;
+
+    let model_info = fastembed::TextEmbedding::get_model_info(&embedding_model)
+        .with_context(|| format!("Failed to get model info for '{}'", model_name))?;
+    let dims = model_info.dim;
+
+    Ok(FastembedEmbedder { model, dims })
 }
 
 fn resolve_cache_dir(model_name: &str) -> anyhow::Result<PathBuf> {
@@ -32,39 +56,9 @@ fn resolve_cache_dir(model_name: &str) -> anyhow::Result<PathBuf> {
         .join(model_name))
 }
 
-pub(crate) struct FastembedEmbedder {
+struct FastembedEmbedder {
     model: fastembed::TextEmbedding,
     dims: usize,
-}
-
-impl FastembedEmbedder {
-    pub(crate) fn new(model_name: &str) -> anyhow::Result<Self> {
-        let cache_dir = resolve_cache_dir(model_name)?;
-        std::fs::create_dir_all(&cache_dir).with_context(|| {
-            format!("Failed to create cache directory '{}'", cache_dir.display())
-        })?;
-
-        let embedding_model = fastembed::EmbeddingModel::from_str(model_name).map_err(|_| {
-            anyhow::anyhow!(
-                "Unknown embedding model '{}'. \
-                Run `docent list-models` to see available models.",
-                model_name
-            )
-        })?;
-
-        let options = fastembed::InitOptions::new(embedding_model.clone())
-            .with_show_download_progress(true)
-            .with_cache_dir(cache_dir);
-
-        let model = fastembed::TextEmbedding::try_new(options)
-            .with_context(|| format!("Failed to initialize embedding model '{}'", model_name))?;
-
-        let model_info = fastembed::TextEmbedding::get_model_info(&embedding_model)
-            .with_context(|| format!("Failed to get model info for '{}'", model_name))?;
-        let dims = model_info.dim;
-
-        Ok(Self { model, dims })
-    }
 }
 
 impl Embedder for FastembedEmbedder {
@@ -107,7 +101,7 @@ mod tests {
 
     #[test]
     fn test_invalid_model_name_error() {
-        let result = FastembedEmbedder::new("nonexistent/model");
+        let result = create_embedder("nonexistent/model");
         assert!(result.is_err(), "Expected error for invalid model name");
         let err = result.err().unwrap();
         let err_msg = err.to_string();
