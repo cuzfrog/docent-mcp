@@ -3,6 +3,7 @@
 .opencode/
 .claude/
 .devin/
+.pi/
 target/
 .venv/
 __pycache__

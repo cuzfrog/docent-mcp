@@ -1,11 +1,5 @@
 # CLAUDE.md
 
-Language: English
-
-## Project
-
-`docent-mcp` — A MCP server that lets agents find Design Decision Records explaining why code looks the way it does. Single Rust binary (`docent`) with two main commands: `index` and `serve`.
-
 ## Build & Run & Dev Setup
 
 Every development cycle must be verified by:
@@ -20,76 +14,8 @@ After major changes, run e2e tests by:
 1. `cargo run -- serve` in background
 2. `pytest -v`
 
-### Task Planning
-Tasks reside in `.lissom/tasks/<task_id>/Specs.md`. The user may ask for a spec refinement and subsequent implementation. Use Tool `question`/`AskUserQuestion` to interview the user if you have any questions or assumptions. The implementation should be done in a feature branch named `<task_id>_<short-description>`, e.g., `IMPL-2_config-loader` (the user may have already created it). After the task is complete, create a PR.
-
 ### Implementation Checklist
 - When MCP schema changes, update Web UI accordingly.
-- When files/dirs are updated, verify and keep below `Architecture` section in sync.
-
-## Architecture
-
-```
-src/
-├── main.rs               # Binary entry: parses CLI, dispatches to app commands
-├── lib.rs                 # Crate root: declares modules, controls visibility
-│
-├── app/                   # Application layer + serve + index workflows
-│   ├── mod.rs             #   Application struct (orchestrates, resolves Config slices)
-│   ├── init.rs            #   Config file generation & TOML merge
-│   ├── index/             #   Indexing workflows (file + git)
-│   │   ├── mod.rs         #     Unified Indexer trait, IndexKind, IndexRequest, IndexOutcome
-│   │   ├── file/          #     File indexing: discover, extract, diff, merge
-│   │   │   ├── mod.rs     #       FileIndexer struct implementing Indexer + create_file_indexer() factory
-│   │   │   ├── rebuild.rs, incremental.rs
-│   │   │   ├── discover.rs, extract.rs, diff.rs, merge.rs
-│   │   ├── git/           #     Git indexing: history, estimate, freshness
-│   │   │   ├── mod.rs     #       GitIndexer struct implementing Indexer + create_git_indexer() factory
-│   │   │   ├── rebuild.rs, incremental.rs, size_check.rs
-│   │   │   ├── extract.rs, history.rs, freshness.rs, estimate.rs, merge.rs
-│   │   ├── chunking/      #     Text splitting into embedding-sized chunks
-│   │   │   ├── mod.rs     #       Chunker trait (sole public interface) + DocumentChunker struct
-│   │   │   ├── engine.rs, sectioning.rs, counter.rs
-│   │   └── pipeline/      #     Indexing pipeline: types + engine
-│   │       ├── types.rs, engine.rs
-│   ├── serve/             #   HTTP server
-│       ├── mod.rs         #     ServeIndexAccess trait (pub(crate), internal to serve)
-│       ├── server.rs      #     Server trait + TokioHttpServer + create_server() factory + prepare_router
-│       ├── service_builder.rs
-│       └── bootstrap.rs   #     shutdown_signal
-│
-├── config/                # Configuration loading, types, validation, defaults
-│
-├── domain/                # Core domain types
-│   └── documents.rs       #   ChunkMetadata, ChunkKind, DocumentContext
-│
-├── index/                 # Persistent index storage & retrieval
-│   ├── header.rs, storage.rs, vector_store.rs, stored_metadata.rs
-│   ├── repository.rs, sub_index.rs, merger.rs
-│   ├── bm25_schema.rs, bm25_storage.rs
-│   └── embedder.rs        #   Embedder trait + FastembedEmbedder + create_embedder
-│
-├── mcp/                   # MCP protocol + hybrid search engine
-│   ├── mod.rs, mcp_handler.rs, search_tool.rs
-│   └── search/            #   Hybrid (semantic + BM25) search
-│       ├── types.rs, backend.rs, fusion.rs
-│       ├── orchestrator.rs, ranking.rs, builder.rs
-│
-├── ui/                    # Web UI (axum routes for static assets)
-│
-├── support/               # Utilities
-│   ├── progress.rs        #   ProgressSink trait (pub) + Progress struct (pub(crate))
-│   ├── ui.rs              #   Console trait + Terminal + create_console
-│   ├── fs.rs, glob.rs, time.rs
-│
-├── templates/             # Default template files (e.g., docent.toml)
-│
-└── tests/                 # Integration-style tests (compiled as crate unit tests)
-```
-
-**Data flow (index):** `main.rs` → `Application::run_index()` resolves enabled kinds → `Indexer::run()` → `app/index/{file,git}/` extract documents → each `Indexer` creates its own `IndexingPipeline` with a `Chunker` → `index/embedder.rs` creates embedder via `create_embedder()` → `app/index/pipeline/engine.rs` coordinates → `index/storage.rs` persists
-
-**Data flow (search):** `mcp/mcp_handler.rs` receives query → `mcp/search/orchestrator.rs` scores (semantic + BM25) → `mcp/search/fusion.rs` fuses → `mcp/search/ranking.rs` ranks with decay + file_hint → response
 
 ### Boundary rules (post IMPROVE-09/13, updated IMPROVE-14)
 
@@ -103,8 +29,7 @@ src/
 
 ## Dependencies
 
-Use fixed versions. Avoid `*` or `^` to prevent unintentional updates.
-This applies to all dependencies, including python and javascript.
+- Use fixed versions. Avoid `*` or `^` to prevent unintentional updates. This applies to all dependencies, including python and javascript.
 
 ## Conventions
 
@@ -117,7 +42,7 @@ This applies to all dependencies, including python and javascript.
 - **No Dead Code** No `allow(dead_code)`. Remove unused code immediately to maintain codebase health.
 - **Module Interface at Top** Public types, contract, methods should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers.
 - **Favor Object Oriented Design** Favor trait-based design over procedural design.
-- **Use imports** Avoid long module path in the code. E.g. `crate::app::index::xxxx::bbbb::new`
+- **Use imports** Import at the file top. Avoid long module path in the code body. E.g. `crate::app::index::xxxx::bbbb::new`
 
 ### Single file layout (from top to bottom)
 1. imports
@@ -131,9 +56,9 @@ This applies to all dependencies, including python and javascript.
 
 ## Git 
 ### branching
-When the user explicitly proceeds with a task/`task_id`, if current branch is `main`, create a new feature branch. After a whole task is done, create a PR.
 - Main branch: `main`
 - Feature branches: `<task_id>_<short-description>`, e.g., `IMPL-2_config-loader`
+- User branches: `dev_*`, `fix_`.
 
 ### PR title - semantic-pull-request format:
 <type>([optional task_id]): <description>
@@ -163,7 +88,7 @@ types:
 - a responsibility should belong to an earlier performer. E.g. if type `Config` can parse the configuration into ready-to-use types, it shouldn't pass raw strings to its clients. A producer should produce the best output for its consumers.
 
 ### Module visibility
-- A module should only has 1 trait and its factory method that are public.
+- A module should only has 1 trait and its factory method that are public. All other implementations should not be exposed.
 - For a single file module, all other things in the file should be file private.
 - For multi-file module, since each file is its own module, all other things must be file private or `pub(super)`
 - Unit tests should be collocated with its prod code.
