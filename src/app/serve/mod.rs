@@ -6,7 +6,6 @@ use crate::index::embedder::{create_embedder, Embedder};
 use crate::index::{IndexRepository, IndexSizeInfo, LoadMergedResult};
 use crate::support::ui::Console;
 
-pub mod bootstrap;
 pub mod server;
 pub(crate) mod search;
 

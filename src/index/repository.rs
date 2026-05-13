@@ -2,32 +2,14 @@ use std::path::{Path, PathBuf};
 
 use crate::config::IndexConfig;
 use crate::domain::ChunkMetadata;
-use crate::index::bm25_schema::Bm25IndexHeader;
-use crate::index::header::IndexHeader;
-use crate::index::merger::IndexMerger;
-use crate::index::sub_index::SubIndex;
-use crate::index::vector_store::VectorStore;
-use crate::index::SourceIndexKind;
 use crate::domain::IndexedBatch;
+use crate::index::merged::LoadMergedResult;
+use crate::index::merger::IndexMerger;
+use crate::index::semantic_header::IndexHeader;
+use crate::index::semantic_store::VectorStore;
+use crate::index::source_index::SubIndex;
+use crate::index::SourceIndexKind;
 
-pub struct MergedIndex {
-    pub(crate) vectors: VectorStore,
-    pub(crate) metadata: Vec<ChunkMetadata>,
-    pub(crate) bm25_embeddings: Option<Vec<bm25::Embedding<u32>>>,
-    pub(crate) bm25_header: Option<Bm25IndexHeader>,
-    pub(crate) built_at: String,
-}
-
-pub struct IndexSizeInfo {
-    pub(crate) total_bytes: u64,
-    pub(crate) file_bytes: u64,
-    pub(crate) git_bytes: u64,
-}
-
-pub struct LoadMergedResult {
-    pub(crate) merged: MergedIndex,
-    pub(crate) notices: Vec<String>,
-}
 
 pub(crate) struct StoreMergedRequest {
     pub kind: SourceIndexKind,

@@ -11,7 +11,7 @@ use crate::app::serve::{build_search_stack, SearchStack, ServeIndexAccessImpl};
 use crate::config::Config;
 use crate::mcp::DocentMcpServer;
 use crate::mcp::SearchExecutor;
-use crate::support::ui::Console;
+use crate::support::ui::{Console, create_console};
 
 #[async_trait]
 pub trait Server: Send + Sync {
@@ -47,11 +47,21 @@ impl Server for TokioHttpServer {
         ));
 
         axum::serve(listener, router)
-            .with_graceful_shutdown(super::bootstrap::shutdown_signal())
+            .with_graceful_shutdown(shutdown_signal())
             .await
             .context("Server error")?;
 
         Ok(())
+    }
+}
+
+async fn shutdown_signal() {
+    if let Err(e) = tokio::signal::ctrl_c().await {
+        let console = create_console(false);
+        Console::info(&console, &format!("Shutdown signal error: {}", e));
+    } else {
+        let console = create_console(false);
+        Console::info(&console, "Shutting down...");
     }
 }
 

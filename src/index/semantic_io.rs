@@ -1,6 +1,6 @@
-use crate::index::header::IndexHeader;
+use crate::index::semantic_header::IndexHeader;
 use crate::index::stored_metadata::StoredChunkMetadata;
-use crate::index::vector_store::{StoredIndex, VectorStore};
+use crate::index::semantic_store::{StoredIndex, VectorStore};
 use std::path::Path;
 
 /// Write the index directory: `header.json`, `vectors.bin`, and `metadata.bin`.

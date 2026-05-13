@@ -16,7 +16,7 @@ mod merge;
 
 pub(super) use discover::discover_files;
 pub(super) use diff::diff_files;
-pub(super) use extract::prepare_files;
+pub(super) use extract::extract_documents;
 pub(super) use merge::{extract_old_hashes, merge_incremental};
 
 pub(super) struct FileIndexer {

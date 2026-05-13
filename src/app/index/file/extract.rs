@@ -95,7 +95,7 @@ fn prepare_single_file(
     })
 }
 
-pub fn prepare_files(
+pub fn extract_documents(
     files: &[PathBuf],
     input_root: &Path,
     file_size_limit_mb: u64,
@@ -204,7 +204,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prepare_files_size_limit_skips_large_file() {
+    fn test_extract_documents_size_limit_skips_large_file() {
         let dir = crate::tests::fixtures::make_temp_dir("size_limit_test");
         let small_file = dir.join("small.md");
         let large_file = dir.join("large.md");
@@ -218,7 +218,7 @@ mod tests {
             PathBuf::from("large.md"),
         ];
 
-        let result = prepare_files(&files, &dir, 1).unwrap();
+        let result = extract_documents(&files, &dir, 1).unwrap();
         assert_eq!(result.len(), 1, "Only the small file should be present");
         assert_eq!(result[0].source_path, "small.md");
 

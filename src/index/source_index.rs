@@ -2,12 +2,12 @@ use std::path::Path;
 
 use crate::domain::ChunkMetadata;
 use crate::index::bm25_builder::build_bm25;
-use crate::index::bm25_schema::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
-use crate::index::bm25_storage;
-use crate::index::header::IndexHeader;
+use crate::index::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
+use crate::index::bm25_io;
+use crate::index::semantic_header::IndexHeader;
 use crate::index::stored_metadata::StoredChunkMetadata;
-use crate::index::vector_store::VectorStore;
-use crate::index::storage::{read_index, write_index};
+use crate::index::semantic_store::VectorStore;
+use crate::index::semantic_io::{read_index, write_index};
 use crate::index::SourceIndexKind;
 pub(crate) struct Bm25SubIndex {
     pub header: Bm25IndexHeader,
@@ -34,7 +34,7 @@ impl SubIndex {
 
         let bm25_dir = source_dir.join("bm25");
         let bm25 = if bm25_dir.join("header.json").exists() {
-            let (header, embeddings) = bm25_storage::read_bm25_index(&bm25_dir)?;
+            let (header, embeddings) = bm25_io::read_bm25_index(&bm25_dir)?;
             Some(Bm25SubIndex { header, embeddings })
         } else {
             None
@@ -68,7 +68,7 @@ impl SubIndex {
             avgdl: bm25_avgdl,
             chunk_count,
         };
-        bm25_storage::write_bm25_index(&bm25_dir, &bm25_header, &bm25_embeddings)?;
+        bm25_io::write_bm25_index(&bm25_dir, &bm25_header, &bm25_embeddings)?;
 
         let bm25_sub = Bm25SubIndex {
             header: bm25_header,
@@ -111,7 +111,7 @@ impl SubIndex {
             avgdl: bm25_avgdl,
             chunk_count: metadata.len(),
         };
-        bm25_storage::write_bm25_index(&bm25_dir, &bm25_header, &bm25_embeddings)?;
+        bm25_io::write_bm25_index(&bm25_dir, &bm25_header, &bm25_embeddings)?;
 
         Ok(())
     }

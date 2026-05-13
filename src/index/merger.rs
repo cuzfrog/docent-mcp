@@ -1,6 +1,6 @@
 use crate::domain::ChunkMetadata;
-use crate::index::sub_index::SubIndex;
-use crate::index::vector_store::VectorStore;
+use crate::index::source_index::SubIndex;
+use crate::index::semantic_store::VectorStore;
 use crate::index::MergedIndex;
 
 pub(crate) struct IndexMerger;

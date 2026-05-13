@@ -1,12 +1,13 @@
-mod header;
+mod semantic_header;
 mod merger;
-mod vector_store;
+mod semantic_store;
 mod stored_metadata;
-mod bm25_schema;
-mod bm25_storage;
-mod storage;
+mod bm25_header;
+mod bm25_io;
+mod semantic_io;
+mod merged;
 mod repository;
-mod sub_index;
+mod source_index;
 pub(crate) mod bm25_builder;
 pub(crate) mod model_factory;
 
@@ -28,10 +29,10 @@ impl SourceIndexKind {
 }
 
 #[cfg(test)]
-pub(crate) use bm25_storage::read_bm25_index;
+pub(crate) use bm25_io::read_bm25_index;
 #[cfg(test)]
-pub(crate) use header::{IndexHeader, SCHEMA_VERSION};
+pub(crate) use semantic_header::{IndexHeader, SCHEMA_VERSION};
 pub(crate) use repository::{IndexRepository, StoreMergedRequest};
-pub(crate) use repository::{IndexSizeInfo, LoadMergedResult, MergedIndex};
-pub(crate) use vector_store::VectorStore;
+pub(crate) use merged::{IndexSizeInfo, LoadMergedResult, MergedIndex};
+pub(crate) use semantic_store::VectorStore;
 pub mod embedder;

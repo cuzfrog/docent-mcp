@@ -1,5 +1,5 @@
-pub(crate) mod mcp_handler;
-pub(crate) mod search_tool;
+pub(crate) mod server;
+pub(crate) mod executor;
 
-pub(crate) use mcp_handler::DocentMcpServer;
-pub(crate) use search_tool::SearchExecutor;
+pub(crate) use server::DocentMcpServer;
+pub(crate) use executor::SearchExecutor;

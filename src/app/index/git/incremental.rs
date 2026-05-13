@@ -40,7 +40,7 @@ impl GitIndexer {
         let total_new_docs = new_docs.len();
         let embed_start = Instant::now();
         let pb2 = self.console.progress(total_new_docs as u64, "Embedding documents");
-        let indexable = super::prepare_git_documents(&new_docs, &vec![true; new_docs.len()]);
+        let indexable = super::extract_documents(&new_docs, &vec![true; new_docs.len()]);
 
         let (batch, dims) = self.processor.run(&indexable, Some(pb2.as_ref()))?;
 

@@ -1,4 +1,4 @@
-use super::header::IndexHeader;
+use super::semantic_header::IndexHeader;
 use super::stored_metadata::StoredChunkMetadata;
 
 #[derive(Debug, Clone, PartialEq)]

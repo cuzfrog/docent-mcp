@@ -10,7 +10,7 @@ pub struct GitDocument {
     pub author_date: String,
 }
 
-pub fn prepare_git_documents(
+pub fn extract_documents(
     documents: &[GitDocument],
     freshness: &[bool],
 ) -> Vec<IndexableDocument> {

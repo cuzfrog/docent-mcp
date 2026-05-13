@@ -35,7 +35,7 @@ impl GitIndexer {
         let embed_start = Instant::now();
         let pb_embed = self.console.progress(total_docs as u64, "Embedding");
         let freshness = super::compute_freshness(docs);
-        let indexable = super::prepare_git_documents(docs, &freshness);
+        let indexable = super::extract_documents(docs, &freshness);
 
         let (batch, dims) = self.processor.run(&indexable, Some(pb_embed.as_ref()))?;
 

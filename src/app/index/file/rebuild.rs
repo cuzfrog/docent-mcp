@@ -34,7 +34,7 @@ impl FileIndexer {
         self.console
             .info(&format!("Scanning: {} files found", all_files.len()));
         let pb = self.console.progress(all_files.len() as u64, "Indexing files");
-        let docs = super::prepare_files(&all_files, &request.input_path, self.file_config.file_size_limit_mb)?;
+        let docs = super::extract_documents(&all_files, &request.input_path, self.file_config.file_size_limit_mb)?;
 
         let (batch, dims) = self.processor.run(&docs, Some(pb.as_ref()))?;
 

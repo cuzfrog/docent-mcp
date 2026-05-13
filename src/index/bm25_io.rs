@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::index::bm25_schema::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
+use crate::index::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
 
 /// Write a BM25 index directory: `header.json` and `embeddings.json`.
 ///
@@ -87,7 +87,7 @@ pub(crate) fn read_bm25_index(path: &Path) -> anyhow::Result<(Bm25IndexHeader, V
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::index::bm25_schema::Bm25IndexHeader;
+    use crate::index::bm25_header::Bm25IndexHeader;
 
     fn sample_header() -> Bm25IndexHeader {
         Bm25IndexHeader {
