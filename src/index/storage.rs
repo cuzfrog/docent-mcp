@@ -8,7 +8,7 @@ use std::path::Path;
 /// Creates `path` (and any missing parents) if it does not exist (`create_dir_all`
 /// is idempotent).  Does **not** validate that `vectors.len()` equals
 /// `metadata.len()` or that dimensions are consistent — the caller is responsible.
-pub fn write_index(
+pub(super) fn write_index(
     path: &Path,
     header: &IndexHeader,
     vectors: &VectorStore,
@@ -107,7 +107,7 @@ fn validate_consistency(header: &IndexHeader, vectors: &VectorStore, metadata: &
     Ok(())
 }
 
-pub fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
+pub(super) fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
     let header = read_header(path)?;
     let vectors = read_vectors(path, &header)?;
     let metadata = read_metadata(path)?;

@@ -121,9 +121,8 @@ mod tests {
     use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
     use crate::config::IndexConfig;
     use crate::domain::IndexKind;
-    use crate::index::embedder::Embedder;
     use crate::index::{IndexRepository, SourceIndexKind};
-    use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi, test_model_factory};
+    use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi};
 
     fn test_processor() -> Box<dyn IndexingProcessor> {
         let embedder = FakeEmbedder::new();
@@ -169,7 +168,6 @@ mod tests {
             file_config: fc,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            model_factory: test_model_factory(),
             processor: test_processor(),
         };
         let req = IndexRequest {
@@ -222,7 +220,6 @@ mod tests {
             file_config: fc2,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            model_factory: test_model_factory(),
             processor: test_processor(),
         };
         let req = IndexRequest {
@@ -273,7 +270,6 @@ mod tests {
             file_config: fc,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            model_factory: test_model_factory(),
             processor: test_processor(),
         };
         let req = IndexRequest {
@@ -302,7 +298,6 @@ mod tests {
             file_config: fc,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            model_factory: test_model_factory(),
             processor: test_processor(),
         };
         let req = IndexRequest {
@@ -338,7 +333,6 @@ mod tests {
             file_config: fc,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            model_factory: test_model_factory(),
             processor: test_processor(),
         };
         let req = IndexRequest {

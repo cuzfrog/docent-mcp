@@ -19,20 +19,19 @@ pub(super) use diff::diff_files;
 pub(super) use extract::prepare_files;
 pub(super) use merge::{extract_old_hashes, merge_incremental};
 
-pub(crate) struct FileIndexer {
-    pub console: Box<dyn Console>,
-    pub index_config: crate::config::IndexConfig,
-    pub file_config: crate::config::FileConfig,
-    pub bm25_k1: f32,
-    pub bm25_b: f32,
-    pub model_factory: Arc<dyn ModelFactory>,
-    pub processor: Box<dyn IndexingProcessor>,
+pub(super) struct FileIndexer {
+    pub(super) console: Box<dyn Console>,
+    pub(super) index_config: crate::config::IndexConfig,
+    pub(super) file_config: crate::config::FileConfig,
+    pub(super) bm25_k1: f32,
+    pub(super) bm25_b: f32,
+    pub(super) processor: Box<dyn IndexingProcessor>,
 }
 
 pub fn create_file_indexer(
     config: &Config,
     console: Box<dyn Console>,
-    model_factory: Arc<dyn ModelFactory>,
+    _model_factory: Arc<dyn ModelFactory>,
     processor: Box<dyn IndexingProcessor>,
 ) -> impl Indexer {
     let fc = config.file.as_ref().expect("FileIndexer requires file config");
@@ -42,7 +41,6 @@ pub fn create_file_indexer(
         file_config: fc.clone(),
         bm25_k1: config.search.bm25.k1,
         bm25_b: config.search.bm25.b,
-        model_factory,
         processor,
     }
 }
@@ -119,7 +117,6 @@ mod tests {
             file_config: file_config.clone(),
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            model_factory: crate::tests::fixtures::test_model_factory(),
             processor: test_processor(),
         };
         let request = IndexRequest {
@@ -152,7 +149,6 @@ mod tests {
             file_config,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            model_factory: crate::tests::fixtures::test_model_factory(),
             processor: test_processor(),
         };
         let request = IndexRequest {

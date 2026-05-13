@@ -5,29 +5,29 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
-pub enum StoredChunkKind {
+pub(super) enum StoredChunkKind {
     File,
     Git,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct StoredChunkMetadata {
-    pub source_path: String,
-    pub source_revision: String,
-    pub title: String,
+pub(super) struct StoredChunkMetadata {
+    pub(super) source_path: String,
+    pub(super) source_revision: String,
+    pub(super) title: String,
     #[serde(default)]
-    pub chunk_text: String,
-    pub section_heading: Option<String>,
-    pub chunk_index: usize,
+    pub(super) chunk_text: String,
+    pub(super) section_heading: Option<String>,
+    pub(super) chunk_index: usize,
     #[serde(default)]
-    pub line_start: usize,
+    pub(super) line_start: usize,
     #[serde(default)]
-    pub line_end: usize,
+    pub(super) line_end: usize,
     #[serde(default)]
-    pub modified_at: Option<String>,
-    pub kind: StoredChunkKind,
+    pub(super) modified_at: Option<String>,
+    pub(super) kind: StoredChunkKind,
     #[serde(default)]
-    pub is_fresh: Option<bool>,
+    pub(super) is_fresh: Option<bool>,
 }
 
 impl From<StoredChunkKind> for IndexKind {

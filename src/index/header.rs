@@ -2,24 +2,24 @@ use crate::config::IndexConfig;
 use crate::domain::ChunkMetadata;
 use serde::{Deserialize, Serialize};
 
-pub const SCHEMA_VERSION: u32 = 7;
+pub(crate) const SCHEMA_VERSION: u32 = 7;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IndexHeader {
-    pub schema_version: u32,
-    pub embedding_model: String,
-    pub embedding_dims: usize,
-    pub chunk_size: usize,
-    pub chunk_overlap: usize,
-    pub built_at: String,
-    pub doc_count: usize,
-    pub chunk_count: usize,
+    pub(crate) schema_version: u32,
+    pub(crate) embedding_model: String,
+    pub(crate) embedding_dims: usize,
+    pub(crate) chunk_size: usize,
+    pub(crate) chunk_overlap: usize,
+    pub(crate) built_at: String,
+    pub(crate) doc_count: usize,
+    pub(crate) chunk_count: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_indexed_commit: Option<String>,
+    pub(crate) last_indexed_commit: Option<String>,
 }
 
 impl IndexHeader {
-    pub(crate) fn from_config(
+    pub(super) fn from_config(
         config: &IndexConfig,
         embedding_dims: usize,
         metadata: &[ChunkMetadata],

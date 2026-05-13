@@ -13,10 +13,10 @@ use crate::index::MergedIndex;
 
 pub use types::SearchResult;
 
-pub(crate) use backend::{ScoreBackend, VectorScoreBackend, ZeroScoreBackend};
-pub(crate) use fusion::create_fusion;
+pub(super) use backend::{ScoreBackend, VectorScoreBackend, ZeroScoreBackend};
+pub(super) use fusion::create_fusion;
 
-pub(crate) use ranking::DecayRanker;
+pub(super) use ranking::DecayRanker;
 
 use backend::build_bm25_backend;
 use orchestrator::HybridSearchService;

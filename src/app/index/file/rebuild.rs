@@ -72,7 +72,7 @@ mod tests {
     use super::super::FileIndexer;
     use crate::app::index::pipeline::{create_test_processor, IndexingProcessor};
     use crate::app::index::{IndexKind, IndexOutcome, IndexRequest, Indexer};
-    use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi, test_model_factory};
+    use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi};
 
     fn test_processor() -> Box<dyn IndexingProcessor> {
         let embedder = FakeEmbedder::new();
@@ -101,7 +101,6 @@ mod tests {
             file_config,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            model_factory: test_model_factory(),
             processor: test_processor(),
         };
         let req = IndexRequest {

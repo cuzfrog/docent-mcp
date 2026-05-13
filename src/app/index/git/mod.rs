@@ -17,20 +17,20 @@ mod freshness;
 pub(crate) mod history;
 mod merge;
 
-pub(crate) use estimate::{estimate_commit_count, estimate_git_index_size};
-pub(crate) use extract::prepare_git_documents;
-pub(crate) use freshness::compute_freshness;
-pub(crate) use history::{index_git_history, resolve_head_commit};
-pub(crate) use merge::merge_git_incremental;
+pub(super) use estimate::{estimate_commit_count, estimate_git_index_size};
+pub(super) use extract::prepare_git_documents;
+pub(super) use freshness::compute_freshness;
+pub(super) use history::{index_git_history, resolve_head_commit};
+pub(super) use merge::merge_git_incremental;
 
-pub(crate) struct GitIndexer {
-    pub console: Box<dyn Console>,
-    pub index_config: crate::config::IndexConfig,
-    pub git_config: crate::config::GitConfig,
-    pub bm25_k1: f32,
-    pub bm25_b: f32,
-    pub model_factory: Arc<dyn ModelFactory>,
-    pub processor: Box<dyn IndexingProcessor>,
+pub(super) struct GitIndexer {
+    pub(super) console: Box<dyn Console>,
+    pub(super) index_config: crate::config::IndexConfig,
+    pub(super) git_config: crate::config::GitConfig,
+    pub(super) bm25_k1: f32,
+    pub(super) bm25_b: f32,
+    pub(super) model_factory: Arc<dyn ModelFactory>,
+    pub(super) processor: Box<dyn IndexingProcessor>,
 }
 
 pub fn create_git_indexer(

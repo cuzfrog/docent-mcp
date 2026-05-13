@@ -13,7 +13,7 @@ pub(crate) mod model_factory;
 pub use model_factory::{create_model_factory, ModelFactory};
 
 #[derive(Clone, Copy)]
-pub enum SourceIndexKind {
+pub(crate) enum SourceIndexKind {
     File,
     Git,
 }
@@ -29,10 +29,9 @@ impl SourceIndexKind {
 
 #[cfg(test)]
 pub(crate) use bm25_storage::read_bm25_index;
-pub use header::{IndexHeader, SCHEMA_VERSION};
-pub use storage::{read_index, write_index};
-pub use stored_metadata::{StoredChunkKind, StoredChunkMetadata};
-pub use repository::{IndexSizeInfo, LoadMergedResult, MergedIndex};
+#[cfg(test)]
+pub(crate) use header::{IndexHeader, SCHEMA_VERSION};
 pub(crate) use repository::{IndexRepository, StoreMergedRequest};
-pub use vector_store::VectorStore;
+pub(crate) use repository::{IndexSizeInfo, LoadMergedResult, MergedIndex};
+pub(crate) use vector_store::VectorStore;
 pub mod embedder;

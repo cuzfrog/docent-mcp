@@ -3,9 +3,9 @@ use super::stored_metadata::StoredChunkMetadata;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct VectorStore {
-    pub(crate) data: Vec<f32>,
-    pub(crate) dims: usize,
-    pub(crate) count: usize,
+    pub(super) data: Vec<f32>,
+    pub(super) dims: usize,
+    pub(super) count: usize,
 }
 
 impl VectorStore {
@@ -73,8 +73,8 @@ impl VectorStore {
 }
 
 #[derive(Debug)]
-pub struct StoredIndex {
-    pub header: IndexHeader,
-    pub vectors: VectorStore,
-    pub metadata: Vec<StoredChunkMetadata>,
+pub(super) struct StoredIndex {
+    pub(super) header: IndexHeader,
+    pub(super) vectors: VectorStore,
+    pub(super) metadata: Vec<StoredChunkMetadata>,
 }

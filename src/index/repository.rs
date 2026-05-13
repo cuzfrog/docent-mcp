@@ -11,22 +11,22 @@ use crate::index::SourceIndexKind;
 use crate::app::index::pipeline::IndexedBatch;
 
 pub struct MergedIndex {
-    pub vectors: VectorStore,
-    pub metadata: Vec<ChunkMetadata>,
-    pub bm25_embeddings: Option<Vec<bm25::Embedding<u32>>>,
-    pub bm25_header: Option<Bm25IndexHeader>,
-    pub built_at: String,
+    pub(crate) vectors: VectorStore,
+    pub(crate) metadata: Vec<ChunkMetadata>,
+    pub(crate) bm25_embeddings: Option<Vec<bm25::Embedding<u32>>>,
+    pub(crate) bm25_header: Option<Bm25IndexHeader>,
+    pub(crate) built_at: String,
 }
 
 pub struct IndexSizeInfo {
-    pub total_bytes: u64,
-    pub file_bytes: u64,
-    pub git_bytes: u64,
+    pub(crate) total_bytes: u64,
+    pub(crate) file_bytes: u64,
+    pub(crate) git_bytes: u64,
 }
 
 pub struct LoadMergedResult {
-    pub merged: MergedIndex,
-    pub notices: Vec<String>,
+    pub(crate) merged: MergedIndex,
+    pub(crate) notices: Vec<String>,
 }
 
 pub(crate) struct StoreMergedRequest {

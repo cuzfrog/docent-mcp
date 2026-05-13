@@ -17,16 +17,6 @@ After major changes, run e2e tests by:
 ### Implementation Checklist
 - When MCP schema changes, update Web UI accordingly.
 
-### Boundary rules (post IMPROVE-09/13, updated IMPROVE-14)
-
-- **Composition root** lives in `main.rs`. It only calls factory functions (`create_file_indexer`, `create_git_indexer`, `create_server`, `create_console`), never concrete struct constructors.
-- **`Application`** orchestrates and resolves `Config` slices, but does not construct dependencies (no `impl Default`). Receives a `Vec<Box<dyn Indexer>>` and dispatches via `enabled_kinds`.
-- **Leaf modules** (`file`, `git`) receive only the config slices they need, never the root `Config`.
-- **`Indexer`** is the only public trait from `app/index/` (file and git modules expose only their factory functions and request/response types).
-- **`Chunker`** is the only public interface from `app/index/chunking`.
-- **Visibility**: concrete impl structs (`FileIndexer`, `GitIndexer`, `DocumentChunker`, `Progress`) are `pub(crate)` or private; public surface consists of traits and factory functions.
-- **Config resolution** happens in `Application` before calling indexers, never in the leaf modules themselves.
-
 ## Dependencies
 
 - Use fixed versions. Avoid `*` or `^` to prevent unintentional updates. This applies to all dependencies, including python and javascript.
@@ -43,6 +33,7 @@ After major changes, run e2e tests by:
 - **Module Interface at Top** Public types, contract, methods should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers.
 - **Favor Object Oriented Design** Favor trait-based design over procedural design.
 - **Use imports** Import at the file top. Avoid long module path in the code body. E.g. `crate::app::index::xxxx::bbbb::new`
+- **Config passing** Do not split `Config` into multiple parameters for a function that consumes it.
 
 ### Single file layout (from top to bottom)
 1. imports
@@ -83,9 +74,10 @@ types:
 - MINIMAL visibility or public surface of a type or a module. This ensures loose coupling and separation of concerns. If this is violated, e.g. a type or a module exposes multiple pub functions, it usually means the design is wrong.
 - Given a change, do not first attempt to insert into current code base. First look at it from a higher perspective, discover refactor opportunities and maintain small file sizes. If a file's prod code is more than 200 lines, consider splitting it. If a function is more than 50 lines, consider splitting it.
 - Naming must reflect the abstraction level. If a newly introduced function violates this, considering renaming related types/functions/variables to maintain correct abstraction levels.
-- avoid "helper" functions, they are where code is coupled out of class hierarchy.
-- a function's parameters should be data it consumes, parameters should not be its dependencies. A high-order function should only be used for transformation instead of procedural processing.
-- a responsibility should belong to an earlier performer. E.g. if type `Config` can parse the configuration into ready-to-use types, it shouldn't pass raw strings to its clients. A producer should produce the best output for its consumers.
+- Avoid "helper" functions, they are where code is coupled out of class hierarchy.
+- A function's parameters should be data it consumes, parameters should not be its dependencies. A high-order function should only be used for transformation instead of procedural processing.
+- A responsibility should belong to an earlier performer. E.g. if type `Config` can parse the configuration into ready-to-use types, it shouldn't pass raw strings to its clients. A producer should produce the best output for its consumers.
+
 
 ### Module visibility
 - A module should only has 1 trait and its factory method that are public. All other implementations should not be exposed.
