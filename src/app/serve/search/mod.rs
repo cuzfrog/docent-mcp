@@ -13,7 +13,6 @@ use crate::index::MergedIndex;
 
 pub use types::SearchResult;
 
-pub(super) use backend::ScoreBackend;
 pub(super) use fusion::create_fusion;
 
 pub(super) use ranking::DecayRanker;
