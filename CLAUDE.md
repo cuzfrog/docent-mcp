@@ -34,6 +34,7 @@ After major changes, run e2e tests by:
 - **Favor Object Oriented Design** Favor trait-based design over procedural design.
 - **Use imports** Import at the file top. Avoid long module path in the code body. E.g. `crate::app::index::xxxx::bbbb::new`
 - **Config passing** Do not split `Config` into multiple parameters for a function that consumes it.
+- **Forbidden Warning Suppression** No `#[allow(clippy::*)]` or similar workaround. An issue must be addressed.
 
 ### Single file layout (from top to bottom)
 1. imports
