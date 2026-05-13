@@ -92,7 +92,7 @@ mod tests {
     fn chunk_document_large_body_is_still_accurate() {
         let body = "word" .to_string();
         // Make a body with 100 words
-        let body = std::iter::repeat(' ').take(99).fold(body, |mut acc, _| {
+        let body = std::iter::repeat_n(' ', 99).fold(body, |mut acc, _| {
             acc.push_str(" word");
             acc
         });

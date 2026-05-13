@@ -83,7 +83,7 @@ mod tests {
 
     fn create_index_at(persist: &std::path::Path, config: &IndexConfig, bm25_k1: f32, bm25_b: f32) {
         let repo = IndexRepository::new(persist, config, bm25_k1, bm25_b);
-        let mut embedder = FakeEmbedder::new();
+        let embedder = FakeEmbedder::new();
         let doc = crate::app::index::pipeline::IndexableDocument {
             source_path: "existing.md".to_string(),
             source_revision: "oldhash".to_string(),

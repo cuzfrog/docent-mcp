@@ -74,14 +74,11 @@ fn prepare_router(stack: &SearchStack) -> anyhow::Result<Router> {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use std::sync::{Arc, Mutex};
 
     use crate::app::serve::build_search_stack;
-    use crate::app::serve::SearchStack;
     use crate::app::serve::server::prepare_router;
     use crate::app::serve::ServeIndexAccess;
-    use crate::config::{IndexConfig, SearchConfig};
-    use crate::index::embedder::{create_embedder, Embedder};
+    use crate::config::IndexConfig;
     use crate::index::{
         IndexRepository, IndexSizeInfo, LoadMergedResult, MergedIndex, SourceIndexKind,
     };
@@ -263,9 +260,6 @@ mod tests {
 
     #[test]
     fn prepare_router_works_with_search_stack() {
-        use crate::app::serve::search::SearchService;
-        use crate::config::SearchConfig;
-
         let persist = make_temp_dir("serve_prepare_router");
         create_minimal_file_index(&persist);
         let config = serve_config_fixture(&persist);

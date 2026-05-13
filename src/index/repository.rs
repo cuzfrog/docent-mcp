@@ -188,7 +188,6 @@ mod tests {
     use crate::index::{
         read_bm25_index, IndexRepository, SourceIndexKind,
     };
-    use crate::index::embedder::Embedder;
     use crate::tests::fixtures::{
         make_temp_dir, FakeEmbedder,
     };

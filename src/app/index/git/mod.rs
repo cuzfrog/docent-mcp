@@ -81,7 +81,7 @@ mod tests {
     use crate::app::index::pipeline::create_test_processor;
     use crate::app::index::pipeline::IndexingProcessor;
     use crate::app::index::IndexKind;
-    use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi, test_model_factory};
+    use crate::tests::fixtures::{make_temp_dir, FakeEmbedder, RecordingUi};
 
     fn test_processor() -> Box<dyn IndexingProcessor> {
         let embedder = FakeEmbedder::new();

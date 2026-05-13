@@ -76,9 +76,9 @@ impl SearchService for HybridSearchService {
 mod tests {
     use std::sync::Arc;
 
-    use crate::app::serve::search::{ScoreBackend, create_fusion, DecayRanker};
-    use crate::app::serve::search::SearchResult;
+    use crate::app::serve::search::{create_fusion, DecayRanker};
     use crate::app::serve::search::SearchService;
+    use super::super::backend::ScoreBackend;
     use crate::domain::{IndexKind, ChunkMetadata, DocumentContext};
 
     use super::HybridSearchService;

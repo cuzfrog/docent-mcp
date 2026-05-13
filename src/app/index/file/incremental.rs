@@ -117,7 +117,6 @@ mod tests {
     use crate::app::index::chunking::counter::create_test_token_counter;
     use crate::app::index::chunking::create_chunker;
     use crate::app::index::pipeline::{create_test_processor, IndexingProcessor, IndexableDocument};
-    use crate::domain::ChunkMetadata;
     use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
     use crate::config::IndexConfig;
     use crate::domain::IndexKind;
@@ -135,8 +134,8 @@ mod tests {
     }
 
     fn create_index_at(persist: &std::path::Path, config: &IndexConfig, bm25_k1: f32, bm25_b: f32) {
-        let repo = IndexRepository::new(persist, config, bm25_k1, bm25_b);
-        let mut embedder = FakeEmbedder::new();
+        let _repo = IndexRepository::new(persist, config, bm25_k1, bm25_b);
+        let embedder = FakeEmbedder::new();
         let doc = IndexableDocument {
             source_path: "existing.md".to_string(),
             source_revision: "oldhash".to_string(),
@@ -190,7 +189,7 @@ mod tests {
         {
             let mut altered_config = ic.clone();
             altered_config.chunk_size = 999;
-            let mut embedder = FakeEmbedder::new();
+            let embedder = FakeEmbedder::new();
             let doc = IndexableDocument {
                 source_path: "test.md".to_string(),
                 source_revision: "h".to_string(),
@@ -239,7 +238,7 @@ mod tests {
         let (ic, fc) = crate::tests::fixtures::file_index_fixtures(&persist, &["*.md"]);
         std::fs::create_dir_all(persist.join("file")).unwrap();
         {
-            let mut embedder = FakeEmbedder::new();
+            let embedder = FakeEmbedder::new();
             let doc = IndexableDocument {
                 source_path: "existing.md".to_string(),
                 source_revision: "hash".to_string(),
