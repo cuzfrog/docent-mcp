@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::Mutex;
 
 use crate::app::index::chunking::counter::TokenCounter;
@@ -9,7 +8,7 @@ use crate::config::{Config, FileConfig, GitConfig, IndexConfig};
 use crate::domain::ChunkMetadata;
 use crate::domain::IndexKind;
 use crate::index::embedder::Embedder;
-use crate::models::{create_model_factory, ModelFactory};
+
 use crate::index::VectorStore;
 use crate::index::{IndexRepository, SourceIndexKind};
 use crate::support::progress::ProgressSink;
@@ -53,11 +52,6 @@ pub fn git_index_fixtures(persist: &Path, globs: &[&str]) -> (IndexConfig, GitCo
         glob_patterns: globs.iter().map(|s| s.to_string()).collect(),
     };
     (index_config, git_config)
-}
-
-pub fn test_model_factory() -> Arc<dyn ModelFactory> {
-    let cache_dir = std::env::temp_dir().join("docent_test_cache");
-    Arc::from(create_model_factory("BGESmallENV15Q", &cache_dir).expect("Failed to create test model factory"))
 }
 
 /// Build a valid full `Config` for serve/search tests with explicit search params.

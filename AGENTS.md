@@ -1,31 +1,28 @@
 # Project Context
 
+**INPORTANT** - you must follow the contents of this context document, if not possible, raise to the user to decide.
+
 ## Architecture
 ```
   files/git ──▼── index ──▶  MCP server  ◀──── query
                  (cache)        (HTTP)
 ```
 
-## Build & Run & Dev Setup
+## Implementation Checklist
 
-Every development cycle must be verified by:
-1. cargo test
-2. cargo clippy --all-targets
+- Every development cycle must be verified by:
+1. `cargo test`
+2. `cargo clippy --all-targets`
 
-After Web UI change (`src/ui/`):
+- After Web UI change (`src/ui/`):
 1. `cd src/ui`
 2. `npm test`
 
-After major changes, run e2e tests by:
+- After major changes, run e2e tests by:
 1. `cargo run -- serve` in background
 2. `pytest -v`
 
-### Implementation Checklist
 - When MCP schema changes, update Web UI accordingly.
-
-## Dependencies
-
-- Use fixed versions. Avoid `*` or `^` to prevent unintentional updates. This applies to all dependencies, including python and javascript.
 
 ## Conventions
 
@@ -43,6 +40,7 @@ After major changes, run e2e tests by:
 - **Forbidden Warning Suppression** No `#[allow(clippy::*)]` or similar workaround. An issue must be addressed.
 - **Code tells** Do not added comments that contains no extra information than the code itself.
 - **No "new" constructors** Do not create `new` constructors in a concrete struct. Use a factory method. This avoids exposing the concrete struct.
+- **Use fixed dependency versions**. Avoid `*` or `^` to prevent unintentional updates. This applies to all dependencies, including python and javascript.
 
 ### Single file layout (ordered from top to bottom)
 1. imports
@@ -54,31 +52,10 @@ After major changes, run e2e tests by:
 
 (Principle: public at top, private at bottom)
 
-## Git 
-### branching
-- Main branch: `main`
-- Feature branches: `<task_id>_<short-description>`, e.g., `IMPL-2_config-loader`
-- User branches: `dev_*`, `fix_`.
+### Git 
+When involving git operations, refer to @doc/AGENTS_GIT.md.
 
-### PR title - semantic-pull-request format:
-<type>([optional task_id]): <description>
-```yaml
-types:
-  - feat
-  - fix
-  - docs
-  - style
-  - refactor
-  - perf
-  - test
-  - chore
-  - ci
-```
-
-### PR Squash commit message
-- Do not contain any individual commits. Use the github template.
-
-## **Crucial** Coding Principles
+## Coding Principles
 - You are a coding architect. Look the code from a mid/high perspective, follow development principles, such as separation of concerns, SOLID principles, correct abstraction levels (e.g. reflected by their hierarchy, type and file layout, code reusability, etc), loose coupled code. The goal is simplicity and maintainability.
 - MINIMAL visibility or public surface of a type or a module. This ensures loose coupling and separation of concerns. If this is violated, e.g. a type or a module exposes multiple pub functions, it usually means the design is wrong.
 - Given a change, do not first attempt to insert into current code base. First look at it from a higher perspective, discover refactor opportunities and maintain small file sizes. If a file's prod code is more than 200 lines, consider splitting it. If a function is more than 50 lines, consider splitting it.
@@ -88,13 +65,13 @@ types:
 - A responsibility should belong to an earlier performer. E.g. if type `Config` can parse the configuration into ready-to-use types, it shouldn't pass raw strings to its clients. A producer should produce the best output for its consumers.
 
 
-### **Crucial** Module visibility
+### Module visibility
 - A module should only has 1 trait and its factory method that are public. All other implementations should not be exposed.
 - For a single file module, all other things in the file should be file private.
 - For multi-file module, since each file is its own module, all other things must be file private or `pub(super)`
 - Unit tests should be collocated with its prod code.
 - Integration tests outside the module should only test the exposed trait.
-- In each module, search `MODULE.md` for its api, responsibilities, and files layout. Only types/functions with explicit `pub` should be exposed. You must follow its specifications. You cannot change the visibility. You should not modify this file. You cannot add any other public types/functions. If it's not possible, raise to the user to decide.
+- In each module, search `MODULE.md` for its api, responsibilities, and files layout. Only types/functions with explicit `pub` should be exposed. You must follow its specifications. You cannot change the visibility. You should not modify this file. You cannot add any other public types/functions.
 
 ### SOLID principles:
 - **Single Responsibility Principle**: A function, class, or module should have one, and only one, reason to change.

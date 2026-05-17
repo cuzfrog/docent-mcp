@@ -74,7 +74,8 @@ impl GitIndexer {
 mod tests {
     use super::super::GitIndexer;
     use crate::app::index::{IndexKind, IndexRequest, Indexer};
-    use crate::tests::fixtures::{make_temp_dir, RecordingUi, test_model_factory, test_processor};
+    use crate::tests::fixtures::{make_temp_dir, RecordingUi, test_processor};
+    use crate::tests::mock_model_factory::mock_model_factory;
 
     #[test]
     fn incremental_without_existing_index_returns_error() {
@@ -87,7 +88,7 @@ mod tests {
             git_config,
             bm25_k1: 1.2,
             bm25_b: 0.75,
-            model_factory: test_model_factory(),
+            model_factory: mock_model_factory(),
             processor: test_processor(),
         };
         let req = IndexRequest {
