@@ -62,16 +62,16 @@ pub(crate) fn build_search_stack(
     }
     let merged = result.merged;
 
-    let factory = crate::index::model_factory::create_model_factory(
+    let factory = crate::models::create_model_factory(
         &config.index.embedding_model,
         std::path::Path::new(&config.index.cache_dir),
     )
     .map_err(|e| anyhow::anyhow!("Failed to create model factory: {}", e))?;
-    let (model, dims) = factory.build_model().map_err(|e| {
+    let model = factory.build_model().map_err(|e| {
         anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e)
     })?;
     let embedder: Arc<Mutex<dyn Embedder>> =
-        Arc::new(Mutex::new(create_embedder(model, dims)));
+        Arc::new(Mutex::new(create_embedder(model)));
     let search_service = search::create_search_service(merged, embedder, &config.search)?;
 
     Ok(SearchStack { search_service })

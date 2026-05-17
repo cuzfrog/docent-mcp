@@ -12,8 +12,10 @@ pub trait TokenCounter: Send + Sync {
 // WhitespaceTokenCounter — mock for unit tests
 // ---------------------------------------------------------------------------
 
+#[cfg(test)]
 pub(crate) struct WhitespaceTokenCounter;
 
+#[cfg(test)]
 impl TokenCounter for WhitespaceTokenCounter {
     fn encode_with_offsets(&self, text: &str) -> (usize, Vec<(usize, usize)>) {
         let mut offsets = Vec::new();
@@ -38,28 +40,16 @@ impl TokenCounter for WhitespaceTokenCounter {
 // ---------------------------------------------------------------------------
 
 struct HuggingFaceTokenCounter {
-    tokenizer: tokenizers::Tokenizer,
+    tokenizer: Box<dyn crate::models::Tokenizer>,
 }
 
-pub fn create_token_counter(tokenizer: tokenizers::Tokenizer) -> Box<dyn TokenCounter> {
+pub fn create_token_counter(tokenizer: Box<dyn crate::models::Tokenizer>) -> Box<dyn TokenCounter> {
     Box::new(HuggingFaceTokenCounter { tokenizer })
 }
 
 impl TokenCounter for HuggingFaceTokenCounter {
     fn encode_with_offsets(&self, text: &str) -> (usize, Vec<(usize, usize)>) {
-        match self.tokenizer.encode(text, false) {
-            Ok(encoding) => {
-                let offsets = encoding.get_offsets().to_vec();
-                (offsets.len(), offsets)
-            }
-            Err(e) => {
-                eprintln!(
-                    "WARNING: tokenizer.encode failed: {e}. Falling back to whitespace offsets."
-                );
-                let counter = WhitespaceTokenCounter;
-                counter.encode_with_offsets(text)
-            }
-        }
+        self.tokenizer.encode_with_offsets(text)
     }
 }
 

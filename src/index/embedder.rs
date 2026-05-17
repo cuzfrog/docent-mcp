@@ -1,37 +1,26 @@
-use anyhow::Context;
+use crate::models::EmbeddingModel;
 
 pub trait Embedder: Send {
     fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>>;
     fn dims(&self) -> usize;
 }
 
-pub fn create_embedder(model: fastembed::TextEmbedding, dims: usize) -> Box<dyn Embedder> {
-    Box::new(FastembedEmbedder::from_parts(model, dims))
+pub fn create_embedder(model: Box<dyn EmbeddingModel>) -> Box<dyn Embedder> {
+    Box::new(FastembedEmbedder { model })
 }
 
 struct FastembedEmbedder {
-    model: fastembed::TextEmbedding,
-    dims: usize,
-}
-
-impl FastembedEmbedder {
-    fn from_parts(model: fastembed::TextEmbedding, dims: usize) -> Self {
-        Self { model, dims }
-    }
+    model: Box<dyn EmbeddingModel>,
 }
 
 impl Embedder for FastembedEmbedder {
     fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
         let strings: Vec<String> = texts.iter().map(|s| s.to_string()).collect();
-        let embeddings = self
-            .model
-            .embed(strings, None)
-            .context("Embedding operation failed")?;
-        Ok(embeddings)
+        self.model.embed(strings)
     }
 
     fn dims(&self) -> usize {
-        self.dims
+        self.model.dims()
     }
 }
 
@@ -45,5 +34,4 @@ impl Embedder for Box<dyn Embedder> {
     }
 }
 
-// Tests for embedder creation are in model_factory.rs
-// (model validation occurs in ModelFactory::build_embedder)
+// Embedder creation is validated through ModelFactory (in src/models/model_factory.rs)

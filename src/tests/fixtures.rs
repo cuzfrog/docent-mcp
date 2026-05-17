@@ -9,7 +9,7 @@ use crate::config::{Config, FileConfig, GitConfig, IndexConfig};
 use crate::domain::ChunkMetadata;
 use crate::domain::IndexKind;
 use crate::index::embedder::Embedder;
-use crate::index::model_factory::{create_model_factory, ModelFactory};
+use crate::models::{create_model_factory, ModelFactory};
 use crate::index::VectorStore;
 use crate::index::{IndexRepository, SourceIndexKind};
 use crate::support::progress::ProgressSink;

@@ -9,9 +9,6 @@ mod merged;
 mod repository;
 mod source_index;
 pub(crate) mod bm25_builder;
-pub(crate) mod model_factory;
-
-pub use model_factory::{create_model_factory, ModelFactory};
 
 #[derive(Clone, Copy)]
 pub(crate) enum SourceIndexKind {

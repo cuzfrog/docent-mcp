@@ -3,7 +3,7 @@ use docent_mcp::app::index::pipeline::create_processor;
 use docent_mcp::app::index::{create_file_indexer, create_git_indexer, Indexer};
 use docent_mcp::app::Application;
 use docent_mcp::config::Config;
-use docent_mcp::index::{create_model_factory, ModelFactory};
+use docent_mcp::models::{create_model_factory, ModelFactory};
 use std::path::PathBuf;
 use std::sync::Arc;
 

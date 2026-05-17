@@ -63,30 +63,6 @@ impl IndexRepository {
         )
     }
 
-    fn load_and_repair_sub_index(
-        &self,
-        kind: SourceIndexKind,
-        notices: &mut Vec<String>,
-    ) -> anyhow::Result<Option<SubIndex>> {
-        if !self.exists(kind) {
-            return Ok(None);
-        }
-        let mut sub = SubIndex::load(&self.persist_path, kind)?;
-        let other_kind = match kind {
-            SourceIndexKind::File => SourceIndexKind::Git,
-            SourceIndexKind::Git => SourceIndexKind::File,
-        };
-        if !self.exists(other_kind) {
-            sub.header.validate_against(&self.config)?;
-        }
-        if sub.bm25.is_none() && !sub.metadata.is_empty() {
-            let (bm25_sub, notice) = sub.rebuild_bm25(&self.persist_path, kind, self.bm25_k1, self.bm25_b)?;
-            notices.push(notice);
-            sub.bm25 = Some(bm25_sub);
-        }
-        Ok(Some(sub))
-    }
-
     pub(crate) fn load_merged(&self) -> anyhow::Result<LoadMergedResult> {
         let mut notices = Vec::new();
         let file = self.load_and_repair_sub_index(SourceIndexKind::File, &mut notices)?;
@@ -157,6 +133,30 @@ impl IndexRepository {
             .join(kind.subdir())
             .join("header.json")
             .exists()
+    }
+
+    fn load_and_repair_sub_index(
+        &self,
+        kind: SourceIndexKind,
+        notices: &mut Vec<String>,
+    ) -> anyhow::Result<Option<SubIndex>> {
+        if !self.exists(kind) {
+            return Ok(None);
+        }
+        let mut sub = SubIndex::load(&self.persist_path, kind)?;
+        let other_kind = match kind {
+            SourceIndexKind::File => SourceIndexKind::Git,
+            SourceIndexKind::Git => SourceIndexKind::File,
+        };
+        if !self.exists(other_kind) {
+            sub.header.validate_against(&self.config)?;
+        }
+        if sub.bm25.is_none() && !sub.metadata.is_empty() {
+            let (bm25_sub, notice) = sub.rebuild_bm25(&self.persist_path, kind, self.bm25_k1, self.bm25_b)?;
+            notices.push(notice);
+            sub.bm25 = Some(bm25_sub);
+        }
+        Ok(Some(sub))
     }
 }
 

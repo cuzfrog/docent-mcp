@@ -1,4 +1,10 @@
-# CLAUDE.md
+# Project Context
+
+## Architecture
+```
+  files/git ──▼── index ──▶  MCP server  ◀──── query
+                 (cache)        (HTTP)
+```
 
 ## Build & Run & Dev Setup
 
@@ -35,8 +41,10 @@ After major changes, run e2e tests by:
 - **Use imports** Import at the file top. Avoid long module path in the code body. E.g. `crate::app::index::xxxx::bbbb::new`
 - **Config passing** Do not split `Config` into multiple parameters for a function that consumes it.
 - **Forbidden Warning Suppression** No `#[allow(clippy::*)]` or similar workaround. An issue must be addressed.
+- **Code tells** Do not added comments that contains no extra information than the code itself.
+- **No "new" constructors** Do not create `new` constructors in a concrete struct. Use a factory method. This avoids exposing the concrete struct.
 
-### Single file layout (from top to bottom)
+### Single file layout (ordered from top to bottom)
 1. imports
 2. types
 3. trait
@@ -80,12 +88,13 @@ types:
 - A responsibility should belong to an earlier performer. E.g. if type `Config` can parse the configuration into ready-to-use types, it shouldn't pass raw strings to its clients. A producer should produce the best output for its consumers.
 
 
-### Module visibility
+### **Crucial** Module visibility
 - A module should only has 1 trait and its factory method that are public. All other implementations should not be exposed.
 - For a single file module, all other things in the file should be file private.
 - For multi-file module, since each file is its own module, all other things must be file private or `pub(super)`
 - Unit tests should be collocated with its prod code.
 - Integration tests outside the module should only test the exposed trait.
+- In each module, search `MODULE.md` for its api, responsibilities, and files layout. Only types/functions with explicit `pub` should be exposed. You must follow its specifications. You cannot change the visibility. You should not modify this file. You cannot add any other public types/functions. If it's not possible, raise to the user to decide.
 
 ### SOLID principles:
 - **Single Responsibility Principle**: A function, class, or module should have one, and only one, reason to change.
