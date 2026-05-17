@@ -2,7 +2,7 @@
 
 # docent
 
-**Semantic + BM25 Document & Git history search for Design Decision Records** — an MCP server that indexes documents and git history, letting agents query *why* code looks the way it does.
+**Semantic + BM25 Document & Git history search for Design Decision Records** — an experimental MCP server written in Rust that indexes documents and git history, letting agents query *why* code looks the way it does.
 
 ```
   files/git ──▼── index ──▶  MCP server  ◀──── query
