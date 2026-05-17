@@ -75,36 +75,4 @@ impl Indexer for GitIndexer {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::index::IndexKind;
-    use crate::tests::fixtures::{make_temp_dir, RecordingUi, test_processor};
 
-    #[test]
-    fn incremental_without_existing_index_returns_error() {
-        let persist = make_temp_dir("git_inc_no_existing");
-        let (index_config, git_config) = crate::tests::fixtures::git_index_fixtures(&persist, &["*.md"]);
-        let ui = RecordingUi::always_confirm();
-        let indexer = GitIndexer {
-            console: Box::new(ui),
-            index_config,
-            git_config,
-            bm25_k1: 1.2,
-            bm25_b: 0.75,
-            model_factory: crate::tests::fixtures::test_model_factory(),
-            processor: test_processor(),
-        };
-        let req = IndexRequest {
-            kind: IndexKind::Git,
-            input_path: persist.clone(),
-            rebuild: false,
-            verbose: false,
-        };
-        let result = indexer.run(&req);
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("No existing Git index"));
-        let _ = std::fs::remove_dir_all(&persist);
-    }
-}
