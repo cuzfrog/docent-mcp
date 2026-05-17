@@ -1,6 +1,7 @@
+[![SafeSkill 92/100](https://img.shields.io/badge/SafeSkill-92%2F100_Verified%20Safe-brightgreen)](https://safeskill.dev/scan/cuzfrog-docent-mcp)
+
 # docent
 
-[![SafeSkill 92/100](https://img.shields.io/badge/SafeSkill-92%2F100_Verified%20Safe-brightgreen)](https://safeskill.dev/scan/cuzfrog-docent-mcp)
 **Semantic + BM25 Document & Git history search for Design Decision Records** — an MCP server that indexes documents and git history, letting agents query *why* code looks the way it does.
 
 ```
@@ -43,8 +44,6 @@ Flags: `--config <path>` (default `./docent.toml`), `--rebuild` (full re-index),
 ## Install
 
 TBC
-
-Or build from source — see [Development](doc/Development.md).
 
 ## Documentation
 
