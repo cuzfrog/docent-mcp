@@ -1,24 +1,26 @@
-use std::sync::Arc;
-
 use anyhow::Context;
 use async_trait::async_trait;
 use axum::Router;
 
 use crate::app::serve::mcp_server::{MCPServer, create_mcp_server};
-use crate::app::serve::search::{build_search_service, SearchService, ServeIndexAccessImpl};
+use crate::app::serve::search::{build_search_service, ServeIndexAccessImpl};
 use crate::config::Config;
 use crate::support::ui::{Console, create_console};
 
 #[async_trait]
-pub(crate) trait HttpServer: Send + Sync {
+pub trait HttpServer: Send + Sync {
     async fn serve(&self) -> anyhow::Result<()>;
 }
 
-pub(crate) fn create_http_server(config: Config, console: Box<dyn Console>) -> impl HttpServer {
-    TokioHttpServer { config, console }
+pub fn create_http_server(config: Config, console: Box<dyn Console>) -> anyhow::Result<impl HttpServer> {
+    let search_service = build_search_service(&ServeIndexAccessImpl, &config, &*console)?;
+    let mcp = create_mcp_server(search_service);
+    let router = mcp.into_router()?;
+    Ok(TokioHttpServer { router, config, console })
 }
 
 struct TokioHttpServer {
+    router: Router,
     config: Config,
     console: Box<dyn Console>,
 }
@@ -26,9 +28,6 @@ struct TokioHttpServer {
 #[async_trait]
 impl HttpServer for TokioHttpServer {
     async fn serve(&self) -> anyhow::Result<()> {
-        let search_service = build_search_service(&ServeIndexAccessImpl, &self.config, &*self.console)?;
-        let router = prepare_router(&search_service)?;
-
         let addr = format!("127.0.0.1:{}", self.config.server.port);
         let listener = tokio::net::TcpListener::bind(&addr)
             .await
@@ -42,7 +41,7 @@ impl HttpServer for TokioHttpServer {
             local_addr,
         ));
 
-        axum::serve(listener, router)
+        axum::serve(listener, self.router.clone())
             .with_graceful_shutdown(shutdown_signal())
             .await
             .context("Server error")?;
@@ -61,17 +60,11 @@ async fn shutdown_signal() {
     }
 }
 
-fn prepare_router(search_service: &Arc<dyn SearchService>) -> anyhow::Result<Router> {
-    let mcp = create_mcp_server(Arc::clone(search_service));
-    mcp.into_router()
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::Path;
 
     use crate::app::serve::search::build_search_service;
-    use crate::app::serve::http_server::prepare_router;
     use crate::app::serve::search::ServeIndexAccess;
     use crate::config::IndexConfig;
     use crate::index::{
@@ -215,20 +208,5 @@ mod tests {
         let _ = std::fs::remove_dir_all(&persist);
     }
 
-    #[test]
-    fn prepare_router_works_with_search_service() {
-        let persist = make_temp_dir("serve_prepare_router");
-        create_minimal_file_index(&persist);
-        let config = serve_config_fixture(&persist);
-        let index_access = FakeServeIndexAccess::new();
-        let console = RecordingUi::always_confirm();
 
-        let search_service = build_search_service(&index_access, &config, &console)
-            .expect("build_search_service should succeed");
-
-        let result = prepare_router(&search_service);
-        assert!(result.is_ok(), "Expected prepare_router to succeed, got: {:?}", result.err());
-
-        let _ = std::fs::remove_dir_all(&persist);
-    }
 }

@@ -25,10 +25,10 @@ pub trait Application: Send + Sync {
 
 pub fn create_application(config: &Config) -> anyhow::Result<impl Application> {
     let console: Box<dyn Console> = Box::new(create_console(config.verbose));
-    let server: Box<dyn HttpServer> = Box::new(serve::create_http_server(
+    let server: Box<dyn HttpServer> = Box::new(crate::app::serve::create_http_server(
         config.clone(),
         Box::new(create_console(config.verbose)),
-    ));
+    )?);
 
     let factory: Arc<dyn ModelFactory> = Arc::from(create_model_factory(
         &config.index.embedding_model,
@@ -111,8 +111,7 @@ impl AppImpl {
 mod tests {
     use super::*;
     use crate::app::index::IndexKind;
-    use crate::app::serve::http_server::create_http_server;
-    use crate::tests::fixtures::{make_temp_dir, serve_config_fixture};
+    use crate::tests::fixtures::{make_temp_dir, serve_config_fixture, create_minimal_file_index};
 
     #[test]
     fn format_supported_models_returns_expected_strings() {
@@ -147,13 +146,15 @@ mod tests {
         });
         config.git = None;
 
+        create_minimal_file_index(&dir);
+
         let app = AppImpl {
             config: config.clone(),
             console: Box::new(create_console(false)),
-            server: Box::new(create_http_server(
-                Config::default(),
+            server: Box::new(crate::app::serve::create_http_server(
+                config.clone(),
                 Box::new(create_console(false)),
-            )),
+            ).unwrap()),
             indexers: HashMap::new(),
         };
 

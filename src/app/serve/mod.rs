@@ -1,5 +1,5 @@
-pub mod http_server;
-pub(crate) mod mcp_server;
-pub(crate) mod search;
+mod http_server;
+mod mcp_server;
+mod search;
 
 pub(super) use http_server::{HttpServer, create_http_server};
