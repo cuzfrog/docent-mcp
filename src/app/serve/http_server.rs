@@ -3,22 +3,18 @@ use std::sync::Arc;
 use anyhow::Context;
 use async_trait::async_trait;
 use axum::Router;
-use rmcp::transport::streamable_http_server::{
-    session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
-};
 
+use crate::app::serve::mcp_server::{MCPServer, create_mcp_server};
 use crate::app::serve::search::{build_search_service, SearchService, ServeIndexAccessImpl};
 use crate::config::Config;
-use crate::mcp::DocentMcpServer;
-use crate::mcp::SearchExecutor;
 use crate::support::ui::{Console, create_console};
 
 #[async_trait]
-pub trait Server: Send + Sync {
+pub(crate) trait HttpServer: Send + Sync {
     async fn serve(&self) -> anyhow::Result<()>;
 }
 
-pub fn create_server(config: Config, console: Box<dyn Console>) -> impl Server {
+pub(crate) fn create_http_server(config: Config, console: Box<dyn Console>) -> impl HttpServer {
     TokioHttpServer { config, console }
 }
 
@@ -28,7 +24,7 @@ struct TokioHttpServer {
 }
 
 #[async_trait]
-impl Server for TokioHttpServer {
+impl HttpServer for TokioHttpServer {
     async fn serve(&self) -> anyhow::Result<()> {
         let search_service = build_search_service(&ServeIndexAccessImpl, &self.config, &*self.console)?;
         let router = prepare_router(&search_service)?;
@@ -66,19 +62,8 @@ async fn shutdown_signal() {
 }
 
 fn prepare_router(search_service: &Arc<dyn SearchService>) -> anyhow::Result<Router> {
-    let server = DocentMcpServer { search_executor: SearchExecutor::new(Arc::clone(search_service)) };
-    let service: StreamableHttpService<DocentMcpServer, LocalSessionManager> =
-        StreamableHttpService::new(
-            {
-                let server = server.clone();
-                move || Ok(server.clone())
-            },
-            LocalSessionManager::default().into(),
-            StreamableHttpServerConfig::default(),
-        );
-    let router = crate::ui::router(service);
-
-    Ok(router)
+    let mcp = create_mcp_server(Arc::clone(search_service));
+    mcp.into_router()
 }
 
 #[cfg(test)]
@@ -86,7 +71,7 @@ mod tests {
     use std::path::Path;
 
     use crate::app::serve::search::build_search_service;
-    use crate::app::serve::server::prepare_router;
+    use crate::app::serve::http_server::prepare_router;
     use crate::app::serve::search::ServeIndexAccess;
     use crate::config::IndexConfig;
     use crate::index::{

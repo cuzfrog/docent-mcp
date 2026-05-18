@@ -6,7 +6,7 @@ use async_trait::async_trait;
 
 use crate::app::index::{create_indexer, Indexer, IndexRequest};
 use crate::domain::IndexKind;
-use crate::app::serve::Server;
+use crate::app::serve::HttpServer;
 use crate::config::Config;
 use crate::app::index::pipeline::create_processor;
 use crate::models::{create_model_factory, ModelFactory};
@@ -25,7 +25,7 @@ pub trait Application: Send + Sync {
 
 pub fn create_application(config: &Config) -> anyhow::Result<impl Application> {
     let console: Box<dyn Console> = Box::new(create_console(config.verbose));
-    let server: Box<dyn Server> = Box::new(serve::create_server(
+    let server: Box<dyn HttpServer> = Box::new(serve::create_http_server(
         config.clone(),
         Box::new(create_console(config.verbose)),
     ));
@@ -58,7 +58,7 @@ pub fn create_application(config: &Config) -> anyhow::Result<impl Application> {
 struct AppImpl {
     config: Config,
     console: Box<dyn Console>,
-    server: Box<dyn Server>,
+    server: Box<dyn HttpServer>,
     indexers: HashMap<IndexKind, Box<dyn Indexer>>,
 }
 
@@ -111,7 +111,7 @@ impl AppImpl {
 mod tests {
     use super::*;
     use crate::app::index::IndexKind;
-    use crate::app::serve::server::create_server;
+    use crate::app::serve::http_server::create_http_server;
     use crate::tests::fixtures::{make_temp_dir, serve_config_fixture};
 
     #[test]
@@ -150,7 +150,7 @@ mod tests {
         let app = AppImpl {
             config: config.clone(),
             console: Box::new(create_console(false)),
-            server: Box::new(create_server(
+            server: Box::new(create_http_server(
                 Config::default(),
                 Box::new(create_console(false)),
             )),
