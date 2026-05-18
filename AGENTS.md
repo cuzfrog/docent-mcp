@@ -61,7 +61,7 @@ When involving git operations, refer to @doc/AGENTS_GIT.md.
 - Avoid "helper" functions, they are where code is coupled out of class hierarchy. "helper" functions are functions that are outside the abstraction hierarchy, containing domain logic, serving the only purpose of code reuse. They are different from "utility/support" functions that are purely technical without complex domain logic. Utility functions do not have a position in the abstraction hierarchy.
 - A function's parameters should be data it consumes, parameters should not be its dependencies. A high-order function should only be used for transformation instead of procedural processing. Context and config types are exempted from this rule.
 - A responsibility should belong to an earlier performer. E.g. if type `Config` can parse the configuration into ready-to-use types, it shouldn't pass raw strings to its clients. A producer should produce the best output for its consumers.
-- A module should be easily testable with mocked dependencies (except trivial ones). Unit tests should be done with mocks without side effects.
+- A module should be easily testable with mocked dependencies (except trivial ones). Unit tests should be done with mocks without creating actual dependency or causing any side effects.
 - Logic should be put in pure functions as much as possible. Any side effects, e.g. IO, should be at the edge layers with minimal logic. This makes the code easier to test.
 
 ### Module visibility
