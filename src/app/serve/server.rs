@@ -7,7 +7,7 @@ use rmcp::transport::streamable_http_server::{
     session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
 };
 
-use crate::app::serve::{build_search_stack, SearchStack, ServeIndexAccessImpl};
+use crate::app::serve::search::{build_search_stack, SearchStack, ServeIndexAccessImpl};
 use crate::config::Config;
 use crate::mcp::DocentMcpServer;
 use crate::mcp::SearchExecutor;
@@ -85,9 +85,9 @@ fn prepare_router(stack: &SearchStack) -> anyhow::Result<Router> {
 mod tests {
     use std::path::Path;
 
-    use crate::app::serve::build_search_stack;
+    use crate::app::serve::search::build_search_stack;
     use crate::app::serve::server::prepare_router;
-    use crate::app::serve::ServeIndexAccess;
+    use crate::app::serve::search::ServeIndexAccess;
     use crate::config::IndexConfig;
     use crate::index::{
         IndexSizeInfo, LoadMergedResult, MergedIndex,

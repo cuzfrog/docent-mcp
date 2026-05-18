@@ -28,7 +28,7 @@ pub(super) struct FileIndexer {
     pub(super) processor: Box<dyn IndexingProcessor>,
 }
 
-pub fn create_file_indexer(
+pub(super) fn create_file_indexer(
     config: &Config,
     console: Box<dyn Console>,
     _model_factory: Arc<dyn ModelFactory>,

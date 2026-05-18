@@ -4,10 +4,16 @@ pub(crate) mod git;
 pub mod pipeline;
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
+use crate::config::Config;
 pub use crate::domain::IndexKind;
-pub use file::create_file_indexer;
-pub use git::create_git_indexer;
+use crate::app::index::pipeline::IndexingProcessor;
+use crate::models::ModelFactory;
+use crate::support::ui::Console;
+
+use file::create_file_indexer;
+use git::create_git_indexer;
 
 pub struct IndexRequest {
     pub kind: IndexKind,
@@ -33,6 +39,28 @@ pub enum IndexOutcome {
     NeedsRebuild {
         reason: String,
     },
+}
+
+pub trait Indexer: Send + Sync {
+    fn kind(&self) -> IndexKind;
+    fn run(&self, request: &IndexRequest) -> anyhow::Result<IndexOutcome>;
+}
+
+pub(super) fn create_indexer(
+    kind: IndexKind,
+    config: &Config,
+    console: Box<dyn Console>,
+    model_factory: Arc<dyn ModelFactory>,
+    processor: Box<dyn IndexingProcessor>,
+) -> Box<dyn Indexer> {
+    match kind {
+        IndexKind::File => {
+            Box::new(create_file_indexer(config, console, model_factory, processor))
+        }
+        IndexKind::Git => {
+            Box::new(create_git_indexer(config, console, model_factory, processor))
+        }
+    }
 }
 
 impl IndexOutcome {
@@ -109,7 +137,3 @@ impl IndexOutcome {
     }
 }
 
-pub trait Indexer: Send + Sync {
-    fn kind(&self) -> IndexKind;
-    fn run(&self, request: &IndexRequest) -> anyhow::Result<IndexOutcome>;
-}

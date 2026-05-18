@@ -33,7 +33,7 @@ pub(super) struct GitIndexer {
     pub(super) processor: Box<dyn IndexingProcessor>,
 }
 
-pub fn create_git_indexer(
+pub(super) fn create_git_indexer(
     config: &Config,
     console: Box<dyn Console>,
     model_factory: Arc<dyn ModelFactory>,

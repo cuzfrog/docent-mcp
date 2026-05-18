@@ -1,37 +1,70 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use crate::app::index::{IndexRequest, Indexer};
-use crate::app::serve::server::Server;
+use async_trait::async_trait;
+
+use crate::app::index::{create_indexer, Indexer, IndexRequest};
+use crate::domain::IndexKind;
+use crate::app::serve::Server;
 use crate::config::Config;
-use crate::support::ui::Console;
+use crate::app::index::pipeline::create_processor;
+use crate::models::{create_model_factory, ModelFactory};
+use crate::support::ui::{Console, create_console};
 
 pub mod index;
 pub mod init;
 pub mod list_models;
 pub mod serve;
 
-pub struct Application {
+#[async_trait]
+pub trait Application: Send + Sync {
+    fn run_index(&self, input_path: Option<PathBuf>, rebuild: bool) -> anyhow::Result<()>;
+    async fn run_serve(&self) -> anyhow::Result<()>;
+}
+
+pub fn create_application(config: &Config) -> anyhow::Result<impl Application> {
+    let console: Box<dyn Console> = Box::new(create_console(config.verbose));
+    let server: Box<dyn Server> = Box::new(serve::create_server(
+        config.clone(),
+        Box::new(create_console(config.verbose)),
+    ));
+
+    let factory: Arc<dyn ModelFactory> = Arc::from(create_model_factory(
+        &config.index.embedding_model,
+        std::path::Path::new(&config.index.cache_dir),
+    )?);
+
+    let mut indexers: HashMap<IndexKind, Box<dyn Indexer>> = HashMap::new();
+    for kind in config.enabled_kinds() {
+        let processor = create_processor(factory.as_ref(), &config.index)?;
+        indexers.insert(kind, create_indexer(
+            kind,
+            config,
+            Box::new(create_console(config.verbose)),
+            Arc::clone(&factory),
+            processor,
+        ));
+    }
+
+    Ok(AppImpl {
+        config: config.clone(),
+        console,
+        server,
+        indexers,
+    })
+}
+
+struct AppImpl {
     config: Config,
     console: Box<dyn Console>,
     server: Box<dyn Server>,
-    indexers: Vec<Box<dyn Indexer>>,
+    indexers: HashMap<IndexKind, Box<dyn Indexer>>,
 }
 
-impl Application {
-    pub fn new(
-        config: Config,
-        console: Box<dyn Console>,
-        server: Box<dyn Server>,
-        indexers: Vec<Box<dyn Indexer>>,
-    ) -> Self {
-        Self { config, console, server, indexers }
-    }
-
-    pub fn run_index(
-        &self,
-        input_path: Option<PathBuf>,
-        rebuild: bool,
-    ) -> anyhow::Result<()> {
+#[async_trait]
+impl Application for AppImpl {
+    fn run_index(&self, input_path: Option<PathBuf>, rebuild: bool) -> anyhow::Result<()> {
         let dir = input_path.unwrap_or_else(|| PathBuf::from("."));
         let dir = dir.canonicalize()?;
 
@@ -41,9 +74,10 @@ impl Application {
         }
 
         for kind in &enabled_kinds {
-            let indexer = self.indexers.iter().find(|i| i.kind() == *kind).ok_or_else(|| {
-                anyhow::anyhow!("No indexer registered for {:?}", kind)
-            })?;
+            let indexer = self
+                .indexers
+                .get(kind)
+                .ok_or_else(|| anyhow::anyhow!("No indexer registered for {:?}", kind))?;
             let request = IndexRequest {
                 kind: *kind,
                 input_path: dir.clone(),
@@ -57,10 +91,12 @@ impl Application {
         Ok(())
     }
 
-    pub async fn run_serve(&self) -> anyhow::Result<()> {
+    async fn run_serve(&self) -> anyhow::Result<()> {
         self.server.serve().await
     }
+}
 
+impl AppImpl {
     fn emit_outcome(&self, outcome: Vec<(&'static str, String)>) {
         for (level, msg) in outcome {
             match level {
@@ -88,7 +124,10 @@ mod tests {
             .iter()
             .map(|(name, dim)| format!("{} (dim: {})", name, dim))
             .collect();
-        assert_eq!(formatted, vec!["model-a (dim: 384)", "model-b (dim: 768)"]);
+        assert_eq!(
+            formatted,
+            vec!["model-a (dim: 384)", "model-b (dim: 768)"]
+        );
     }
 
     #[test]
@@ -108,12 +147,15 @@ mod tests {
         });
         config.git = None;
 
-        let app = Application::new(
-            config.clone(),
-            Box::new(crate::support::ui::create_console(false)),
-            Box::new(create_server(Config::default(), Box::new(crate::support::ui::create_console(false)))),
-            vec![],
-        );
+        let app = AppImpl {
+            config: config.clone(),
+            console: Box::new(create_console(false)),
+            server: Box::new(create_server(
+                Config::default(),
+                Box::new(create_console(false)),
+            )),
+            indexers: HashMap::new(),
+        };
 
         app.run_index(Some(dir.clone()), false).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
