@@ -26,23 +26,17 @@ pub fn create_processor(
     factory: &dyn ModelFactory,
     index_config: &IndexConfig,
 ) -> anyhow::Result<Box<dyn IndexingProcessor>> {
-    Ok(Box::new(ParallelBatchIndexingProcessor::new(factory, index_config)?))
+    let token_counter = create_token_counter(factory.tokenizer());
+    let chunker = create_chunker(index_config.chunk_size, index_config.chunk_overlap, token_counter);
+    let model = factory.build_model()?;
+    let embedder = create_embedder(model);
+
+    Ok(Box::new(ParallelBatchIndexingProcessor { chunker, embedder: Mutex::new(embedder) }))
 }
 
 struct ParallelBatchIndexingProcessor {
     chunker: Box<dyn Chunker>,
     embedder: Mutex<Box<dyn Embedder>>,
-}
-
-impl ParallelBatchIndexingProcessor {
-    pub fn new(factory: &dyn ModelFactory, index_config: &IndexConfig) -> anyhow::Result<Self> {
-        let token_counter = create_token_counter(factory.tokenizer());
-        let chunker = create_chunker(index_config.chunk_size, index_config.chunk_overlap, token_counter);
-        let model = factory.build_model()?;
-        let embedder = create_embedder(model);
-        Ok(Self { chunker, embedder: Mutex::new(embedder) })
-    }
-
 }
 
 impl IndexingProcessor for ParallelBatchIndexingProcessor {
