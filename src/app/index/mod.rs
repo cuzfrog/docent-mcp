@@ -1,7 +1,7 @@
 pub(crate) mod chunking;
 pub(crate) mod file;
 pub(crate) mod git;
-pub mod processor;
+pub(crate) mod processor;
 
 mod types;
 pub use types::{IndexOutcome, IndexRequest};

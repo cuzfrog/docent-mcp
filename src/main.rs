@@ -60,11 +60,11 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::ListModels => {
             let console = docent_mcp::support::ui::create_console(false);
-            docent_mcp::app::list_models::list_models(&console);
+            docent_mcp::app::list_models(&console);
         }
         Commands::Init => {
             let console = docent_mcp::support::ui::create_console(false);
-            docent_mcp::app::init::run_init(&console)?;
+            docent_mcp::app::run_init(&console)?;
         }
         Commands::Index(args) => {
             let config = Config::load(&args.config, args.verbose)?;

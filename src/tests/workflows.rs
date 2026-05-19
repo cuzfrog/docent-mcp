@@ -1,12 +1,12 @@
 use std::path::Path;
 
-use crate::app::index::chunking::create_chunker;
+use crate::app::create_chunker;
 use crate::domain::IndexableDocument;
 use crate::config::IndexConfig;
 use crate::domain::{IndexKind, ChunkMetadata};
 use crate::index::{IndexRepository, read_bm25_index};
 use crate::tests::fixtures::{make_temp_dir, read_index_at, create_test_processor, create_minimal_file_index};
-use crate::app::index::chunking::mock_token_counter;
+use crate::app::mock_token_counter;
 use crate::index::mock_embedder;
 
 fn test_config(index_dir: &std::path::Path) -> IndexConfig {

@@ -1,8 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use crate::app::index::chunking::{create_chunker, Chunk, Chunker};
-use crate::app::index::processor::IndexingProcessor;
+use crate::app::{create_chunker, Chunk, Chunker, IndexingProcessor};
 use crate::domain::{IndexableDocument, IndexedBatch};
 use crate::config::{Config, FileConfig, GitConfig, IndexConfig};
 use crate::domain::ChunkMetadata;
@@ -272,7 +271,7 @@ pub fn create_test_processor(
 /// Create a test processor with a deterministic mock embedder and whitespace token counter.
 pub fn test_processor() -> Box<dyn IndexingProcessor> {
     let embedder = Box::new(crate::index::mock_embedder());
-    let chunker = create_chunker(256, 32, Box::new(crate::app::index::chunking::mock_token_counter()));
+    let chunker = create_chunker(256, 32, Box::new(crate::app::mock_token_counter()));
     Box::new(TestIndexingProcessor::new(chunker, embedder))
 }
 
@@ -305,7 +304,7 @@ pub fn create_minimal_file_index(persist_path: &Path) {
     let chunker = create_chunker(
         config.chunk_size,
         config.chunk_overlap,
-        Box::new(crate::app::index::chunking::mock_token_counter()),
+        Box::new(crate::app::mock_token_counter()),
     );
     let processor = create_test_processor(
         Box::new(crate::index::mock_embedder()),
