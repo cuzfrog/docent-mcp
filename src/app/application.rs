@@ -10,7 +10,7 @@ use crate::app::serve::HttpServer;
 use crate::config::Config;
 
 use crate::models::{create_model_factory, ModelFactory};
-use crate::support::ui::{Console, create_console};
+use crate::support::{Console, create_console};
 
 #[async_trait]
 pub trait Application: Send + Sync {

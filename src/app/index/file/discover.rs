@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-use crate::support::fs::path_to_string;
-use crate::support::glob::matches_any_pattern;
+use crate::support::path_to_string;
+use crate::support::matches_any_pattern;
 
 pub fn discover_files(root: &Path, glob_patterns: &[String]) -> anyhow::Result<Vec<PathBuf>> {
     if !root.exists() {

@@ -7,7 +7,7 @@ use crate::app::index::file::create_file_indexer;
 use crate::app::index::git::create_git_indexer;
 use crate::app::index::processor::create_processor;
 use crate::models::ModelFactory;
-use crate::support::ui::Console;
+use crate::support::Console;
 
 pub trait Indexer: Send + Sync {
     fn run(&self, request: &IndexRequest) -> anyhow::Result<IndexOutcome>;

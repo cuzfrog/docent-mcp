@@ -1,5 +1,5 @@
-use crate::support::progress;
-use crate::support::progress::Progress;
+use super::progress;
+use super::progress::Progress;
 use std::io::Write;
 
 pub trait Console: Send + Sync {

@@ -1,6 +1,6 @@
 use crate::config::GitConfig;
-use crate::support::glob::matches_any_pattern;
-use crate::support::progress::Progress;
+use crate::support::matches_any_pattern;
+use crate::support::Progress;
 use std::path::Path;
 
 pub(crate) fn open_repo_and_branch(
@@ -105,13 +105,13 @@ impl CommitWalker<'_> {
 
         let diff = self.repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&commit_tree), None)?;
         let author_secs = commit.time().seconds();
-        let author_date = crate::support::time::unix_to_rfc3339(author_secs, 0)
+        let author_date = crate::support::unix_to_rfc3339(author_secs, 0)
             .unwrap_or_else(|| "unknown".to_string());
         let title = commit.summary().unwrap_or("").to_string();
 
         for (i, delta) in diff.deltas().enumerate() {
             let file_path = match delta.new_file().path() {
-                Some(p) => crate::support::fs::path_to_string(p),
+                Some(p) => crate::support::path_to_string(p),
                 None => continue,
             };
 

@@ -59,11 +59,11 @@ async fn main() -> anyhow::Result<()> {
             create_application(&config)?.run_serve().await?;
         }
         Commands::ListModels => {
-            let console = docent_mcp::support::ui::create_console(false);
+            let console = docent_mcp::support::create_console(false);
             docent_mcp::app::list_models(&console);
         }
         Commands::Init => {
-            let console = docent_mcp::support::ui::create_console(false);
+            let console = docent_mcp::support::create_console(false);
             docent_mcp::app::run_init(&console)?;
         }
         Commands::Index(args) => {

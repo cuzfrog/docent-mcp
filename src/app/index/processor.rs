@@ -7,7 +7,7 @@ use crate::domain::ChunkMetadata;
 use crate::index::embedder::{create_embedder, Embedder};
 use crate::models::ModelFactory;
 use crate::domain::{IndexableDocument, IndexedBatch};
-use crate::support::progress::Progress;
+use crate::support::Progress;
 
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -132,7 +132,7 @@ impl ParallelBatchIndexingProcessor {
 mod tests {
     use super::*;
     use crate::domain::IndexKind;
-    use crate::support::progress::MockProgress;
+    use crate::support::MockProgress;
     use crate::app::index::chunking::mock_token_counter;
     use crate::index::mock_embedder;
     use std::sync::Arc;

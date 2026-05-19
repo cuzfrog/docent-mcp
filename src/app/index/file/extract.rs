@@ -53,7 +53,7 @@ fn prepare_single_file(
     file_size_limit_mb: u64,
 ) -> Option<IndexableDocument> {
     let full_path = input_root.join(file);
-    let relative_path = crate::support::fs::path_to_string(file);
+    let relative_path = crate::support::path_to_string(file);
 
     if file_size_limit_mb > 0 {
         let meta = std::fs::metadata(&full_path).ok()?;
@@ -79,7 +79,7 @@ fn prepare_single_file(
         return None;
     }
 
-    let source_revision = crate::support::fs::sha256_hex(content.as_bytes());
+    let source_revision = crate::support::sha256_hex(content.as_bytes());
     let title = extract_title_from_body(&content)
         .unwrap_or_else(|| title_from_path(Path::new(&relative_path)));
     let mtime = get_file_mtime(&full_path);

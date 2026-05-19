@@ -6,7 +6,7 @@ use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
 use crate::domain::IndexKind;
 use crate::config::Config;
 use crate::models::ModelFactory;
-use crate::support::ui::Console;
+use crate::support::Console;
 
 pub(crate) struct GitIndexer {
     pub(crate) console: Box<dyn Console>,

@@ -4,7 +4,7 @@ use axum::Router;
 
 use crate::app::serve::mcp_server::{MCPServer, create_mcp_server};
 use crate::config::Config;
-use crate::support::ui::{Console, create_console};
+use crate::support::{Console, create_console};
 
 // ---------------------------------------------------------------------------
 // Search service bootstrap (moved from search/index_access.rs)
@@ -34,18 +34,18 @@ impl ServeIndexAccess for ServeIndexAccessImpl {
         persist_path: &std::path::Path,
         max_size_mb: u64,
     ) -> anyhow::Result<Option<crate::index::IndexSizeInfo>> {
-        let total_size = crate::support::fs::dir_size(persist_path);
+        let total_size = crate::support::dir_size(persist_path);
         let max_bytes = max_size_mb * 1024 * 1024;
         if total_size > max_bytes {
             Ok(Some(crate::index::IndexSizeInfo {
                 total_bytes: total_size,
                 file_bytes: if persist_path.join("file").exists() {
-                    crate::support::fs::dir_size(&persist_path.join("file"))
+                    crate::support::dir_size(&persist_path.join("file"))
                 } else {
                     0
                 },
                 git_bytes: if persist_path.join("git").exists() {
-                    crate::support::fs::dir_size(&persist_path.join("git"))
+                    crate::support::dir_size(&persist_path.join("git"))
                 } else {
                     0
                 },
@@ -70,7 +70,7 @@ impl ServeIndexAccess for ServeIndexAccessImpl {
 fn build_search_service(
     index_access: &dyn ServeIndexAccess,
     config: &crate::config::Config,
-    console: &dyn crate::support::ui::Console,
+    console: &dyn crate::support::Console,
 ) -> anyhow::Result<std::sync::Arc<dyn crate::app::serve::search::SearchService>> {
     use std::sync::{Arc, Mutex};
     let persist_path = config.persist_path_buf();

@@ -63,7 +63,7 @@ pub fn merge_incremental(
     // Both are ordered by source_path, so a single forward pass suffices.
     let mut old_idx = 0;
     for file in sorted_files {
-        let source_path = crate::support::fs::path_to_string(file);
+        let source_path = crate::support::path_to_string(file);
 
         if changed_paths.contains(source_path.as_str()) {
             // Use fresh data (was already computed and cloned by the

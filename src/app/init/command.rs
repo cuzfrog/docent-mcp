@@ -3,7 +3,7 @@
 //! Responsible for generating a default `docent.toml` and merging new config
 //! fields into an existing file while preserving user customisations.
 
-use crate::support::ui::Console;
+use crate::support::Console;
 
 use super::merge_config::{merge_toml, DEFAULT_TEMPLATE};
 

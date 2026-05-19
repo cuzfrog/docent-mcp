@@ -4,7 +4,7 @@ use crate::app::index::processor::IndexingProcessor;
 use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
 use crate::config::Config;
 use crate::models::ModelFactory;
-use crate::support::ui::Console;
+use crate::support::Console;
 
 pub(crate) struct FileIndexer {
     pub(crate) console: Box<dyn Console>,
