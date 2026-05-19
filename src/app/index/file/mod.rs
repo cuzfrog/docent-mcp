@@ -1,5 +1,5 @@
-pub(crate) mod rebuild;
-pub(crate) mod incremental;
+mod rebuild;
+mod incremental;
 
 mod discover;
 mod diff;

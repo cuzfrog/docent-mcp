@@ -1,11 +1,11 @@
-pub(crate) mod rebuild;
-pub(crate) mod incremental;
-pub(crate) mod size_check;
+mod rebuild;
+mod incremental;
+mod size_check;
 
 mod estimate;
-pub(crate) mod extract;
+mod extract;
 mod freshness;
-pub(crate) mod history;
+mod history;
 mod indexer;
 mod merge;
 
