@@ -1,9 +1,19 @@
-pub(crate) mod defaults;
+mod defaults;
 mod types;
 mod validate;
 mod load;
 
-pub use types::*;
+pub use types::{
+    Config,
+    IndexConfig,
+    ServerConfig,
+    SearchConfig,
+    RankingConfig,
+    FusionConfig,
+    Bm25Config,
+    FileConfig,
+    GitConfig,
+};
 
 #[cfg(test)]
 mod tests;
