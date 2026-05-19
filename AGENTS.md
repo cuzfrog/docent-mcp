@@ -30,7 +30,7 @@
 - **Error handling:** Use `anyhow::Result` internally. At binary boundaries (CLI, MCP responses), convert to user-facing messages. No `.unwrap()` on fallible operations.
 - **No panics in library code.** Reserve `panic` for unreachable states only.
 - **Logging:** There is not dedicated logging framework in use. Logging simply means print messages to stdout/stderr by the UI abstraction in `src/support/ui.rs`. Do not use `eprintln!` for CLI user-facing messages, except for error and warning. The MCP server uses HTTP.
-- **Tests:** Each module has unit tests in a `#[cfg(test)] mod tests` block. Integration tests are under `src/tests/`. E2E tests are in `e2e-tests/`. E2E tests assume the binary is built and available. No `#[ignore]` tests, test must be runnable and provide coverage value. `mockall` is used for mocking dependencies in unit tests. For shared and manually created mocks, refer to @src/tests/MODULE.md
+- **Tests:** Each module has unit tests in a `#[cfg(test)] mod tests` block. Integration tests are under `src/tests/`. E2E tests are in `e2e-tests/`. E2E tests assume the binary is built and available. No `#[ignore]` tests, test must be runnable and provide coverage value. `mockall` is used for mocking dependencies in unit tests. For mocks, see below section `Test Mocking`.
 - **Naming:** Snake_case for files and functions. Types are PascalCase. Constants are UPPER_SNAKE_CASE. Variable naming should be specific to carry their function. E.g. `token_counter` should not be `counter`, which can be confusing.
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).
 - **No Dead Code** No `allow(dead_code)`. It should only be used during long incremental refactors, and must be removed once possible.
@@ -41,6 +41,15 @@
 - **No comments** Do not add comments except it's a consequential information and the code itself cannot tell.
 - **No "new" constructors** Do not create `new` constructors in a concrete struct. Use a standalone factory method, i.e. the module constructor that creates an impl of this trait. This avoids exposing the concrete struct. The factory method should return `impl Trait` when possible, avoid `Box<dyn Trait>`. The naming pattern is `create_X`, e.g., `pub fn create_model_factory() -> impl ModelFactory`.
 - **Use fixed dependency versions**. Avoid `*` or `^` to prevent unintentional updates. `=` should be explicitly used. This applies to all dependencies, including python and javascript.
+
+### Test Mocking
+* `pub fn mock_xxxx()` to create a shared mock for testing.
+* `struct MockXxxxx` implements the trait, this is achieved by `mockall` crate.
+* Do not test mock itself.
+* Mocks should not violate visibility rules. A trait only used in its parent module should not have its mock exposed outside its parent module. A mock with manually implemented logic should be placed in a companion file, such as `abc_mock.rs` with test scope along with its counterpart file `abc.rs`.
+* Use `#[cfg(test)]` to re-export a mock when needed.
+
+Manual implementeation of a mock's behavior should be avoided as possible. Try to use mocks directly in unit tests with expected calls.
 
 ### Single file layout (ordered from top to bottom)
 1. imports
@@ -72,7 +81,19 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - Unit tests should be collocated with its prod code.
 - Integration tests outside the module should only test the exposed `pub trait` or `pub(crate) trait`.
 - In each module, search `MODULE.md` for its api, responsibilities, and files layout. Only types/functions with explicit `pub` should be exposed. You must follow its specifications. You cannot change the visibility. You should not modify this file. You cannot add any other public types/functions.
+- all `mod` in `mod.rs` must be private. Any exposed types must use explicit re-export.
 - Cross boundary domain types, config types, DTOs are exempted from the visibility rule.
+
+`MODULE.md` format (inside parenthesis is comments):
+```
+# Module - MODULE_NAME
+(implicitly for mod.rs)
+
+- <any public export> (if there are entries, only mentioned exports are allowed)
+
+## FILE.rs or DIR/ (a child module)
+- <any public export> (only mentioned exports are allowed)
+```
 
 ### SOLID principles:
 - **Single Responsibility Principle**: A function, class, or module should have one, and only one, reason to change.

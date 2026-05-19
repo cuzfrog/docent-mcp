@@ -1,6 +1,4 @@
-// ---------------------------------------------------------------------------
-// TokenCounter trait — swappable tokenizer abstraction
-// ---------------------------------------------------------------------------
+use crate::models::Tokenizer;
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TokenCounter: Send + Sync {
@@ -9,15 +7,11 @@ pub trait TokenCounter: Send + Sync {
     fn encode_with_offsets(&self, text: &str) -> (usize, Vec<(usize, usize)>);
 }
 
-// ---------------------------------------------------------------------------
-// HuggingFaceTokenCounter — real tokenizer using the embedding model's tokenizer
-// ---------------------------------------------------------------------------
-
 struct HuggingFaceTokenCounter {
-    tokenizer: Box<dyn crate::models::Tokenizer>,
+    tokenizer: Box<dyn Tokenizer>,
 }
 
-pub fn create_token_counter(tokenizer: Box<dyn crate::models::Tokenizer>) -> Box<dyn TokenCounter> {
+pub fn create_token_counter(tokenizer: Box<dyn Tokenizer>) -> Box<dyn TokenCounter> {
     Box::new(HuggingFaceTokenCounter { tokenizer })
 }
 
@@ -29,40 +23,18 @@ impl TokenCounter for HuggingFaceTokenCounter {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    /// Test helper: count tokens using `encode_with_offsets`
-    fn count_tokens(counter: &dyn TokenCounter, text: &str) -> usize {
-        counter.encode_with_offsets(text).0
-    }
-
-    fn make_mock_counter() -> MockTokenCounter {
-        let mut mock = MockTokenCounter::new();
-        mock.expect_encode_with_offsets()
-            .returning(|text: &str| {
-                let mut offsets = Vec::new();
-                let mut pos = 0;
-                for word in text.split_whitespace() {
-                    let start = pos + text[pos..].find(word).unwrap();
-                    let end = start + word.len();
-                    offsets.push((start, end));
-                    pos = end;
-                }
-                (offsets.len(), offsets)
-            });
-        mock
-    }
+    use crate::models::MockTokenizer;
+    use mockall::predicate::eq;
 
     #[test]
-    fn test_whitespace_counter_basics() {
-        let counter = make_mock_counter();
-        assert_eq!(count_tokens(&counter, ""), 0);
-        assert_eq!(count_tokens(&counter, "   "), 0);
-        assert_eq!(count_tokens(&counter, "hello"), 1);
-        assert_eq!(count_tokens(&counter, "hello world"), 2);
-
-        let (count, offsets) = counter.encode_with_offsets("hello world");
-        assert_eq!(count, 2);
-        assert_eq!(offsets, vec![(0, 5), (6, 11)]);
+    fn test_delegation() {
+        let mut mock_tokenizer = MockTokenizer::new();
+        mock_tokenizer
+            .expect_encode_with_offsets()
+            .with(eq("test text"))
+            .once()
+            .return_const((0, vec![]));
+        let counter = super::create_token_counter(Box::new(mock_tokenizer));
+        counter.encode_with_offsets("test text");
     }
 }

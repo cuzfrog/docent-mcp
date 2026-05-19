@@ -14,7 +14,7 @@ pub fn mock_embedder() -> MockEmbedder {
     mock.expect_dims()
         .return_const(4usize);
     mock.expect_embed()
-        .returning(|texts: &[&str]| {
+        .returning(|texts: &[String]| {
             Ok(texts
                 .iter()
                 .map(|text| {

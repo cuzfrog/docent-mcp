@@ -12,7 +12,7 @@ pub(super) fn create_embedding_model(
     model: fastembed::TextEmbedding,
     dims: usize,
 ) -> Box<dyn EmbeddingModel> {
-    Box::new(FastEmbedEmbeddingModel { inner: model, dims: dims })
+    Box::new(FastEmbedEmbeddingModel { inner: model, dims })
 }
 
 struct FastEmbedEmbeddingModel {

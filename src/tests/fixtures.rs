@@ -228,8 +228,9 @@ impl IndexingProcessor for TestIndexingProcessor {
         let mut all_vectors: Vec<Vec<f32>> = Vec::with_capacity(chunk_texts.len());
         let mut embedder = self.embedder.lock().unwrap();
         for batch in chunk_texts.chunks(BATCH_SIZE) {
+            let batch: Vec<String> = batch.iter().map(|s| s.to_string()).collect();
             let vectors = embedder
-                .embed(batch)
+                .embed(&batch)
                 .map_err(|e| anyhow::anyhow!("Embedding operation failed: {}", e))?;
             all_vectors.extend(vectors);
         }

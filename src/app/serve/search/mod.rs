@@ -185,6 +185,7 @@ mod tests {
     use crate::config::{SearchConfig, FusionConfig, RankingConfig, Bm25Config};
     use crate::index::MergedIndex;
     use crate::index::VectorStore;
+    use crate::domain::{IndexKind, ChunkMetadata, DocumentContext};
     use crate::tests::mock_embedder::mock_embedder;
 
     fn default_search_config() -> SearchConfig {
@@ -207,9 +208,46 @@ mod tests {
 
     #[test]
     fn test_build_hybrid_search_service_without_bm25() {
+        let metadata = vec![
+            ChunkMetadata {
+                doc_ctx: DocumentContext {
+                    source_path: Arc::from("doc1.md"),
+                    source_revision: Arc::from("hash1"),
+                    title: Arc::from(""),
+                    modified_at: None,
+                    kind: IndexKind::File,
+                },
+                chunk_text: "The quick brown fox jumps over the lazy dog.".to_string(),
+                section_heading: None,
+                chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
+                is_fresh: None,
+            },
+            ChunkMetadata {
+                doc_ctx: DocumentContext {
+                    source_path: Arc::from("doc2.md"),
+                    source_revision: Arc::from("hash2"),
+                    title: Arc::from(""),
+                    modified_at: None,
+                    kind: IndexKind::File,
+                },
+                chunk_text: "Apples are delicious fruits.".to_string(),
+                section_heading: None,
+                chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
+                is_fresh: None,
+            },
+        ];
+
         let merged = MergedIndex {
-            vectors: VectorStore::from_vec_vec(vec![vec![1.0, 2.0, 3.0]]).unwrap(),
-            metadata: vec![],
+            vectors: VectorStore::from_vec_vec(vec![
+                vec![1.0, 0.0, 0.0, 0.0],
+                vec![0.0, 1.0, 0.0, 0.0],
+            ])
+            .unwrap(),
+            metadata,
             bm25_embeddings: None,
             bm25_header: None,
             built_at: "now".to_string(),
@@ -217,8 +255,20 @@ mod tests {
         let embedder: Arc<Mutex<dyn Embedder>> =
             Arc::new(Mutex::new(mock_embedder()));
         let search_config = default_search_config();
-        let result = create_search_service(merged, embedder, &search_config);
-        assert!(result.is_ok());
+        let service = create_search_service(merged, embedder, &search_config).unwrap();
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let results = rt.block_on(service.search("apples", 5, "")).unwrap();
+
+        assert!(!results.is_empty(), "Should return results");
+        assert!(
+            results.iter().all(|r| r.bm25_score == 0.0),
+            "All BM25 scores should be zero when no BM25 data is available"
+        );
+        assert!(
+            results.iter().all(|r| r.semantic_score > 0.0),
+            "Semantic scores should be non-zero"
+        );
     }
 
 

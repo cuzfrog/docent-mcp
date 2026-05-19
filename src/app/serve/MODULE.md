@@ -1,7 +1,6 @@
 # Module - MCP
 
-- all modules are private
-- only re-export `pub(super) use http_server::{HttpServer, create_http_server}`
+- `pub(super) use http_server::{HttpServer, create_http_server}`
 
 ## mcp_server.rs
 This module addresses MCP related concerns. It's a higher layer abstraction on top of `SearchService` which encapsulates the actual index querying.

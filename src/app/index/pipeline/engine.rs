@@ -53,8 +53,9 @@ impl IndexingProcessor for ParallelBatchIndexingProcessor {
         let mut embedder = self.embedder.lock().unwrap();
         for batch in chunk_texts.chunks(BATCH_SIZE) {
             let batch_size = batch.len() as u64;
+            let batch: Vec<String> = batch.iter().map(|s| s.to_string()).collect();
             let vectors = embedder
-                .embed(batch)
+                .embed(&batch)
                 .map_err(|e| anyhow::anyhow!("Embedding operation failed: {}", e))?;
             if let Some(p) = progress {
                 p.tick(batch_size);

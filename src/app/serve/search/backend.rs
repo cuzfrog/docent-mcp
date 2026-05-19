@@ -30,7 +30,7 @@ impl ScoreBackend for VectorScoreBackend {
             .map_err(|e| anyhow::anyhow!("Embedder lock poisoned: {}", e))?;
 
         let query_vector = emb
-            .embed(&[query])?
+            .embed(&[query.to_string()])?
             .into_iter()
             .next()
             .ok_or_else(|| anyhow::anyhow!("Embedder returned no vectors for query"))?;

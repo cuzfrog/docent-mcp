@@ -2,7 +2,7 @@ use crate::models::EmbeddingModel;
 
 #[cfg_attr(test, mockall::automock)]
 pub trait Embedder: Send {
-    fn embed<'a>(&mut self, texts: &[&'a str]) -> anyhow::Result<Vec<Vec<f32>>>;
+    fn embed(&mut self, texts: &[String]) -> anyhow::Result<Vec<Vec<f32>>>;
     fn dims(&self) -> usize;
 }
 
@@ -15,9 +15,8 @@ struct FastembedEmbedder {
 }
 
 impl Embedder for FastembedEmbedder {
-    fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
-        let strings: Vec<String> = texts.iter().map(|s| s.to_string()).collect();
-        self.model.embed(strings)
+    fn embed(&mut self, texts: &[String]) -> anyhow::Result<Vec<Vec<f32>>> {
+        self.model.embed(texts.to_vec())
     }
 
     fn dims(&self) -> usize {
@@ -26,7 +25,7 @@ impl Embedder for FastembedEmbedder {
 }
 
 impl Embedder for Box<dyn Embedder> {
-    fn embed(&mut self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
+    fn embed(&mut self, texts: &[String]) -> anyhow::Result<Vec<Vec<f32>>> {
         self.as_mut().embed(texts)
     }
 

@@ -1,4 +1,4 @@
-
+#[cfg_attr(test, mockall::automock)]
 pub trait Tokenizer: Send + Sync {
     /// Encode `text` and return (total_token_count, Vec<(byte_start, byte_end)>).
     /// `byte_start` and `byte_end` are UTF-8 byte offsets into the original `text`.
