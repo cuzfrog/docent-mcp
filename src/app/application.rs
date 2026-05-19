@@ -8,7 +8,7 @@ use crate::app::index::{create_indexer, Indexer, IndexRequest};
 use crate::domain::IndexKind;
 use crate::app::serve::HttpServer;
 use crate::config::Config;
-use crate::app::index::processor::create_processor;
+
 use crate::models::{create_model_factory, ModelFactory};
 use crate::support::ui::{Console, create_console};
 
@@ -32,14 +32,12 @@ pub fn create_application(config: &Config) -> anyhow::Result<impl Application> {
 
     let mut indexers: HashMap<IndexKind, Box<dyn Indexer>> = HashMap::new();
     for kind in config.enabled_kinds() {
-        let processor = create_processor(factory.as_ref(), &config.index)?;
         indexers.insert(kind, create_indexer(
             kind,
             config,
             Box::new(create_console(config.verbose)),
             Arc::clone(&factory),
-            processor,
-        ));
+        )?);
     }
 
     Ok(AppImpl {

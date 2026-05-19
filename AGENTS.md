@@ -92,7 +92,7 @@ Pre-action checklist:
 - Before adding a mock of `xxx`, check `xxx_mock.rs` for reuse.
 
 Post-action checklist:
-- After semantic or logic change, run: `cargo test` and `cargo clippy --all-targets`
+- After file edit (semantic or logic change), run: `cargo test` and `cargo clippy --all-targets`
 - After Web UI change (`src/ui/`), run: `cd src/ui && npm test`
 - After adding new features, run e2e tests by: `cargo run -- serve` in background, then `pytest -v`
 - After MCP schema changes, update Web UI accordingly.
