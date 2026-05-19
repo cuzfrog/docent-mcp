@@ -5,10 +5,10 @@ use crate::config::SearchConfig;
 use crate::index::embedder::Embedder;
 use crate::index::{MergedIndex};
 use crate::app::serve::search::backend::build_backends;
-use crate::app::serve::search::create_fusion;
+use super::fusion::create_fusion;
 use crate::app::serve::search::orchestrator::HybridSearchService;
-use crate::app::serve::search::DecayRanker;
-use super::SearchResult;
+use super::ranking::DecayRanker;
+use super::types::SearchResult;
 
 #[async_trait::async_trait]
 pub trait SearchService: Send + Sync {
