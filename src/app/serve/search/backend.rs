@@ -134,7 +134,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::mock_embedder::mock_embedder;
+    use crate::index::mock_embedder;
 
     #[test]
     fn test_vector_backend_scores_descending() {

@@ -186,7 +186,7 @@ mod tests {
     use crate::index::MergedIndex;
     use crate::index::VectorStore;
     use crate::domain::{IndexKind, ChunkMetadata, DocumentContext};
-    use crate::tests::mock_embedder::mock_embedder;
+    use crate::index::mock_embedder;
 
     fn default_search_config() -> SearchConfig {
         SearchConfig {

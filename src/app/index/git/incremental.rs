@@ -75,7 +75,7 @@ mod tests {
     use super::super::GitIndexer;
     use crate::app::index::{IndexKind, IndexRequest, Indexer};
     use crate::tests::fixtures::{make_temp_dir, RecordingUi, test_processor};
-    use crate::tests::mock_model_factory::mock_model_factory;
+    use crate::models::mock_model_factory;
 
     #[test]
     fn incremental_without_existing_index_returns_error() {

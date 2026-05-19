@@ -2,6 +2,12 @@ pub(crate) mod counter;
 pub(crate) mod engine;
 pub(crate) mod sectioning;
 
+#[cfg(test)]
+mod counter_mock;
+
+#[cfg(test)]
+pub(crate) use counter_mock::mock_token_counter;
+
 pub use engine::Chunk;
 use engine::{chunk_document, ChunkingConfig};
 

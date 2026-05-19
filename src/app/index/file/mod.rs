@@ -68,8 +68,8 @@ mod tests {
     use crate::domain::IndexKind;
     use crate::index::{IndexRepository, SourceIndexKind};
     use crate::tests::fixtures::{make_temp_dir, test_processor, create_test_processor};
-    use crate::tests::mock_embedder::mock_embedder;
-    use crate::tests::mock_token_counter::mock_token_counter;
+    use crate::app::index::chunking::mock_token_counter;
+    use crate::index::mock_embedder;
 
     fn write_file(dir: &std::path::Path, name: &str, content: &str) {
         std::fs::write(dir.join(name), content).unwrap();

@@ -36,3 +36,9 @@ pub(crate) use semantic_header::SCHEMA_VERSION;
 pub(crate) use merged::{IndexSizeInfo, LoadMergedResult, MergedIndex};
 pub(crate) use semantic_store::VectorStore;
 pub mod embedder;
+
+#[cfg(test)]
+mod embedder_mock;
+
+#[cfg(test)]
+pub(crate) use embedder_mock::mock_embedder;

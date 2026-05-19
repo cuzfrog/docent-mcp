@@ -40,7 +40,8 @@
 - **Forbidden Warning Suppression** No `#[allow(clippy::*)]` or similar workaround. An issue must be addressed.
 - **No comments** Do not add comments except it's a consequential information and the code itself cannot tell.
 - **No "new" constructors** Do not create `new` constructors in a concrete struct. Use a standalone factory method, i.e. the module constructor that creates an impl of this trait. This avoids exposing the concrete struct. The factory method should return `impl Trait` when possible, avoid `Box<dyn Trait>`. The naming pattern is `create_X`, e.g., `pub fn create_model_factory() -> impl ModelFactory`.
-- **Use fixed dependency versions**. Avoid `*` or `^` to prevent unintentional updates. `=` should be explicitly used. This applies to all dependencies, including python and javascript.
+- **Use fixed dependency versions** Avoid `*` or `^` to prevent unintentional updates. `=` should be explicitly used. This applies to all dependencies, including python and javascript.
+- **Clean mod.rs** The file should not contain anything except module definition and re-export.
 
 ### Test Mocking
 * `pub fn mock_xxxx()` to create a shared mock for testing.

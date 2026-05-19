@@ -133,8 +133,8 @@ mod tests {
     use super::*;
     use crate::domain::IndexKind;
     use crate::support::progress::MockProgress;
-    use crate::tests::mock_embedder::mock_embedder;
-    use crate::tests::mock_token_counter::mock_token_counter;
+    use crate::app::index::chunking::mock_token_counter;
+    use crate::index::mock_embedder;
     use std::sync::Arc;
 
     // -----------------------------------------------------------------------

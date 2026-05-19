@@ -1,4 +1,4 @@
-use crate::index::embedder::MockEmbedder;
+use super::embedder::MockEmbedder;
 
 /// Create a deterministic mock embedder for tests.
 ///

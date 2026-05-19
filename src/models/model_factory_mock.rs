@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::models::{EmbeddingModel, ModelFactory, Tokenizer};
+use super::{EmbeddingModel, ModelFactory, Tokenizer};
 
 pub fn mock_model_factory() -> Arc<dyn ModelFactory> {
     Arc::new(MockModelFactory { dims: 4 })
@@ -63,4 +63,3 @@ impl ModelFactory for MockModelFactory {
         Ok(Box::new(MockEmbeddingModel { dims: self.dims }))
     }
 }
-

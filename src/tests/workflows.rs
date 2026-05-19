@@ -6,8 +6,8 @@ use crate::config::IndexConfig;
 use crate::domain::{IndexKind, ChunkMetadata};
 use crate::index::{IndexRepository, SourceIndexKind, read_bm25_index};
 use crate::tests::fixtures::{make_temp_dir, read_index_at, create_test_processor, create_minimal_file_index};
-use crate::tests::mock_embedder::mock_embedder;
-use crate::tests::mock_token_counter::mock_token_counter;
+use crate::app::index::chunking::mock_token_counter;
+use crate::index::mock_embedder;
 
 fn test_config(index_dir: &std::path::Path) -> IndexConfig {
     IndexConfig {

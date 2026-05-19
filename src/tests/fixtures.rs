@@ -270,8 +270,8 @@ pub fn create_test_processor(
 
 /// Create a test processor with a deterministic mock embedder and whitespace token counter.
 pub fn test_processor() -> Box<dyn IndexingProcessor> {
-    let embedder = Box::new(crate::tests::mock_embedder::mock_embedder());
-    let chunker = create_chunker(256, 32, Box::new(crate::tests::mock_token_counter::mock_token_counter()));
+    let embedder = Box::new(crate::index::mock_embedder());
+    let chunker = create_chunker(256, 32, Box::new(crate::app::index::chunking::mock_token_counter()));
     Box::new(TestIndexingProcessor::new(chunker, embedder))
 }
 
@@ -304,10 +304,10 @@ pub fn create_minimal_file_index(persist_path: &Path) {
     let chunker = create_chunker(
         config.chunk_size,
         config.chunk_overlap,
-        Box::new(crate::tests::mock_token_counter::mock_token_counter()),
+        Box::new(crate::app::index::chunking::mock_token_counter()),
     );
     let processor = create_test_processor(
-        Box::new(crate::tests::mock_embedder::mock_embedder()),
+        Box::new(crate::index::mock_embedder()),
         chunker,
     );
     let (batch, dims) = processor.run(&[doc], None).unwrap();

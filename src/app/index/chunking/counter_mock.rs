@@ -1,4 +1,4 @@
-use crate::app::index::chunking::counter::MockTokenCounter;
+use super::counter::MockTokenCounter;
 
 /// Create a mock token counter that splits on whitespace for deterministic tests.
 pub fn mock_token_counter() -> MockTokenCounter {

@@ -81,7 +81,7 @@ mod tests {
     use super::super::GitIndexer;
     use crate::app::index::{IndexKind, IndexRequest, Indexer};
     use crate::tests::fixtures::{make_temp_dir, RecordingUi, test_processor};
-    use crate::tests::mock_model_factory::mock_model_factory;
+    use crate::models::mock_model_factory;
 
     #[test]
     fn rebuild_requires_existing_git_repo_to_proceed() {
