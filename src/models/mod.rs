@@ -10,6 +10,6 @@ pub use model_factory::{create_model_factory, ModelFactory};
 mod model_factory_mock;
 
 #[cfg(test)]
-pub use model_factory_mock::mock_model_factory;
+pub(crate) use model_factory_mock::mock_model_factory;
 #[cfg(test)]
-pub use tokenizer::MockTokenizer;
+pub(crate) use tokenizer::MockTokenizer;
