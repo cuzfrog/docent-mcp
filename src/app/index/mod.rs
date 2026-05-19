@@ -4,7 +4,7 @@ mod git;
 mod processor;
 
 mod types;
-pub use types::{IndexOutcome, IndexRequest};
+pub(super) use types::{IndexOutcome, IndexRequest};
 
 mod indexer;
 pub use indexer::Indexer;
