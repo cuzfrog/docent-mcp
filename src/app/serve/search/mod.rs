@@ -10,8 +10,6 @@ pub use types::SearchResult;
 
 mod index_access;
 pub(crate) use index_access::{ServeIndexAccessImpl, build_search_service};
-#[cfg(test)]
-pub(crate) use index_access::ServeIndexAccess;
 
 pub(super) use fusion::create_fusion;
 pub(super) use ranking::DecayRanker;

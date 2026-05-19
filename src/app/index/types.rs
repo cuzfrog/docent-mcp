@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use crate::domain::IndexKind;
 
 pub struct IndexRequest {
-    pub kind: IndexKind,
     pub input_path: PathBuf,
     pub rebuild: bool,
     pub verbose: bool,

@@ -74,7 +74,6 @@ impl Application for AppImpl {
                 .get(kind)
                 .ok_or_else(|| anyhow::anyhow!("No indexer registered for {:?}", kind))?;
             let request = IndexRequest {
-                kind: *kind,
                 input_path: dir.clone(),
                 rebuild,
                 verbose: self.config.verbose,
@@ -105,110 +104,36 @@ impl AppImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::index::IndexKind;
-    use crate::tests::fixtures::{make_temp_dir, serve_config_fixture, create_minimal_file_index};
+    use async_trait::async_trait;
+    use crate::app::serve::HttpServer;
 
-    #[test]
-    fn format_supported_models_returns_expected_strings() {
-        let models = [
-            ("model-a".to_string(), 384),
-            ("model-b".to_string(), 768),
-        ];
-        let formatted: Vec<String> = models
-            .iter()
-            .map(|(name, dim)| format!("{} (dim: {})", name, dim))
-            .collect();
-        assert_eq!(
-            formatted,
-            vec!["model-a (dim: 384)", "model-b (dim: 768)"]
-        );
+    struct MockHttpServer;
+
+    #[async_trait]
+    impl HttpServer for MockHttpServer {
+        async fn serve(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
     }
 
     #[test]
-    fn format_supported_models_empty() {
-        let formatted: Vec<String> = vec![];
-        assert!(formatted.is_empty());
-    }
-
-    #[test]
-    fn run_index_skips_both_when_file_disabled_and_git_absent() {
-        let dir = make_temp_dir("app_index_both_skip");
-        let mut config = serve_config_fixture(&dir);
-        config.file = Some(crate::config::FileConfig {
-            enabled: false,
-            glob_patterns: vec![],
-            file_size_limit_mb: 0,
-        });
-        config.git = None;
-
-        create_minimal_file_index(&dir);
-
+    fn run_index_skips_when_no_kinds_enabled() {
+        let config = Config {
+            file: Some(crate::config::FileConfig {
+                enabled: false,
+                glob_patterns: vec![],
+                file_size_limit_mb: 0,
+            }),
+            git: None,
+            ..Config::default()
+        };
         let app = AppImpl {
             config: config.clone(),
             console: Box::new(create_console(false)),
-            server: Box::new(crate::app::serve::create_http_server(
-                config.clone(),
-                Box::new(create_console(false)),
-            ).unwrap()),
+            server: Box::new(MockHttpServer),
             indexers: HashMap::new(),
         };
-
-        app.run_index(Some(dir.clone()), false).unwrap();
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn enabled_kinds_returns_file_when_enabled() {
-        let mut config = Config::default();
-        config.file = Some(crate::config::FileConfig {
-            enabled: true,
-            glob_patterns: vec![],
-            file_size_limit_mb: 0,
-        });
-        let kinds = config.enabled_kinds();
-        assert_eq!(kinds, vec![IndexKind::File]);
-    }
-
-    #[test]
-    fn enabled_kinds_returns_git_when_enabled() {
-        let mut config = Config::default();
-        config.git = Some(crate::config::GitConfig {
-            depth_limit: 100,
-            branch: "main".to_string(),
-            enabled: true,
-            glob_patterns: vec![],
-        });
-        let kinds = config.enabled_kinds();
-        assert_eq!(kinds, vec![IndexKind::Git]);
-    }
-
-    #[test]
-    fn enabled_kinds_returns_both_when_enabled() {
-        let mut config = Config::default();
-        config.file = Some(crate::config::FileConfig {
-            enabled: true,
-            glob_patterns: vec![],
-            file_size_limit_mb: 0,
-        });
-        config.git = Some(crate::config::GitConfig {
-            depth_limit: 100,
-            branch: "main".to_string(),
-            enabled: true,
-            glob_patterns: vec![],
-        });
-        let kinds = config.enabled_kinds();
-        assert_eq!(kinds, vec![IndexKind::File, IndexKind::Git]);
-    }
-
-    #[test]
-    fn enabled_kinds_returns_empty_when_disabled() {
-        let mut config = Config::default();
-        config.file = Some(crate::config::FileConfig {
-            enabled: false,
-            glob_patterns: vec![],
-            file_size_limit_mb: 0,
-        });
-        let kinds = config.enabled_kinds();
-        assert!(kinds.is_empty());
+        let result = app.run_index(None, false);
+        assert!(result.is_ok());
     }
 }

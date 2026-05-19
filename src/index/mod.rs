@@ -14,10 +14,6 @@ pub(crate) mod bm25_builder;
 pub(crate) use repository::{IndexRepository, StoreMergedRequest};
 
 #[cfg(test)]
-pub(crate) use bm25_io::read_bm25_index;
-#[cfg(test)]
-pub(crate) use semantic_header::IndexHeader;
-#[cfg(test)]
 pub(crate) use semantic_header::SCHEMA_VERSION;
 pub(crate) use merged::{IndexSizeInfo, LoadMergedResult, MergedIndex};
 pub(crate) use semantic_store::VectorStore;

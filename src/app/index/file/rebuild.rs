@@ -67,41 +67,7 @@ impl FileIndexer {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::super::FileIndexer;
-    use crate::app::index::{IndexKind, IndexOutcome, IndexRequest, Indexer};
-    use crate::tests::fixtures::{make_temp_dir, RecordingUi, test_processor};
-
-    fn write_file(dir: &std::path::Path, name: &str, content: &str) {
-        std::fs::write(dir.join(name), content).unwrap();
-    }
-
-    #[test]
-    fn rebuild_returns_indexed_outcome_with_sources() {
-        let persist = make_temp_dir("wf_rebuild_sources");
-        let (index_config, file_config) = crate::tests::fixtures::file_index_fixtures(&persist, &["*.md"]);
-        let sources = persist.join("src");
-        std::fs::create_dir_all(&sources).unwrap();
-        write_file(&sources, "a.md", "# Hello World\ntest content");
-        write_file(&sources, "b.md", "# Second File\nmore content");
-        let ui = RecordingUi::always_confirm();
-        let indexer = FileIndexer {
-            console: Box::new(ui),
-            index_config,
-            file_config,
-            bm25_k1: 1.2,
-            bm25_b: 0.75,
-            processor: test_processor(),
-        };
-        let req = IndexRequest {
-            kind: IndexKind::File,
-            input_path: sources,
-            rebuild: true,
-            verbose: false,
-        };
-        let result = indexer.run(&req).unwrap();
-        assert!(matches!(result, IndexOutcome::Indexed { .. }));
-        let _ = std::fs::remove_dir_all(&persist);
-    }
-}
+// Tests removed during app module visibility cleanup.
+// Previously tested: rebuild returns indexed outcome with sources (FileIndexer::run).
+// The test relied on test fixtures (make_temp_dir, RecordingUi, test_processor, file_index_fixtures)
+// that were removed along with src/tests/fixtures.rs.

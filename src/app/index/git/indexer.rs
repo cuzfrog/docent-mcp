@@ -36,10 +36,6 @@ pub(crate) fn create_git_indexer(
 }
 
 impl Indexer for GitIndexer {
-    fn kind(&self) -> IndexKind {
-        IndexKind::Git
-    }
-
     fn run(&self, request: &IndexRequest) -> anyhow::Result<IndexOutcome> {
         let persist_path = PathBuf::from(&self.index_config.persist_path);
         let dims = self.model_factory.dims();

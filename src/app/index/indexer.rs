@@ -10,7 +10,6 @@ use crate::models::ModelFactory;
 use crate::support::ui::Console;
 
 pub trait Indexer: Send + Sync {
-    fn kind(&self) -> IndexKind;
     fn run(&self, request: &IndexRequest) -> anyhow::Result<IndexOutcome>;
 }
 
