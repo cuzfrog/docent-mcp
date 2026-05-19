@@ -10,20 +10,8 @@ mod repository;
 mod source_index;
 pub(crate) mod bm25_builder;
 
-#[derive(Clone, Copy)]
-pub(crate) enum SourceIndexKind {
-    File,
-    Git,
-}
-
-impl SourceIndexKind {
-    pub(crate) fn subdir(&self) -> &str {
-        match self {
-            SourceIndexKind::File => "file",
-            SourceIndexKind::Git => "git",
-        }
-    }
-}
+mod kind;
+pub(crate) use kind::SourceIndexKind;
 
 pub(crate) use repository::{IndexRepository, StoreMergedRequest};
 
