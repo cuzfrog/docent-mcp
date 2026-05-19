@@ -8,23 +8,6 @@
                  (cache)        (HTTP)
 ```
 
-## Implementation Checklist
-
-- Every development cycle must be verified by:
-1. `cargo test`
-2. `cargo clippy --all-targets`
-
-- After Web UI change (`src/ui/`):
-1. `cd src/ui`
-2. `npm test`
-
-- After major changes, run e2e tests by:
-1. `cargo run -- serve` in background
-2. `pytest -v`
-
-- When MCP schema changes, update Web UI accordingly.
-- When adding utility functions/logic, check `src/support/` first.
-
 ## Conventions
 
 - **Error handling:** Use `anyhow::Result` internally. At binary boundaries (CLI, MCP responses), convert to user-facing messages. No `.unwrap()` on fallible operations.
@@ -35,7 +18,7 @@
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).
 - **No Dead Code** No `allow(dead_code)`. It should only be used during long incremental refactors, and must be removed once possible.
 - **Module Interface at Top** Public types, contract, methods should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
-- **Use imports** Import at the file top. Avoid long module path in the code body. E.g. `crate::app::index::xxxx::bbbb::new`
+- **Imports** Import at the file top. Avoid long module path in the code body. E.g. `crate::app::index::xxxx::bbbb::new`. Import from `super` when possible. To access sibling modules, do not re-export in the `mod.rs`.
 - **Config passing** Try to give a function what it needs, but do not split `Config` into multiple parameters.
 - **Forbidden Warning Suppression** No `#[allow(clippy::*)]` or similar workaround. An issue must be addressed.
 - **No comments** Do not add comments except it's a consequential information and the code itself cannot tell.
@@ -102,3 +85,14 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - **Liskov Substitution Principle**: Switching implementation should not violate the interface's contract, including implicit ones like side effects and error handling.
 - **Interface Segregation Principle**: A client should not be forced to depend on interfaces it does not use.
 - **Dependency Inversion Principle**: High-level modules should not depend on low-level modules. Abstractions should not depend on detailed implementations.
+
+## Hooks
+Pre-action checklist:
+- Before adding utility functions/logic, check `src/support/` for reuse.
+- Before adding a mock of `xxx`, check `xxx_mock.rs` for reuse.
+
+Post-action checklist:
+- After semantic or logic change, run: `cargo test` and `cargo clippy --all-targets`
+- After Web UI change (`src/ui/`), run: `cd src/ui && npm test`
+- After adding new features, run e2e tests by: `cargo run -- serve` in background, then `pytest -v`
+- After MCP schema changes, update Web UI accordingly.
