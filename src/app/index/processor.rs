@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use crate::app::index::chunking::counter::create_token_counter;
+use crate::app::index::chunking::create_token_counter;
 use crate::app::index::chunking::{create_chunker, Chunk, Chunker};
 use crate::config::IndexConfig;
 use crate::domain::ChunkMetadata;

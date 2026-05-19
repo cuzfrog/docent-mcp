@@ -1,5 +1,5 @@
 use crate::app::index::chunking::engine::{chunk_document, Chunk, ChunkingConfig};
-use crate::app::index::chunking::counter::TokenCounter;
+use super::counter::TokenCounter;
 
 pub trait Chunker: Send + Sync {
     fn chunk(&self, body: &str) -> Vec<Chunk>;

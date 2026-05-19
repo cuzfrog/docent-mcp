@@ -67,7 +67,7 @@ pub(crate) fn split_into_sections(body: &str) -> Vec<(Option<String>, String, us
     sections
 }
 
-use crate::app::index::chunking::counter::TokenCounter;
+use super::counter::TokenCounter;
 use crate::app::index::chunking::engine::{Chunk, ChunkingConfig};
 
 // ---------------------------------------------------------------------------

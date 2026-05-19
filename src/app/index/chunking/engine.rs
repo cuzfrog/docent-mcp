@@ -27,7 +27,7 @@ pub(crate) struct ChunkingConfig {
 // ---------------------------------------------------------------------------
 
 use super::sectioning::{build_newline_positions, chunk_section, split_into_sections};
-use crate::app::index::chunking::counter::TokenCounter;
+use super::counter::TokenCounter;
 
 /// Chunk a document body into semantic chunks.
 ///
@@ -65,7 +65,7 @@ pub(crate) fn chunk_document(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::index::chunking::counter::MockTokenCounter;
+    use super::super::counter::MockTokenCounter;
 
     fn test_config() -> ChunkingConfig {
         ChunkingConfig {
