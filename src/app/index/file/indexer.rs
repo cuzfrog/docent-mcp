@@ -53,7 +53,7 @@ mod tests {
     use crate::domain::ChunkMetadata;
     use crate::config::IndexConfig;
     use crate::domain::IndexKind;
-    use crate::index::{IndexRepository, SourceIndexKind};
+    use crate::index::IndexRepository;
     use crate::tests::fixtures::{make_temp_dir, test_processor, create_test_processor};
     use crate::app::index::chunking::mock_token_counter;
     use crate::index::mock_embedder;
@@ -81,7 +81,7 @@ mod tests {
         );
         let (batch, dims) = processor.run(&[doc], None).unwrap();
         let doc_count = ChunkMetadata::unique_count(&batch.metadata);
-        repo.store(SourceIndexKind::File, &batch, dims, doc_count, None).unwrap();
+        repo.store(IndexKind::File, &batch, dims, doc_count, None).unwrap();
     }
 
     #[test]

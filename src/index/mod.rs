@@ -10,8 +10,6 @@ mod repository;
 mod source_index;
 pub(crate) mod bm25_builder;
 
-mod kind;
-pub(crate) use kind::SourceIndexKind;
 
 pub(crate) use repository::{IndexRepository, StoreMergedRequest};
 

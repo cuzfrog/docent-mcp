@@ -4,7 +4,7 @@ use crate::app::index::chunking::create_chunker;
 use crate::app::index::pipeline::IndexableDocument;
 use crate::config::IndexConfig;
 use crate::domain::{IndexKind, ChunkMetadata};
-use crate::index::{IndexRepository, SourceIndexKind, read_bm25_index};
+use crate::index::{IndexRepository, read_bm25_index};
 use crate::tests::fixtures::{make_temp_dir, read_index_at, create_test_processor, create_minimal_file_index};
 use crate::app::index::chunking::mock_token_counter;
 use crate::index::mock_embedder;
@@ -71,7 +71,7 @@ fn test_index_and_store_round_trip() {
 
     let repo = IndexRepository::new(&index_dir, &config, 1.2, 0.75);
     let doc_count = ChunkMetadata::unique_count(&batch.metadata);
-    repo.store(SourceIndexKind::File, &batch, dims, doc_count, None).unwrap();
+    repo.store(IndexKind::File, &batch, dims, doc_count, None).unwrap();
 
     let (header, vectors, metadata) = read_index_at(&index_dir);
 
@@ -105,7 +105,7 @@ fn test_empty_document_list_produces_empty_index() {
     assert!(batch.metadata.is_empty());
 
     let repo = IndexRepository::new(&index_dir, &config, 1.2, 0.75);
-    repo.store(SourceIndexKind::File, &batch, dims, 0, None).unwrap();
+    repo.store(IndexKind::File, &batch, dims, 0, None).unwrap();
 
     let (header, vectors, metadata) = read_index_at(&index_dir);
     assert_eq!(header.chunk_count, 0);
@@ -166,7 +166,7 @@ fn test_index_preserves_metadata_fields() {
 
     let repo = IndexRepository::new(&index_dir, &config, 1.2, 0.75);
     let doc_count = ChunkMetadata::unique_count(&batch.metadata);
-    repo.store(SourceIndexKind::File, &batch, dims, doc_count, None).unwrap();
+    repo.store(IndexKind::File, &batch, dims, doc_count, None).unwrap();
 
     let (_header, _vectors, metadata) = read_index_at(&index_dir);
 
@@ -224,7 +224,7 @@ fn create_git_index_without_bm25(persist_path: &Path) {
     );
     let (batch, dims) = processor.run(&[doc], None).unwrap();
     let doc_count = ChunkMetadata::unique_count(&batch.metadata);
-    repo.store(SourceIndexKind::Git, &batch, dims, doc_count, None)
+    repo.store(IndexKind::Git, &batch, dims, doc_count, None)
         .unwrap();
 
     let bm25_dir = persist_path.join("git").join("bm25");
@@ -375,7 +375,7 @@ fn idempotent_bm25_repair() {
     );
     let (batch, dims) = processor.run(&[doc], None).unwrap();
     let doc_count = ChunkMetadata::unique_count(&batch.metadata);
-    repo.store(SourceIndexKind::File, &batch, dims, doc_count, None).unwrap();
+    repo.store(IndexKind::File, &batch, dims, doc_count, None).unwrap();
     let bm25_dir = persist.join("file").join("bm25");
     let _ = std::fs::remove_dir_all(&bm25_dir);
 

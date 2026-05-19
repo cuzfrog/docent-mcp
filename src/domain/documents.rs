@@ -10,6 +10,15 @@ pub enum IndexKind {
     Git,
 }
 
+impl IndexKind {
+    pub(crate) fn subdir(&self) -> &'static str {
+        match self {
+            IndexKind::File => "file",
+            IndexKind::Git => "git",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct DocumentContext {
     pub source_path: Arc<str>,

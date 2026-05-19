@@ -2,7 +2,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use crate::app::index::{IndexKind, IndexOutcome, IndexRequest};
-use crate::index::{IndexRepository, SourceIndexKind, StoreMergedRequest};
+use crate::index::{IndexRepository, StoreMergedRequest};
 use super::GitIndexer;
 
 impl GitIndexer {
@@ -13,7 +13,7 @@ impl GitIndexer {
         dims: usize,
     ) -> anyhow::Result<IndexOutcome> {
         let repo = IndexRepository::new(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
-        let stored = repo.load_one(SourceIndexKind::Git)?;
+        let stored = repo.load_one(IndexKind::Git)?;
         let old_header = stored.header;
         let old_vectors = stored.vectors;
         let old_metadata = stored.metadata;
@@ -52,7 +52,7 @@ impl GitIndexer {
         );
         let (merged_vectors, merged_metadata) = merged;
         let (chunk_count, doc_count) = repo.store_merged(&StoreMergedRequest {
-            kind: SourceIndexKind::Git,
+            kind: IndexKind::Git,
             merged_vectors,
             merged_metadata,
             dims,

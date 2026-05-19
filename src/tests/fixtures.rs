@@ -9,7 +9,7 @@ use crate::domain::IndexKind;
 use crate::index::embedder::Embedder;
 
 use crate::index::VectorStore;
-use crate::index::{IndexRepository, SourceIndexKind};
+use crate::index::IndexRepository;
 use crate::support::progress::Progress;
 
 // ---------------------------------------------------------------------------
@@ -186,7 +186,7 @@ pub fn read_index_at(
         max_size_mb: 512,
     };
     let repo = IndexRepository::new(path, &config, 1.2, 0.75);
-    let stored = repo.load_one(SourceIndexKind::File).unwrap();
+    let stored = repo.load_one(IndexKind::File).unwrap();
     (stored.header, stored.vectors, stored.metadata)
 }
 
@@ -312,7 +312,7 @@ pub fn create_minimal_file_index(persist_path: &Path) {
     );
     let (batch, dims) = processor.run(&[doc], None).unwrap();
     let doc_count = ChunkMetadata::unique_count(&batch.metadata);
-    repo.store(SourceIndexKind::File, &batch, dims, doc_count, None)
+    repo.store(IndexKind::File, &batch, dims, doc_count, None)
         .unwrap();
 }
 

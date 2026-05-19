@@ -8,7 +8,7 @@ use crate::index::semantic_header::IndexHeader;
 use crate::index::stored_metadata::StoredChunkMetadata;
 use crate::index::semantic_store::VectorStore;
 use crate::index::semantic_io::{read_index, write_index};
-use crate::index::SourceIndexKind;
+use crate::domain::IndexKind;
 pub(crate) struct Bm25SubIndex {
     pub header: Bm25IndexHeader,
     pub embeddings: Vec<bm25::Embedding<u32>>,
@@ -22,7 +22,7 @@ pub(crate) struct SubIndex {
 }
 
 impl SubIndex {
-    pub(crate) fn load(persist_path: &Path, kind: SourceIndexKind) -> anyhow::Result<Self> {
+    pub(crate) fn load(persist_path: &Path, kind: IndexKind) -> anyhow::Result<Self> {
         let source_dir = persist_path.join(kind.subdir());
 
         let stored = read_index(&source_dir)?;
@@ -51,7 +51,7 @@ impl SubIndex {
     pub(crate) fn rebuild_bm25(
         &self,
         persist_path: &Path,
-        kind: SourceIndexKind,
+        kind: IndexKind,
         k1: f32,
         b: f32,
     ) -> anyhow::Result<(Bm25SubIndex, String)> {
@@ -84,7 +84,7 @@ impl SubIndex {
 
     pub(crate) fn store(
         persist_path: &Path,
-        kind: SourceIndexKind,
+        kind: IndexKind,
         header: &IndexHeader,
         vectors: &VectorStore,
         metadata: &[ChunkMetadata],

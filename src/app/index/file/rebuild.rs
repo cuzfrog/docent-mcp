@@ -1,12 +1,12 @@
 use crate::app::index::{IndexKind, IndexOutcome, IndexRequest};
 use crate::domain::ChunkMetadata;
-use crate::index::{IndexRepository, SourceIndexKind};
+use crate::index::IndexRepository;
 use super::FileIndexer;
 
 impl FileIndexer {
     fn confirm_rebuild(&self, persist_path: &std::path::Path) -> anyhow::Result<bool> {
         let repo = IndexRepository::new(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
-        match repo.load_one(SourceIndexKind::File) {
+        match repo.load_one(IndexKind::File) {
             Ok(_) => {
                 self.console.warn(&format!(
                     "Warning: this will delete the existing index at '{}' and rebuild it from scratch.",
@@ -54,7 +54,7 @@ impl FileIndexer {
         let (batch, dims) = self.index_files(request)?;
         let chunk_count = batch.metadata.len();
         let doc_count = ChunkMetadata::unique_count(&batch.metadata);
-        repo.store(SourceIndexKind::File, &batch, dims, doc_count, None)?;
+        repo.store(IndexKind::File, &batch, dims, doc_count, None)?;
         Ok(IndexOutcome::Indexed {
             kind: IndexKind::File,
             rebuilt: true,

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::app::index::{IndexKind, IndexOutcome, IndexRequest};
 use crate::domain::ChunkMetadata;
-use crate::index::{IndexRepository, SourceIndexKind, StoreMergedRequest, VectorStore};
+use crate::index::{IndexRepository, StoreMergedRequest, VectorStore};
 use super::FileIndexer;
 
 type ExistingIndex = (HashMap<String, String>, Vec<ChunkMetadata>, VectorStore, bool);
@@ -36,7 +36,7 @@ impl FileIndexer {
     fn load_existing_index(&self) -> Result<ExistingIndex, IndexLoadError> {
         let persist_path = std::path::PathBuf::from(&self.index_config.persist_path);
         let repo = IndexRepository::new(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
-        match repo.load_one(SourceIndexKind::File) {
+        match repo.load_one(IndexKind::File) {
             Ok(stored) => {
                 if let Err(e) = stored.header.validate_against(&self.index_config) {
                     self.console.warn(&format!("{}", e));
@@ -93,7 +93,7 @@ impl FileIndexer {
         );
         let (merged_vectors, merged_metadata) = merged;
         let (chunk_count, doc_count) = repo.store_merged(&StoreMergedRequest {
-            kind: SourceIndexKind::File,
+            kind: IndexKind::File,
             merged_vectors,
             merged_metadata,
             dims,
@@ -119,7 +119,7 @@ mod tests {
     use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
     use crate::config::IndexConfig;
     use crate::domain::IndexKind;
-    use crate::index::{IndexRepository, SourceIndexKind};
+    use crate::index::IndexRepository;
     use crate::tests::fixtures::{make_temp_dir, RecordingUi, test_processor, create_test_processor};
     use crate::app::index::chunking::mock_token_counter;
     use crate::index::mock_embedder;
@@ -201,7 +201,7 @@ mod tests {
             );
             let (_batch, _dims) = processor.run(&[doc], None).unwrap();
             let repo = IndexRepository::new(&persist, &altered_config, 1.2, 0.75);
-            repo.store(SourceIndexKind::File, &_batch, _dims, 1, None).unwrap();
+            repo.store(IndexKind::File, &_batch, _dims, 1, None).unwrap();
         }
         let sources = persist.join("src");
         std::fs::create_dir_all(&sources).unwrap();
@@ -250,7 +250,7 @@ mod tests {
             );
             let (_batch, _dims) = processor.run(&[doc], None).unwrap();
             let repo = IndexRepository::new(&persist, &ic, 1.2, 0.75);
-            repo.store(SourceIndexKind::File, &_batch, _dims, 1, None).unwrap();
+            repo.store(IndexKind::File, &_batch, _dims, 1, None).unwrap();
             let vectors_path = persist.join("file").join("vectors.bin");
             std::fs::write(&vectors_path, vec![0u8; 4]).unwrap();
         }
@@ -338,7 +338,7 @@ mod tests {
         let result = indexer.run(&req).unwrap();
         assert!(matches!(result, IndexOutcome::Indexed { .. }));
         let repo = IndexRepository::new(&persist, &ic, 1.2, 0.75);
-        let stored = repo.load_one(SourceIndexKind::File).unwrap();
+        let stored = repo.load_one(IndexKind::File).unwrap();
         assert!(stored.bm25.is_some(), "BM25 data should be present after incremental indexing");
         let _ = std::fs::remove_dir_all(&persist);
     }

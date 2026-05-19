@@ -48,7 +48,7 @@ impl Indexer for GitIndexer {
             self.rebuild(request, &persist_path, dims)
         } else {
             let repo = crate::index::IndexRepository::new(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
-            if !repo.exists(crate::index::SourceIndexKind::Git) {
+            if !repo.exists(IndexKind::Git) {
                 anyhow::bail!(
                     "No existing Git index found at '{}'. Use `docent index-git --rebuild` to create one.",
                     persist_path.display()
