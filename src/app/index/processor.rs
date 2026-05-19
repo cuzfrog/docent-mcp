@@ -4,7 +4,7 @@ use crate::app::index::chunking::counter::create_token_counter;
 use crate::app::index::chunking::{create_chunker, Chunk, Chunker};
 use crate::config::IndexConfig;
 use crate::domain::ChunkMetadata;
-use crate::index::embedder::{create_embedder, Embedder};
+use crate::index::{create_embedder, Embedder};
 use crate::models::ModelFactory;
 use crate::domain::{IndexableDocument, IndexedBatch};
 use crate::support::Progress;

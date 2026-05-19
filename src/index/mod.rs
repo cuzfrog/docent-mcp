@@ -8,8 +8,7 @@ mod semantic_io;
 mod merged;
 mod repository;
 mod source_index;
-pub(crate) mod bm25_builder;
-
+mod bm25_builder;
 
 pub(crate) use repository::{IndexRepository, StoreMergedRequest};
 
@@ -17,7 +16,11 @@ pub(crate) use repository::{IndexRepository, StoreMergedRequest};
 pub(crate) use semantic_header::SCHEMA_VERSION;
 pub(crate) use merged::{IndexSizeInfo, LoadMergedResult, MergedIndex};
 pub(crate) use semantic_store::VectorStore;
-pub mod embedder;
+
+pub(crate) use bm25_builder::build_bm25;
+
+mod embedder;
+pub(crate) use embedder::{Embedder, create_embedder};
 
 #[cfg(test)]
 mod embedder_mock;

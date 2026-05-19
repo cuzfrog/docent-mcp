@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use crate::config::SearchConfig;
-use crate::index::embedder::Embedder;
+use crate::index::Embedder;
 use crate::index::{MergedIndex};
 use crate::app::serve::search::backend::build_backends;
 use super::fusion::create_fusion;

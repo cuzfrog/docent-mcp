@@ -119,8 +119,8 @@ fn build_search_service(
     let model = factory.build_model().map_err(|e| {
         anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e)
     })?;
-    let embedder: Arc<Mutex<dyn crate::index::embedder::Embedder>> =
-        Arc::new(Mutex::new(crate::index::embedder::create_embedder(model)));
+    let embedder: Arc<Mutex<dyn crate::index::Embedder>> =
+        Arc::new(Mutex::new(crate::index::create_embedder(model)));
     let search_service =
         crate::app::serve::search::create_search_service(merged, embedder, &config.search)?;
 
