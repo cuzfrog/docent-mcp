@@ -30,7 +30,7 @@ impl GitIndexer {
     fn embed_docs(
         &self,
         docs: &[crate::app::index::git::extract::GitDocument],
-    ) -> anyhow::Result<(crate::app::index::pipeline::IndexedBatch, usize, f64)> {
+    ) -> anyhow::Result<(crate::domain::IndexedBatch, usize, f64)> {
         let total_docs = docs.len();
         let embed_start = Instant::now();
         let pb_embed = self.console.progress(total_docs as u64, "Embedding");

@@ -1,5 +1,5 @@
 use crate::domain::IndexKind;
-use crate::app::index::pipeline::IndexableDocument;
+use crate::domain::IndexableDocument;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GitDocument {

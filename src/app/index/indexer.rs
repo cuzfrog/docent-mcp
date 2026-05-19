@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::config::Config;
 use crate::domain::IndexKind;
 use crate::app::index::{IndexOutcome, IndexRequest};
-use crate::app::index::pipeline::IndexingProcessor;
+use crate::app::index::processor::IndexingProcessor;
 use crate::app::index::file::create_file_indexer;
 use crate::app::index::git::create_git_indexer;
 use crate::models::ModelFactory;

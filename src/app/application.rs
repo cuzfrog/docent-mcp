@@ -8,7 +8,7 @@ use crate::app::index::{create_indexer, Indexer, IndexRequest};
 use crate::domain::IndexKind;
 use crate::app::serve::HttpServer;
 use crate::config::Config;
-use crate::app::index::pipeline::create_processor;
+use crate::app::index::processor::create_processor;
 use crate::models::{create_model_factory, ModelFactory};
 use crate::support::ui::{Console, create_console};
 

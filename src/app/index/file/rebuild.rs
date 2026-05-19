@@ -29,7 +29,7 @@ impl FileIndexer {
     fn index_files(
         &self,
         request: &IndexRequest,
-    ) -> anyhow::Result<(crate::app::index::pipeline::IndexedBatch, usize)> {
+    ) -> anyhow::Result<(crate::domain::IndexedBatch, usize)> {
         let all_files = super::discover_files(&request.input_path, &self.file_config.glob_patterns)?;
         self.console
             .info(&format!("Scanning: {} files found", all_files.len()));

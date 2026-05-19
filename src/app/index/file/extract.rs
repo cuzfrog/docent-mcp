@@ -1,5 +1,5 @@
 use crate::domain::IndexKind;
-use crate::app::index::pipeline::IndexableDocument;
+use crate::domain::IndexableDocument;
 use std::path::{Path, PathBuf};
 
 use super::diff::get_file_mtime;

@@ -115,7 +115,7 @@ impl FileIndexer {
 mod tests {
     use super::super::FileIndexer;
     use crate::app::index::chunking::create_chunker;
-    use crate::app::index::pipeline::IndexableDocument;
+    use crate::domain::IndexableDocument;
     use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
     use crate::config::IndexConfig;
     use crate::domain::IndexKind;

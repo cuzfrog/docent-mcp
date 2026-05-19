@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::app::index::chunking::create_chunker;
-use crate::app::index::pipeline::IndexableDocument;
+use crate::domain::IndexableDocument;
 use crate::config::IndexConfig;
 use crate::domain::{IndexKind, ChunkMetadata};
 use crate::index::{IndexRepository, read_bm25_index};

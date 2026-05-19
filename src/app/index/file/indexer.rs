@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::app::index::pipeline::IndexingProcessor;
+use crate::app::index::processor::IndexingProcessor;
 use crate::app::index::{IndexKind, IndexOutcome, IndexRequest, Indexer};
 use crate::config::Config;
 use crate::models::ModelFactory;
@@ -65,7 +65,7 @@ mod tests {
     fn create_index_at(persist: &std::path::Path, config: &IndexConfig, bm25_k1: f32, bm25_b: f32) {
         let repo = IndexRepository::new(persist, config, bm25_k1, bm25_b);
         let embedder = mock_embedder();
-        let doc = crate::app::index::pipeline::IndexableDocument {
+        let doc = crate::domain::IndexableDocument {
             source_path: "existing.md".to_string(),
             source_revision: "oldhash".to_string(),
             title: "Existing".to_string(),

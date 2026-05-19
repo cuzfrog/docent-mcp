@@ -2,7 +2,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use crate::app::index::chunking::{create_chunker, Chunk, Chunker};
-use crate::app::index::pipeline::{IndexingProcessor, IndexableDocument, IndexedBatch};
+use crate::app::index::processor::IndexingProcessor;
+use crate::domain::{IndexableDocument, IndexedBatch};
 use crate::config::{Config, FileConfig, GitConfig, IndexConfig};
 use crate::domain::ChunkMetadata;
 use crate::domain::IndexKind;

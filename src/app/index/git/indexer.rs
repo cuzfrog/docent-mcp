@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::app::index::pipeline::IndexingProcessor;
+use crate::app::index::processor::IndexingProcessor;
 use crate::app::index::{IndexKind, IndexOutcome, IndexRequest, Indexer};
 use crate::config::Config;
 use crate::models::ModelFactory;
