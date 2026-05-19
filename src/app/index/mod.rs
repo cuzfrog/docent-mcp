@@ -5,7 +5,6 @@ pub(crate) mod processor;
 
 mod types;
 pub use types::{IndexOutcome, IndexRequest};
-pub use crate::domain::IndexKind;
 
 mod indexer;
 pub use indexer::Indexer;

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use crate::app::index::{IndexKind, IndexOutcome, IndexRequest};
+use crate::app::index::{IndexOutcome, IndexRequest};
+use crate::domain::IndexKind;
 use crate::domain::ChunkMetadata;
 use crate::index::{IndexRepository, StoreMergedRequest, VectorStore};
 use super::FileIndexer;
