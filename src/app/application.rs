@@ -4,13 +4,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::app::index::{create_indexer, Indexer, IndexRequest};
-use crate::domain::IndexKind;
-use crate::app::serve::HttpServer;
+use super::index::{create_indexer, IndexRequest, Indexer};
+use super::serve::HttpServer;
 use crate::config::Config;
+use crate::domain::IndexKind;
 
 use crate::models::{create_model_factory, ModelFactory};
-use crate::support::{Console, create_console};
+use crate::support::{create_console, Console};
 
 #[async_trait]
 pub trait Application: Send + Sync {
@@ -32,12 +32,15 @@ pub fn create_application(config: &Config) -> anyhow::Result<impl Application> {
 
     let mut indexers: HashMap<IndexKind, Box<dyn Indexer>> = HashMap::new();
     for kind in config.enabled_kinds() {
-        indexers.insert(kind, create_indexer(
+        indexers.insert(
             kind,
-            config,
-            Box::new(create_console(config.verbose)),
-            Arc::clone(&factory),
-        )?);
+            create_indexer(
+                kind,
+                config,
+                Box::new(create_console(config.verbose)),
+                Arc::clone(&factory),
+            )?,
+        );
     }
 
     Ok(AppImpl {
@@ -102,8 +105,8 @@ impl AppImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_trait::async_trait;
     use crate::app::serve::HttpServer;
+    use async_trait::async_trait;
 
     struct MockHttpServer;
 
