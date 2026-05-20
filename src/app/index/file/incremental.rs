@@ -43,7 +43,7 @@ impl FileIndexer {
                     self.console.warn(&format!("{}", e));
                     return Err(IndexLoadError::NeedsRebuild(format!("{}", e)));
                 }
-                let old_hashes = super::extract_old_hashes(&stored.metadata);
+                let old_hashes = super::merge::extract_old_hashes(&stored.metadata);
                 Ok((old_hashes, stored.metadata, stored.vectors, true))
             }
             Err(e) => {
@@ -74,8 +74,8 @@ impl FileIndexer {
             }
             Err(IndexLoadError::Other(e)) => return Err(e),
         };
-        let all_files = super::discover_files(&request.input_path, &self.file_config.glob_patterns)?;
-        let diff = super::diff_files(&all_files, &old_hashes, &request.input_path)?;
+        let all_files = super::discover::discover_files(&request.input_path, &self.file_config.glob_patterns)?;
+        let diff = super::diff::diff_files(&all_files, &old_hashes, &request.input_path)?;
         self.console.info(&format!(
             "Processing Files: {} new/changed, {} deleted, {} unchanged",
             diff.to_index.len(), diff.deleted_count, diff.unchanged_count
@@ -84,12 +84,12 @@ impl FileIndexer {
             return Ok(IndexOutcome::UpToDate);
         }
         let pb = self.console.progress(diff.to_index.len() as u64, "Indexing files");
-        let docs = super::extract_documents(&diff.to_index, &request.input_path, self.file_config.file_size_limit_mb)?;
+        let docs = super::extract::extract_documents(&diff.to_index, &request.input_path, self.file_config.file_size_limit_mb)?;
 
         let (batch, dims) = self.processor.run(&docs, Some(pb.as_ref()))?;
 
         pb.finish();
-        let merged = super::merge_incremental(
+        let merged = super::merge::merge_incremental(
             &all_files, &old_metadata, &old_vectors, &batch.metadata, &batch.vectors,
         );
         let (merged_vectors, merged_metadata) = merged;

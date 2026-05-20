@@ -87,12 +87,12 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - **Interface Segregation Principle**: A client should not be forced to depend on interfaces it does not use.
 - **Dependency Inversion Principle**: High-level modules should not depend on low-level modules. Abstractions should not depend on detailed implementations.
 
-## Hooks
-Pre-action checklist:
+## File Edit Checklist
+Pre-action:
 - Before adding utility functions/logic, check `src/support/` for reuse.
 - Before adding a mock of `xxx`, check `xxx_mock.rs` for reuse.
 
-Post-action checklist:
+Post-action:
 - After file edit (semantic or logic change), run: `cargo test` and `cargo clippy --all-targets`
 - After Web UI change (`src/ui/`), run: `cd src/ui && npm test`
 - After adding new features, run e2e tests by: `cargo run -- serve` in background, then `pytest -v`
