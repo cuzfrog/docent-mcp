@@ -8,11 +8,11 @@ use crate::index::merger::IndexMerger;
 use crate::index::semantic_header::IndexHeader;
 use crate::index::semantic_store::VectorStore;
 use crate::index::source_index::SubIndex;
-use crate::index::SourceIndexKind;
+use crate::domain::IndexKind;
 
 
 pub(crate) struct StoreMergedRequest {
-    pub kind: SourceIndexKind,
+    pub kind: IndexKind,
     pub merged_vectors: Vec<Vec<f32>>,
     pub merged_metadata: Vec<ChunkMetadata>,
     pub dims: usize,
@@ -38,7 +38,7 @@ impl IndexRepository {
 
     pub(crate) fn store(
         &self,
-        kind: SourceIndexKind,
+        kind: IndexKind,
         batch: &IndexedBatch,
         embedding_dims: usize,
         doc_count: usize,
@@ -63,34 +63,10 @@ impl IndexRepository {
         )
     }
 
-    fn load_and_repair_sub_index(
-        &self,
-        kind: SourceIndexKind,
-        notices: &mut Vec<String>,
-    ) -> anyhow::Result<Option<SubIndex>> {
-        if !self.exists(kind) {
-            return Ok(None);
-        }
-        let mut sub = SubIndex::load(&self.persist_path, kind)?;
-        let other_kind = match kind {
-            SourceIndexKind::File => SourceIndexKind::Git,
-            SourceIndexKind::Git => SourceIndexKind::File,
-        };
-        if !self.exists(other_kind) {
-            sub.header.validate_against(&self.config)?;
-        }
-        if sub.bm25.is_none() && !sub.metadata.is_empty() {
-            let (bm25_sub, notice) = sub.rebuild_bm25(&self.persist_path, kind, self.bm25_k1, self.bm25_b)?;
-            notices.push(notice);
-            sub.bm25 = Some(bm25_sub);
-        }
-        Ok(Some(sub))
-    }
-
     pub(crate) fn load_merged(&self) -> anyhow::Result<LoadMergedResult> {
         let mut notices = Vec::new();
-        let file = self.load_and_repair_sub_index(SourceIndexKind::File, &mut notices)?;
-        let git = self.load_and_repair_sub_index(SourceIndexKind::Git, &mut notices)?;
+        let file = self.load_and_repair_sub_index(IndexKind::File, &mut notices)?;
+        let git = self.load_and_repair_sub_index(IndexKind::Git, &mut notices)?;
 
         if file.is_none() && git.is_none() {
             anyhow::bail!(
@@ -148,15 +124,39 @@ impl IndexRepository {
         Ok((chunk_count, doc_count))
     }
 
-    pub(crate) fn load_one(&self, kind: SourceIndexKind) -> anyhow::Result<SubIndex> {
+    pub(crate) fn load_one(&self, kind: IndexKind) -> anyhow::Result<SubIndex> {
         SubIndex::load(&self.persist_path, kind)
     }
 
-    pub(crate) fn exists(&self, kind: SourceIndexKind) -> bool {
+    pub(crate) fn exists(&self, kind: IndexKind) -> bool {
         self.persist_path
             .join(kind.subdir())
             .join("header.json")
             .exists()
+    }
+
+    fn load_and_repair_sub_index(
+        &self,
+        kind: IndexKind,
+        notices: &mut Vec<String>,
+    ) -> anyhow::Result<Option<SubIndex>> {
+        if !self.exists(kind) {
+            return Ok(None);
+        }
+        let mut sub = SubIndex::load(&self.persist_path, kind)?;
+        let other_kind = match kind {
+            IndexKind::File => IndexKind::Git,
+            IndexKind::Git => IndexKind::File,
+        };
+        if !self.exists(other_kind) {
+            sub.header.validate_against(&self.config)?;
+        }
+        if sub.bm25.is_none() && !sub.metadata.is_empty() {
+            let (bm25_sub, notice) = sub.rebuild_bm25(&self.persist_path, kind, self.bm25_k1, self.bm25_b)?;
+            notices.push(notice);
+            sub.bm25 = Some(bm25_sub);
+        }
+        Ok(Some(sub))
     }
 }
 

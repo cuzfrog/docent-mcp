@@ -163,3 +163,70 @@ impl Config {
         kinds
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{FileConfig, GitConfig};
+    use crate::domain::IndexKind;
+
+    #[test]
+    fn enabled_kinds_returns_file_when_enabled() {
+        let config = Config {
+            file: Some(FileConfig {
+                enabled: true,
+                glob_patterns: vec![],
+                file_size_limit_mb: 0,
+            }),
+            ..Config::default()
+        };
+        assert_eq!(config.enabled_kinds(), vec![IndexKind::File]);
+    }
+
+    #[test]
+    fn enabled_kinds_returns_git_when_enabled() {
+        let config = Config {
+            git: Some(GitConfig {
+                depth_limit: 100,
+                branch: "main".to_string(),
+                enabled: true,
+                glob_patterns: vec![],
+            }),
+            ..Config::default()
+        };
+        assert_eq!(config.enabled_kinds(), vec![IndexKind::Git]);
+    }
+
+    #[test]
+    fn enabled_kinds_returns_both_when_both_enabled() {
+        let config = Config {
+            file: Some(FileConfig {
+                enabled: true,
+                glob_patterns: vec![],
+                file_size_limit_mb: 0,
+            }),
+            git: Some(GitConfig {
+                depth_limit: 100,
+                branch: "main".to_string(),
+                enabled: true,
+                glob_patterns: vec![],
+            }),
+            ..Config::default()
+        };
+        assert_eq!(config.enabled_kinds(), vec![IndexKind::File, IndexKind::Git]);
+    }
+
+    #[test]
+    fn enabled_kinds_returns_empty_when_all_disabled() {
+        let config = Config {
+            file: Some(FileConfig {
+                enabled: false,
+                glob_patterns: vec![],
+                file_size_limit_mb: 0,
+            }),
+            git: None,
+            ..Config::default()
+        };
+        assert!(config.enabled_kinds().is_empty());
+    }
+}

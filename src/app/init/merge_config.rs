@@ -4,11 +4,13 @@
 //! `[search.ranking]`, `[search.fusion]`, `[search.bm25]` layout, and merging
 //! existing user values into a template while preserving comments and layout.
 
+pub(super) const DEFAULT_TEMPLATE: &str = include_str!("../../templates/docent.toml");
+
 /// Merge existing config values into the default template.
 ///
 /// For each section in the existing config, the corresponding section in the
 /// template is scanned and matching keys are replaced with the user's value.
-pub(crate) fn merge_toml(template: &str, existing: &str) -> anyhow::Result<String> {
+pub(super) fn merge_toml(template: &str, existing: &str) -> anyhow::Result<String> {
     let existing_root: toml::Value = toml::from_str(existing)
         .map_err(|e| anyhow::anyhow!("Failed to parse existing config: {}", e))?;
 
@@ -222,8 +224,7 @@ strategy = "weighted_sum"
 [search.bm25]
 k1 = 2.0
 "#;
-        let template = crate::config::defaults::DEFAULT_TEMPLATE;
-        let merged = merge_toml(template, existing).unwrap();
+        let merged = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
         assert!(merged.contains("[search.ranking]"));
         assert!(merged.contains("same_src_score_decay"));
         assert!(merged.contains("0.5"));
@@ -247,8 +248,7 @@ semantic_weight = 0.8
 bm25_k1 = 2.0
 bm25_b = 0.5
 "#;
-        let template = crate::config::defaults::DEFAULT_TEMPLATE;
-        let merged = merge_toml(template, existing).unwrap();
+        let merged = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
         assert!(merged.contains("[search.ranking]"), "Should have [search.ranking] section");
         assert!(merged.contains("same_src_score_decay"), "Should migrate same_src_score_decay");
         assert!(merged.contains("0.5"), "same_src_score_decay should have value 0.5");
@@ -278,8 +278,7 @@ chunk_overlap = 64
 max_size_mb = 512
 "#;
 
-        let template = crate::config::defaults::DEFAULT_TEMPLATE;
-        let merged = merge_toml(template, existing).unwrap();
+        let merged = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
         let index_pos = merged.find("[index]").unwrap();
         let next_section_pos = merged[index_pos + 1..]
             .find("\n[")

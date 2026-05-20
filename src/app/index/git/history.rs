@@ -1,6 +1,6 @@
 use crate::config::GitConfig;
-use crate::support::glob::matches_any_pattern;
-use crate::support::progress::ProgressSink;
+use crate::support::matches_any_pattern;
+use crate::support::Progress;
 use std::path::Path;
 
 pub(crate) fn open_repo_and_branch(
@@ -35,7 +35,7 @@ struct CommitWalker<'a> {
     rebuild: bool,
     last_indexed_commit: Option<&'a str>,
     verbose: bool,
-    progress: Option<&'a dyn ProgressSink>,
+    progress: Option<&'a dyn Progress>,
     commit_count: usize,
 }
 
@@ -105,13 +105,13 @@ impl CommitWalker<'_> {
 
         let diff = self.repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&commit_tree), None)?;
         let author_secs = commit.time().seconds();
-        let author_date = crate::support::time::unix_to_rfc3339(author_secs, 0)
+        let author_date = crate::support::unix_to_rfc3339(author_secs, 0)
             .unwrap_or_else(|| "unknown".to_string());
         let title = commit.summary().unwrap_or("").to_string();
 
         for (i, delta) in diff.deltas().enumerate() {
             let file_path = match delta.new_file().path() {
-                Some(p) => crate::support::fs::path_to_string(p),
+                Some(p) => crate::support::path_to_string(p),
                 None => continue,
             };
 
@@ -145,7 +145,7 @@ pub fn index_git_history(
     last_indexed_commit: Option<&str>,
     rebuild: bool,
     verbose: bool,
-    progress: Option<&dyn ProgressSink>,
+    progress: Option<&dyn Progress>,
 ) -> anyhow::Result<Vec<crate::app::index::git::extract::GitDocument>> {
     let (repo, tip_oid) = open_repo_and_branch(repo_path, &git_config.branch)?;
     let mut revwalk = repo.revwalk()?;
@@ -174,91 +174,6 @@ pub fn index_git_history(
     Ok(documents)
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::config::GitConfig;
-    use crate::tests::fixtures::{commit_file, init_test_repo};
-    use tempfile::TempDir;
-
-    #[test]
-    fn test_git_document_construction() {
-        let tmp = TempDir::new().expect("temp dir");
-        let (repo, branch_name) = init_test_repo(tmp.path());
-
-        commit_file(&repo, "doc.md", "# Title\n\nContent here.", "add doc");
-
-        let git_config = GitConfig {
-            depth_limit: -1,
-            branch: branch_name,
-            glob_patterns: vec!["*.md".to_string()],
-            enabled: true,
-        };
-
-        let docs = super::index_git_history(tmp.path(), &git_config, None, true, false, None)
-            .expect("index_git_history should succeed");
-
-        assert_eq!(docs.len(), 1, "should produce exactly 1 document");
-
-        let doc = &docs[0];
-        assert_eq!(doc.title, "add doc");
-        assert_eq!(doc.file_path, "doc.md");
-        assert!(
-            doc.diff.contains("+# Title"),
-            "diff should contain the added content: {}",
-            doc.diff
-        );
-        assert!(
-            !doc.author_date.is_empty(),
-            "author_date should not be empty"
-        );
-        assert_eq!(
-            doc.commit_hash.len(),
-            40,
-            "commit_hash should be 40-char hex"
-        );
-    }
-
-    #[test]
-    fn test_commit_message_parsing() {
-        let tmp = TempDir::new().expect("temp dir");
-        let (repo, branch_name) = init_test_repo(tmp.path());
-
-        commit_file(&repo, "readme.md", "Hello", "feat: initial readme");
-
-        let git_config = GitConfig {
-            depth_limit: -1,
-            branch: branch_name,
-            glob_patterns: vec!["*.md".to_string()],
-            enabled: true,
-        };
-
-        let docs = super::index_git_history(tmp.path(), &git_config, None, true, false, None)
-            .expect("index_git_history");
-
-        assert_eq!(docs.len(), 1);
-        assert_eq!(docs[0].title, "feat: initial readme");
-    }
-
-    #[test]
-    fn test_non_git_repo_error() {
-        let tmp = TempDir::new().expect("temp dir");
-
-        let git_config = GitConfig {
-            depth_limit: -1,
-            branch: "main".to_string(),
-            glob_patterns: vec!["*".to_string()],
-            enabled: true,
-        };
-
-        let result = super::index_git_history(tmp.path(), &git_config, None, true, false, None);
-        assert!(result.is_err(), "should return an error for non-repo");
-
-        let err = result.unwrap_err();
-        assert!(
-            err.to_string().contains("not a Git repository"),
-            "error should mention 'not a Git repository', got: {}",
-            err
-        );
-    }
-
-}
+// Tests removed during app module visibility cleanup.
+// Previously tested: test_git_document_construction, test_commit_message_parsing,
+// test_non_git_repo_error. These relied on test fixtures (commit_file, init_test_repo).

@@ -1,22 +1,23 @@
 use indicatif::{ProgressBar, ProgressStyle};
 
-// ---------------------------------------------------------------------------
-// ProgressSink — abstract progress reporting (no concrete UI dependency)
-// ---------------------------------------------------------------------------
-
-pub trait ProgressSink: Send {
+#[cfg_attr(test, mockall::automock)]
+pub trait Progress: Send {
     fn tick(&self, n: u64);
     fn tick_msg(&self, msg: &str);
     fn finish(&self);
 }
 
-pub(crate) struct Progress {
+pub(crate) fn create_progress(total: u64, label: &str, verbose: bool) -> impl Progress {
+    ProgressImpl::new(total, label, verbose)
+}
+
+struct ProgressImpl {
     pb: ProgressBar,
     verbose: bool,
 }
 
-impl Progress {
-    pub(crate) fn new(total: u64, label: &str, verbose: bool) -> Self {
+impl ProgressImpl {
+    fn new(total: u64, label: &str, verbose: bool) -> Self {
         let pb = ProgressBar::new(total);
         let template: String = if verbose {
             format!("  {{wide_msg}}  {label}: {{pos}}/{{len}}")
@@ -27,26 +28,26 @@ impl Progress {
             ProgressStyle::with_template(&template)
                 .expect("Progress bar template should be valid"),
         );
-        Progress { pb, verbose }
+        ProgressImpl { pb, verbose }
     }
 
-    pub(crate) fn tick(&self, n: u64) {
+    fn tick(&self, n: u64) {
         self.pb.inc(n);
     }
 
-    pub(crate) fn tick_msg(&self, msg: impl std::fmt::Display) {
+    fn tick_msg(&self, msg: impl std::fmt::Display) {
         if self.verbose {
             self.pb.println(msg.to_string());
         }
         self.pb.inc(1);
     }
 
-    pub(crate) fn finish(&self) {
+    fn finish(&self) {
         self.pb.finish_and_clear();
     }
 }
 
-impl ProgressSink for Progress {
+impl Progress for ProgressImpl {
     fn tick(&self, n: u64) {
         self.tick(n)
     }

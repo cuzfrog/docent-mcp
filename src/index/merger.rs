@@ -70,7 +70,7 @@ impl IndexMerger {
 
 #[cfg(test)]
 mod tests {
-    use crate::domain::{ChunkMetadata, DocumentContext, IndexKind};
+    use crate::domain::{ChunkMetadata, DocumentContext};
     use crate::index::bm25_header::Bm25IndexHeader;
     use crate::index::semantic_header::IndexHeader;
     use crate::index::semantic_store::VectorStore;

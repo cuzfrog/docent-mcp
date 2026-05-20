@@ -7,7 +7,7 @@ pub mod app;
 pub mod config;
 pub mod domain;
 pub mod index;
-pub(crate) mod mcp;
+pub mod models;
 pub mod support;
 pub(crate) mod ui;
 
