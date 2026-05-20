@@ -18,16 +18,9 @@ pub(crate) struct ChunkingConfig {
     pub chunk_overlap: usize,
 }
 
+#[cfg_attr(test, mockall::automock)]
 pub trait Chunker: Send + Sync {
     fn chunk(&self, body: &str) -> Vec<Chunk>;
-}
-
-#[cfg(test)]
-mockall::mock! {
-    pub Chunker {}
-    impl Chunker for Chunker {
-        fn chunk(&self, body: &str) -> Vec<Chunk>;
-    }
 }
 
 struct DocumentChunker {
