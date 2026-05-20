@@ -30,7 +30,7 @@ trait ServeIndexAccess: Send + Sync {
         config: &crate::config::IndexConfig,
         k1: f32,
         b: f32,
-    ) -> anyhow::Result<crate::index::LoadMergedResult>;
+    ) -> anyhow::Result<crate::index::MergedIndex>;
 }
 
 struct ServeIndexAccessImpl;
@@ -68,7 +68,7 @@ impl ServeIndexAccess for ServeIndexAccessImpl {
         config: &crate::config::IndexConfig,
         k1: f32,
         b: f32,
-    ) -> anyhow::Result<crate::index::LoadMergedResult> {
+    ) -> anyhow::Result<crate::index::MergedIndex> {
         let repo = crate::index::create_index_repository(persist_path, config, k1, b);
         crate::index::load_merged(&repo, persist_path)
     }
@@ -105,7 +105,7 @@ fn build_search_service(
         }
     }
 
-    let result = index_access
+    let merged = index_access
         .load_merged(
             &persist_path,
             &config.index,
@@ -113,7 +113,6 @@ fn build_search_service(
             config.search.bm25.b,
         )
         .map_err(|e| anyhow::anyhow!("Failed to load merged index: {}", e))?;
-    let merged = result.merged;
 
     let factory = crate::models::create_model_factory(
         &config.index.embedding_model,
@@ -189,7 +188,7 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::domain::Vector;
-    use crate::index::{LoadMergedResult, MergedIndex};
+    use crate::index::MergedIndex;
 
     // ------------------------------------------------------------------
     // Fake implementations of the two seam traits
@@ -226,17 +225,15 @@ mod tests {
             _config: &crate::config::IndexConfig,
             _k1: f32,
             _b: f32,
-        ) -> anyhow::Result<LoadMergedResult> {
+        ) -> anyhow::Result<MergedIndex> {
             match &self.load_err {
                 Some(msg) => Err(anyhow::anyhow!("{}", msg)),
-                None => Ok(LoadMergedResult {
-                    merged: MergedIndex {
-                        vectors: Vector::from_vec_vec(vec![]).unwrap(),
-                        metadata: vec![],
-                        bm25_embeddings: None,
-                        bm25_header: None,
-                        built_at: "test".to_string(),
-                    },
+                None => Ok(MergedIndex {
+                    vectors: Vector::from_vec_vec(vec![]).unwrap(),
+                    metadata: vec![],
+                    bm25_embeddings: None,
+                    bm25_header: None,
+                    built_at: "test".to_string(),
                 }),
             }
         }

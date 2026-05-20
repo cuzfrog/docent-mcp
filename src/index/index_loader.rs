@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use super::merged::LoadMergedResult;
+use super::merged::MergedIndex;
 use super::merger::IndexMerger;
 use super::repository::IndexRepository;
 use crate::domain::IndexKind;
@@ -8,7 +8,7 @@ use crate::domain::IndexKind;
 pub(crate) fn load_merged(
     repo: &dyn IndexRepository,
     persist_path: &Path,
-) -> anyhow::Result<LoadMergedResult> {
+) -> anyhow::Result<MergedIndex> {
     let file = repo.load(IndexKind::File)?;
     let git = repo.load(IndexKind::Git)?;
 
@@ -36,6 +36,5 @@ pub(crate) fn load_merged(
         }
     }
 
-    let merged = IndexMerger::merge(file, git)?;
-    Ok(LoadMergedResult { merged })
+    IndexMerger::merge(file, git)
 }

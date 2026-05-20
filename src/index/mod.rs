@@ -13,7 +13,7 @@ mod bm25_builder;
 pub(crate) use repository::{IndexRepository, create_index_repository};
 pub(crate) use index_loader::load_merged;
 
-pub(crate) use merged::{LoadMergedResult, MergedIndex};
+pub(crate) use merged::MergedIndex;
 
 mod embedder;
 pub(crate) use embedder::{Embedder, create_embedder};

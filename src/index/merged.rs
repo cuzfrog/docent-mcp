@@ -11,7 +11,4 @@ pub(crate) struct MergedIndex {
     pub(crate) built_at: String,
 }
 
-/// Wrapper around [`MergedIndex`] loaded from disk.
-pub(crate) struct LoadMergedResult {
-    pub(crate) merged: MergedIndex,
-}
+
