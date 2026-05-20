@@ -1,3 +1,6 @@
+use super::chunker::{Chunk, ChunkingConfig};
+use super::counter::TokenCounter;
+
 // ---------------------------------------------------------------------------
 // Section splitting helpers — split body on H2/H3 heading boundaries
 // ---------------------------------------------------------------------------
@@ -66,9 +69,6 @@ pub(crate) fn split_into_sections(body: &str) -> Vec<(Option<String>, String, us
 
     sections
 }
-
-use super::counter::TokenCounter;
-use crate::app::index::chunking::engine::{Chunk, ChunkingConfig};
 
 // ---------------------------------------------------------------------------
 // chunk_section — apply sliding window within a single section

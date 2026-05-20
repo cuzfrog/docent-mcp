@@ -3,9 +3,9 @@ use std::sync::Mutex;
 use crate::app::index::chunking::{create_chunker, Chunk, Chunker};
 use crate::config::IndexConfig;
 use crate::domain::ChunkMetadata;
+use crate::domain::{IndexableDocument, IndexedBatch};
 use crate::index::{create_embedder, Embedder};
 use crate::models::ModelFactory;
-use crate::domain::{IndexableDocument, IndexedBatch};
 use crate::support::Progress;
 
 use rayon::prelude::*;
@@ -25,11 +25,18 @@ pub fn create_processor(
     factory: &dyn ModelFactory,
     index_config: &IndexConfig,
 ) -> anyhow::Result<Box<dyn IndexingProcessor>> {
-    let chunker = create_chunker(index_config.chunk_size, index_config.chunk_overlap, factory.tokenizer());
+    let chunker = create_chunker(
+        index_config.chunk_size,
+        index_config.chunk_overlap,
+        factory.tokenizer(),
+    );
     let model = factory.build_model()?;
     let embedder = create_embedder(model);
 
-    Ok(Box::new(ParallelBatchIndexingProcessor { chunker, embedder: Mutex::new(embedder) }))
+    Ok(Box::new(ParallelBatchIndexingProcessor {
+        chunker,
+        embedder: Mutex::new(embedder),
+    }))
 }
 
 struct ParallelBatchIndexingProcessor {
@@ -129,31 +136,13 @@ impl ParallelBatchIndexingProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::index::chunking::MockChunker;
     use crate::domain::IndexKind;
-    use crate::support::MockProgress;
     use crate::index::mock_embedder;
-    use crate::models::MockTokenizer;
+    use crate::support::MockProgress;
     use std::sync::Arc;
 
-    // -----------------------------------------------------------------------
-    // Helpers
-    // -----------------------------------------------------------------------
-
-    fn make_processor(chunk_size: usize, chunk_overlap: usize) -> Box<dyn IndexingProcessor> {
-        let mut mock_tok = MockTokenizer::new();
-        mock_tok.expect_encode_with_offsets()
-            .returning(|text: &str| {
-                let mut offsets = Vec::new();
-                let mut pos = 0;
-                for word in text.split_whitespace() {
-                    let start = pos + text[pos..].find(word).unwrap();
-                    let end = start + word.len();
-                    offsets.push((start, end));
-                    pos = end;
-                }
-                (offsets.len(), offsets)
-            });
-        let chunker = create_chunker(chunk_size, chunk_overlap, Box::new(mock_tok));
+    fn make_processor(chunker: Box<dyn Chunker>) -> Box<dyn IndexingProcessor> {
         let embedder = Box::new(mock_embedder());
         Box::new(ParallelBatchIndexingProcessor {
             chunker,
@@ -179,7 +168,18 @@ mod tests {
 
     #[test]
     fn test_processor_run_single_document() {
-        let processor = make_processor(256, 32);
+        let mut mock_chunker = MockChunker::new();
+        mock_chunker.expect_chunk().returning(|body| {
+            vec![Chunk {
+                text: body.to_string(),
+                token_count: 0,
+                section_heading: None,
+                chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
+            }]
+        });
+        let processor = make_processor(Box::new(mock_chunker));
 
         let doc = make_test_document("Hello world");
         let result = processor.run(&[doc], None);
@@ -193,7 +193,18 @@ mod tests {
 
     #[test]
     fn test_processor_run_multiple_documents() {
-        let processor = make_processor(256, 32);
+        let mut mock_chunker = MockChunker::new();
+        mock_chunker.expect_chunk().returning(|body| {
+            vec![Chunk {
+                text: body.to_string(),
+                token_count: 0,
+                section_heading: None,
+                chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
+            }]
+        });
+        let processor = make_processor(Box::new(mock_chunker));
 
         let docs = vec![
             make_test_document("First document"),
@@ -210,14 +221,26 @@ mod tests {
 
     #[test]
     fn test_processor_reports_full_progress() {
-        let processor = make_processor(256, 32);
+        let mut mock_chunker = MockChunker::new();
+        mock_chunker.expect_chunk().returning(|body| {
+            vec![Chunk {
+                text: body.to_string(),
+                token_count: 0,
+                section_heading: None,
+                chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
+            }]
+        });
+        let processor = make_processor(Box::new(mock_chunker));
 
         let total_ticked = Arc::new(AtomicU64::new(0));
         let tick_accum = total_ticked.clone();
 
         let mut mock_progress = MockProgress::new();
-        mock_progress.expect_tick()
-            .returning(move |n| { tick_accum.fetch_add(n, Ordering::SeqCst); });
+        mock_progress.expect_tick().returning(move |n| {
+            tick_accum.fetch_add(n, Ordering::SeqCst);
+        });
         // tick_msg and finish are never called by the engine — no expectations needed
 
         let doc = make_test_document("Hello world");
@@ -230,7 +253,9 @@ mod tests {
 
     #[test]
     fn test_processor_run_empty_docs() {
-        let processor = make_processor(256, 32);
+        let mut mock_chunker = MockChunker::new();
+        mock_chunker.expect_chunk().returning(|_| vec![]);
+        let processor = make_processor(Box::new(mock_chunker));
 
         let result = processor.run(&[], None);
         assert!(result.is_ok());
@@ -242,7 +267,18 @@ mod tests {
 
     #[test]
     fn test_processor_metadata_fields() {
-        let processor = make_processor(256, 32);
+        let mut mock_chunker = MockChunker::new();
+        mock_chunker.expect_chunk().returning(|body| {
+            vec![Chunk {
+                text: body.to_string(),
+                token_count: 0,
+                section_heading: None,
+                chunk_index: 0,
+                line_start: 0,
+                line_end: 0,
+            }]
+        });
+        let processor = make_processor(Box::new(mock_chunker));
 
         let doc = IndexableDocument {
             source_path: "src/main.rs".to_string(),
@@ -264,7 +300,20 @@ mod tests {
 
     #[test]
     fn test_processor_chunk_count_matches_vectors() {
-        let processor = make_processor(10, 2);
+        let mut mock_chunker = MockChunker::new();
+        mock_chunker.expect_chunk().returning(|_body| {
+            (0..2)
+                .map(|i| Chunk {
+                    text: format!("chunk {}", i),
+                    token_count: 0,
+                    section_heading: None,
+                    chunk_index: i,
+                    line_start: 0,
+                    line_end: 0,
+                })
+                .collect()
+        });
+        let processor = make_processor(Box::new(mock_chunker));
 
         // A longer document that will be chunked into multiple pieces
         let body = "one two three four five six seven eight nine ten".repeat(5);
