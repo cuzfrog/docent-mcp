@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::domain::ChunkMetadata;
-use super::build_bm25;
+use super::bm25_builder::build_bm25;
 use super::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
 use super::bm25_io;
 use super::semantic_header::IndexHeader;
