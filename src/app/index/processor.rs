@@ -1,6 +1,5 @@
 use std::sync::Mutex;
 
-use crate::app::index::chunking::create_token_counter;
 use crate::app::index::chunking::{create_chunker, Chunk, Chunker};
 use crate::config::IndexConfig;
 use crate::domain::ChunkMetadata;
@@ -26,8 +25,7 @@ pub fn create_processor(
     factory: &dyn ModelFactory,
     index_config: &IndexConfig,
 ) -> anyhow::Result<Box<dyn IndexingProcessor>> {
-    let token_counter = create_token_counter(factory.tokenizer());
-    let chunker = create_chunker(index_config.chunk_size, index_config.chunk_overlap, token_counter);
+    let chunker = create_chunker(index_config.chunk_size, index_config.chunk_overlap, factory.tokenizer());
     let model = factory.build_model()?;
     let embedder = create_embedder(model);
 
@@ -133,8 +131,8 @@ mod tests {
     use super::*;
     use crate::domain::IndexKind;
     use crate::support::MockProgress;
-    use crate::app::index::chunking::mock_token_counter;
     use crate::index::mock_embedder;
+    use crate::models::MockTokenizer;
     use std::sync::Arc;
 
     // -----------------------------------------------------------------------
@@ -142,7 +140,20 @@ mod tests {
     // -----------------------------------------------------------------------
 
     fn make_processor(chunk_size: usize, chunk_overlap: usize) -> Box<dyn IndexingProcessor> {
-        let chunker = create_chunker(chunk_size, chunk_overlap, Box::new(mock_token_counter()));
+        let mut mock_tok = MockTokenizer::new();
+        mock_tok.expect_encode_with_offsets()
+            .returning(|text: &str| {
+                let mut offsets = Vec::new();
+                let mut pos = 0;
+                for word in text.split_whitespace() {
+                    let start = pos + text[pos..].find(word).unwrap();
+                    let end = start + word.len();
+                    offsets.push((start, end));
+                    pos = end;
+                }
+                (offsets.len(), offsets)
+            });
+        let chunker = create_chunker(chunk_size, chunk_overlap, Box::new(mock_tok));
         let embedder = Box::new(mock_embedder());
         Box::new(ParallelBatchIndexingProcessor {
             chunker,

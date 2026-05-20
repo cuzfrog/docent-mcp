@@ -7,12 +7,14 @@ pub trait TokenCounter: Send + Sync {
     fn encode_with_offsets(&self, text: &str) -> (usize, Vec<(usize, usize)>);
 }
 
-struct HuggingFaceTokenCounter {
+pub(super) fn create_token_counter(
     tokenizer: Box<dyn Tokenizer>,
+) -> Box<dyn TokenCounter> {
+    Box::new(HuggingFaceTokenCounter { tokenizer })
 }
 
-pub fn create_token_counter(tokenizer: Box<dyn Tokenizer>) -> Box<dyn TokenCounter> {
-    Box::new(HuggingFaceTokenCounter { tokenizer })
+struct HuggingFaceTokenCounter {
+    tokenizer: Box<dyn Tokenizer>,
 }
 
 impl TokenCounter for HuggingFaceTokenCounter {

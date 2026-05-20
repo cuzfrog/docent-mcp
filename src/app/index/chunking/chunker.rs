@@ -1,5 +1,6 @@
+use super::counter::{create_token_counter, TokenCounter};
 use crate::app::index::chunking::engine::{chunk_document, Chunk, ChunkingConfig};
-use super::counter::TokenCounter;
+use crate::models::Tokenizer;
 
 pub trait Chunker: Send + Sync {
     fn chunk(&self, body: &str) -> Vec<Chunk>;
@@ -11,11 +12,7 @@ struct DocumentChunker {
 }
 
 impl DocumentChunker {
-    fn new(
-        chunk_size: usize,
-        chunk_overlap: usize,
-        token_counter: Box<dyn TokenCounter>,
-    ) -> Self {
+    fn new(chunk_size: usize, chunk_overlap: usize, token_counter: Box<dyn TokenCounter>) -> Self {
         Self {
             config: ChunkingConfig {
                 chunk_size,
@@ -35,7 +32,12 @@ impl Chunker for DocumentChunker {
 pub fn create_chunker(
     chunk_size: usize,
     chunk_overlap: usize,
-    token_counter: Box<dyn TokenCounter>,
+    tokenizer: Box<dyn Tokenizer>,
 ) -> Box<dyn Chunker> {
-    Box::new(DocumentChunker::new(chunk_size, chunk_overlap, token_counter))
+    let token_counter = create_token_counter(tokenizer);
+    Box::new(DocumentChunker::new(
+        chunk_size,
+        chunk_overlap,
+        token_counter,
+    ))
 }
