@@ -4,13 +4,6 @@ use crate::domain::{IndexKind, ChunkMetadata, DocumentContext};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub(super) enum StoredChunkKind {
-    File,
-    Git,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(super) struct StoredChunkMetadata {
     pub(super) source_path: String,
     pub(super) source_revision: String,
@@ -25,27 +18,9 @@ pub(super) struct StoredChunkMetadata {
     pub(super) line_end: usize,
     #[serde(default)]
     pub(super) modified_at: Option<String>,
-    pub(super) kind: StoredChunkKind,
+    pub(super) kind: IndexKind,
     #[serde(default)]
     pub(super) is_fresh: Option<bool>,
-}
-
-impl From<StoredChunkKind> for IndexKind {
-    fn from(kind: StoredChunkKind) -> Self {
-        match kind {
-            StoredChunkKind::File => IndexKind::File,
-            StoredChunkKind::Git => IndexKind::Git,
-        }
-    }
-}
-
-impl From<IndexKind> for StoredChunkKind {
-    fn from(kind: IndexKind) -> Self {
-        match kind {
-            IndexKind::File => StoredChunkKind::File,
-            IndexKind::Git => StoredChunkKind::Git,
-        }
-    }
 }
 
 impl From<StoredChunkMetadata> for ChunkMetadata {
@@ -56,7 +31,7 @@ impl From<StoredChunkMetadata> for ChunkMetadata {
                 source_revision: Arc::from(m.source_revision.as_str()),
                 title: Arc::from(m.title.as_str()),
                 modified_at: m.modified_at.as_ref().map(|s| Arc::from(s.as_str())),
-                kind: m.kind.into(),
+                kind: m.kind,
             },
             chunk_text: m.chunk_text,
             section_heading: m.section_heading,
@@ -80,7 +55,7 @@ impl From<ChunkMetadata> for StoredChunkMetadata {
             line_start: m.line_start,
             line_end: m.line_end,
             modified_at: m.doc_ctx.modified_at.as_ref().map(|s| s.to_string()),
-            kind: m.doc_ctx.kind.into(),
+            kind: m.doc_ctx.kind,
             is_fresh: m.is_fresh,
         }
     }
@@ -102,7 +77,7 @@ mod tests {
             line_start: 1,
             line_end: 5,
             modified_at: None,
-            kind: StoredChunkKind::File,
+            kind: IndexKind::File,
             is_fresh: None,
         };
 
@@ -126,7 +101,7 @@ mod tests {
             line_start: 1,
             line_end: 5,
             modified_at: None,
-            kind: StoredChunkKind::Git,
+            kind: IndexKind::Git,
             is_fresh: Some(true),
         };
 
@@ -152,7 +127,7 @@ mod tests {
         }"#;
 
         let meta: StoredChunkMetadata = serde_json::from_str(json).unwrap();
-        assert_eq!(meta.kind, StoredChunkKind::File);
+        assert_eq!(meta.kind, IndexKind::File);
         assert_eq!(meta.is_fresh, None);
     }
 
@@ -168,7 +143,7 @@ mod tests {
             line_start: 1,
             line_end: 5,
             modified_at: None,
-            kind: StoredChunkKind::File,
+            kind: IndexKind::File,
             is_fresh: None,
         };
 
@@ -196,7 +171,7 @@ mod tests {
         };
 
         let stored: StoredChunkMetadata = rt.into();
-        assert_eq!(stored.kind, StoredChunkKind::Git);
+        assert_eq!(stored.kind, IndexKind::Git);
         assert_eq!(stored.is_fresh, Some(true));
     }
 }

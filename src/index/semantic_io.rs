@@ -126,7 +126,8 @@ pub(super) fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::index::stored_metadata::StoredChunkKind;
+
+    use crate::domain::IndexKind;
     use crate::index::semantic_header::SCHEMA_VERSION;
 
     fn matching_header() -> IndexHeader {
@@ -170,7 +171,7 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -183,7 +184,7 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -196,7 +197,7 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
         ];
@@ -233,7 +234,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -246,7 +247,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -259,7 +260,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
         ];
@@ -316,7 +317,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -329,7 +330,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -342,7 +343,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
         ];
@@ -382,7 +383,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -395,7 +396,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -408,7 +409,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
         ];
@@ -448,7 +449,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -461,7 +462,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
         ];
@@ -506,7 +507,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -519,7 +520,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -532,7 +533,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -545,7 +546,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
         ];
@@ -606,7 +607,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -619,7 +620,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -632,7 +633,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
         ];
@@ -726,7 +727,7 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: StoredChunkKind::File,
+            kind: IndexKind::File,
             is_fresh: None,
         }];
 
@@ -785,7 +786,7 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: StoredChunkKind::File,
+            kind: IndexKind::File,
             is_fresh: None,
         }];
 
