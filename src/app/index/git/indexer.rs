@@ -3,9 +3,7 @@ use std::sync::Arc;
 
 use crate::app::index::processor::IndexingProcessor;
 use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
-use crate::domain::IndexKind;
 use crate::config::Config;
-use crate::index::{create_index_repository, IndexRepository};
 use crate::models::ModelFactory;
 use crate::support::Console;
 
@@ -45,13 +43,6 @@ impl Indexer for GitIndexer {
         if request.rebuild {
             self.rebuild(request, &persist_path, dims)
         } else {
-            let repo = create_index_repository(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
-            if !repo.exists(IndexKind::Git) {
-                anyhow::bail!(
-                    "No existing Git index found at '{}'. Use `docent index-git --rebuild` to create one.",
-                    persist_path.display()
-                );
-            }
             self.incremental(request, &persist_path, dims)
         }
     }

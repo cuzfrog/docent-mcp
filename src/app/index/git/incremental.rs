@@ -2,7 +2,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use crate::app::index::{IndexOutcome, IndexRequest};
-use crate::domain::IndexKind;
+use crate::domain::{IndexKind, Vector};
 use crate::index::{create_index_repository, IndexRepository, StoreMergedRequest};
 use super::GitIndexer;
 
@@ -14,11 +14,20 @@ impl GitIndexer {
         dims: usize,
     ) -> anyhow::Result<IndexOutcome> {
         let repo = create_index_repository(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
-        let stored = repo.load_one(IndexKind::Git)?;
-        let old_header = stored.header;
-        let old_vectors = stored.vectors;
-        let old_metadata = stored.metadata;
-        let last_commit = old_header.last_indexed_commit.clone();
+        let (old_vectors, old_metadata, last_commit) = match repo.load_one(IndexKind::Git) {
+            Ok(stored) => {
+                let last_commit = stored.header.last_indexed_commit.clone();
+                (stored.vectors, stored.metadata, last_commit)
+            }
+            Err(e) => {
+                if e.to_string().contains("no index found") {
+                    let empty = Vector::from_vec_vec(vec![])?;
+                    (empty, vec![], None)
+                } else {
+                    return Err(e);
+                }
+            }
+        };
         let total_new = match self.check_git_size(&request.input_path, dims, last_commit.as_deref())? {
             Some(n) => n,
             None => return Ok(IndexOutcome::Aborted),

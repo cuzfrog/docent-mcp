@@ -33,8 +33,6 @@ pub(crate) trait IndexRepository: Send + Sync {
     fn store_merged(&self, req: &StoreMergedRequest) -> anyhow::Result<(usize, usize)>;
 
     fn load_one(&self, kind: IndexKind) -> anyhow::Result<SubIndex>;
-
-    fn exists(&self, kind: IndexKind) -> bool;
 }
 
 pub(crate) fn create_index_repository(
@@ -147,13 +145,6 @@ impl IndexRepository for FileSystemIndexRepository {
     fn load_one(&self, kind: IndexKind) -> anyhow::Result<SubIndex> {
         SubIndex::load(&self.persist_path, kind)
     }
-
-    fn exists(&self, kind: IndexKind) -> bool {
-        self.persist_path
-            .join(kind.subdir())
-            .join("header.json")
-            .exists()
-    }
 }
 
 impl FileSystemIndexRepository {
@@ -162,7 +153,8 @@ impl FileSystemIndexRepository {
         kind: IndexKind,
         notices: &mut Vec<String>,
     ) -> anyhow::Result<Option<SubIndex>> {
-        if !self.exists(kind) {
+        let header_path = self.persist_path.join(kind.subdir()).join("header.json");
+        if !header_path.exists() {
             return Ok(None);
         }
         let mut sub = SubIndex::load(&self.persist_path, kind)?;
@@ -170,7 +162,8 @@ impl FileSystemIndexRepository {
             IndexKind::File => IndexKind::Git,
             IndexKind::Git => IndexKind::File,
         };
-        if !self.exists(other_kind) {
+        let other_header_path = self.persist_path.join(other_kind.subdir()).join("header.json");
+        if !other_header_path.exists() {
             sub.header.validate_against(&self.config)?;
         }
         if sub.bm25.is_none() && !sub.metadata.is_empty() {
