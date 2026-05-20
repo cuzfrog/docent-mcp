@@ -6,7 +6,7 @@ use crate::domain::IndexedBatch;
 use super::merged::LoadMergedResult;
 use super::merger::IndexMerger;
 use super::semantic_header::IndexHeader;
-use super::semantic_store::VectorStore;
+use crate::domain::Vector;
 use super::source_index::SubIndex;
 use crate::domain::IndexKind;
 
@@ -74,7 +74,7 @@ impl IndexRepository for FileSystemIndexRepository {
             last_indexed_commit.clone(),
             doc_count,
         );
-        let vector_store = VectorStore::from_vec_vec(batch.vectors.clone())?;
+        let vector_store = Vector::from_vec_vec(batch.vectors.clone())?;
         SubIndex::store(
             &self.persist_path,
             kind,
@@ -131,7 +131,7 @@ impl IndexRepository for FileSystemIndexRepository {
             req.last_indexed_commit.clone(),
             doc_count,
         );
-        let vector_store = VectorStore::from_vec_vec(req.merged_vectors.clone())?;
+        let vector_store = Vector::from_vec_vec(req.merged_vectors.clone())?;
         SubIndex::store(
             &self.persist_path,
             req.kind,

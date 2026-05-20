@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::index::Embedder;
 use crate::index::MergedIndex;
-use crate::index::VectorStore;
+use crate::domain::Vector;
 
 pub trait ScoreBackend: Send + Sync {
     fn score(&self, query: &str) -> anyhow::Result<Vec<f32>>;
@@ -10,13 +10,13 @@ pub trait ScoreBackend: Send + Sync {
 
 pub(crate) struct VectorScoreBackend {
     embedder: Arc<Mutex<dyn Embedder>>,
-    vectors: Arc<VectorStore>,
+    vectors: Arc<Vector>,
 }
 
 impl VectorScoreBackend {
     pub(crate) fn new(
         embedder: Arc<Mutex<dyn Embedder>>,
-        vectors: Arc<VectorStore>,
+        vectors: Arc<Vector>,
     ) -> Self {
         Self { embedder, vectors }
     }
@@ -141,7 +141,7 @@ mod tests {
         let embedder: Arc<Mutex<dyn Embedder>> =
             Arc::new(Mutex::new(mock_embedder()));
         let vectors = Arc::new(
-            VectorStore::from_vec_vec(vec![
+            Vector::from_vec_vec(vec![
                 vec![9.0, 2.0, 0.0, 1.0],
                 vec![5.0, 2.0, 0.0, 1.0],
                 vec![1.0, 2.0, 0.0, 1.0],
@@ -160,7 +160,7 @@ mod tests {
     fn test_vector_backend_empty_vectors() {
         let embedder: Arc<Mutex<dyn Embedder>> =
             Arc::new(Mutex::new(mock_embedder()));
-        let vectors = Arc::new(VectorStore::from_vec_vec(vec![]).unwrap());
+        let vectors = Arc::new(Vector::from_vec_vec(vec![]).unwrap());
         let backend = VectorScoreBackend::new(embedder, vectors);
         let scores = backend.score("anything").unwrap();
         assert!(scores.is_empty());

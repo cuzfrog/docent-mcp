@@ -1,6 +1,6 @@
 use crate::domain::ChunkMetadata;
 use super::source_index::SubIndex;
-use super::semantic_store::VectorStore;
+use crate::domain::Vector;
 use super::MergedIndex;
 
 pub(crate) struct IndexMerger;
@@ -14,10 +14,10 @@ impl IndexMerger {
             file_index.as_ref().map(|s| &s.vectors),
             git_index.as_ref().map(|s| &s.vectors),
         ) {
-            (Some(f), Some(g)) => VectorStore::concat(f, g)?,
+            (Some(f), Some(g)) => Vector::concat(f, g)?,
             (Some(f), None) => f.clone(),
             (None, Some(g)) => g.clone(),
-            (None, None) => VectorStore::from_vec_vec(vec![])?,
+            (None, None) => Vector::from_vec_vec(vec![])?
         };
 
         let all_metadata: Vec<ChunkMetadata> = file_index
@@ -73,7 +73,7 @@ mod tests {
     use crate::domain::{ChunkMetadata, DocumentContext};
     use crate::index::bm25_header::Bm25IndexHeader;
     use crate::index::semantic_header::IndexHeader;
-    use crate::index::semantic_store::VectorStore;
+    use crate::domain::Vector;
     use crate::index::source_index::{Bm25SubIndex, SubIndex};
     use super::*;
 
@@ -120,13 +120,13 @@ mod tests {
     fn test_merge_both_present() {
         let file = SubIndex {
             header: dummy_header("2026-01-01"),
-            vectors: VectorStore::from_vec_vec(vec![vec![1.0, 0.0, 0.0, 0.0]]).unwrap(),
+            vectors: Vector::from_vec_vec(vec![vec![1.0, 0.0, 0.0, 0.0]]).unwrap(),
             metadata: dummy_metadata(),
             bm25: Some(dummy_bm25()),
         };
         let git = SubIndex {
             header: dummy_header("2026-01-02"),
-            vectors: VectorStore::from_vec_vec(vec![vec![0.0, 1.0, 0.0, 0.0]]).unwrap(),
+            vectors: Vector::from_vec_vec(vec![vec![0.0, 1.0, 0.0, 0.0]]).unwrap(),
             metadata: dummy_metadata(),
             bm25: Some(dummy_bm25()),
         };
@@ -144,7 +144,7 @@ mod tests {
     fn test_merge_file_only() {
         let file = SubIndex {
             header: dummy_header("2026-01-01"),
-            vectors: VectorStore::from_vec_vec(vec![vec![1.0, 0.0, 0.0, 0.0]]).unwrap(),
+            vectors: Vector::from_vec_vec(vec![vec![1.0, 0.0, 0.0, 0.0]]).unwrap(),
             metadata: dummy_metadata(),
             bm25: Some(dummy_bm25()),
         };
@@ -160,7 +160,7 @@ mod tests {
     fn test_merge_git_only() {
         let git = SubIndex {
             header: dummy_header("2026-01-02"),
-            vectors: VectorStore::from_vec_vec(vec![vec![0.0, 1.0, 0.0, 0.0]]).unwrap(),
+            vectors: Vector::from_vec_vec(vec![vec![0.0, 1.0, 0.0, 0.0]]).unwrap(),
             metadata: dummy_metadata(),
             bm25: Some(dummy_bm25()),
         };
@@ -185,13 +185,13 @@ mod tests {
     fn test_merge_bm25_absent() {
         let file = SubIndex {
             header: dummy_header("2026-01-01"),
-            vectors: VectorStore::from_vec_vec(vec![vec![1.0, 0.0, 0.0, 0.0]]).unwrap(),
+            vectors: Vector::from_vec_vec(vec![vec![1.0, 0.0, 0.0, 0.0]]).unwrap(),
             metadata: dummy_metadata(),
             bm25: None,
         };
         let git = SubIndex {
             header: dummy_header("2026-01-02"),
-            vectors: VectorStore::from_vec_vec(vec![vec![0.0, 1.0, 0.0, 0.0]]).unwrap(),
+            vectors: Vector::from_vec_vec(vec![vec![0.0, 1.0, 0.0, 0.0]]).unwrap(),
             metadata: dummy_metadata(),
             bm25: None,
         };

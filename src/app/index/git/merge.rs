@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::domain::{IndexKind, ChunkMetadata};
-use crate::index::VectorStore;
+use crate::domain::Vector;
 
 use crate::app::index::git::extract::GitDocument;
 
@@ -12,7 +12,7 @@ use crate::app::index::git::extract::GitDocument;
 /// are cloned, which is unavoidable since they come from a temporary batch.
 pub fn merge_git_incremental(
     old_metadata: Vec<ChunkMetadata>,
-    old_vectors: VectorStore,
+    old_vectors: Vector,
     new_docs: &[GitDocument],
     new_metadata: &[ChunkMetadata],
     new_vectors: &[Vec<f32>],

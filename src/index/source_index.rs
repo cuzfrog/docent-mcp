@@ -6,7 +6,7 @@ use super::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
 use super::bm25_io;
 use super::semantic_header::IndexHeader;
 use super::stored_metadata::StoredChunkMetadata;
-use super::semantic_store::VectorStore;
+use crate::domain::Vector;
 use super::semantic_io::{read_index, write_index};
 use crate::domain::IndexKind;
 pub(crate) struct Bm25SubIndex {
@@ -16,7 +16,7 @@ pub(crate) struct Bm25SubIndex {
 
 pub(crate) struct SubIndex {
     pub header: IndexHeader,
-    pub vectors: VectorStore,
+    pub vectors: Vector,
     pub metadata: Vec<ChunkMetadata>,
     pub bm25: Option<Bm25SubIndex>,
 }
@@ -86,7 +86,7 @@ impl SubIndex {
         persist_path: &Path,
         kind: IndexKind,
         header: &IndexHeader,
-        vectors: &VectorStore,
+        vectors: &Vector,
         metadata: &[ChunkMetadata],
         bm25_k1: f32,
         bm25_b: f32,

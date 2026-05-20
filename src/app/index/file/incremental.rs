@@ -3,10 +3,11 @@ use std::collections::HashMap;
 use crate::app::index::{IndexOutcome, IndexRequest};
 use crate::domain::IndexKind;
 use crate::domain::ChunkMetadata;
-use crate::index::{create_index_repository, IndexRepository, StoreMergedRequest, VectorStore};
+use crate::domain::Vector;
+use crate::index::{create_index_repository, IndexRepository, StoreMergedRequest};
 use super::FileIndexer;
 
-type ExistingIndex = (HashMap<String, String>, Vec<ChunkMetadata>, VectorStore, bool);
+type ExistingIndex = (HashMap<String, String>, Vec<ChunkMetadata>, Vector, bool);
 
 #[derive(Debug)]
 enum IndexLoadError {
@@ -70,7 +71,7 @@ impl FileIndexer {
                 });
             }
             Err(IndexLoadError::NotFound) => {
-                (HashMap::new(), vec![], VectorStore::from_vec_vec(vec![])?, false)
+                (HashMap::new(), vec![], Vector::from_vec_vec(vec![])?, false)
             }
             Err(IndexLoadError::Other(e)) => return Err(e),
         };

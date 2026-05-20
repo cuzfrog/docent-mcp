@@ -54,7 +54,8 @@ pub fn create_search_service(
 mod tests {
     use super::*;
     use crate::config::{SearchConfig, FusionConfig, RankingConfig, Bm25Config};
-    use crate::index::{MergedIndex, VectorStore};
+    use crate::domain::Vector;
+use crate::index::MergedIndex;
     use crate::domain::{IndexKind, ChunkMetadata, DocumentContext};
     use crate::index::mock_embedder;
 
@@ -112,7 +113,7 @@ mod tests {
         ];
 
         let merged = MergedIndex {
-            vectors: VectorStore::from_vec_vec(vec![
+            vectors: Vector::from_vec_vec(vec![
                 vec![1.0, 0.0, 0.0, 0.0],
                 vec![0.0, 1.0, 0.0, 0.0],
             ])

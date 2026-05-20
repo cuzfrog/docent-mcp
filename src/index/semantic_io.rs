@@ -1,7 +1,15 @@
-use super::semantic_store::{StoredIndex, VectorStore};
+use crate::domain::Vector;
 use super::stored_metadata::StoredChunkMetadata;
 use super::semantic_header::IndexHeader;
 use std::path::Path;
+
+/// In-memory representation of a persisted semantic index.
+#[derive(Debug)]
+pub(super) struct StoredIndex {
+    pub(super) header: IndexHeader,
+    pub(super) vectors: Vector,
+    pub(super) metadata: Vec<StoredChunkMetadata>,
+}
 
 /// Write the index directory: `header.json`, `vectors.bin`, and `metadata.bin`.
 ///
@@ -11,7 +19,7 @@ use std::path::Path;
 pub(super) fn write_index(
     path: &Path,
     header: &IndexHeader,
-    vectors: &VectorStore,
+    vectors: &Vector,
     metadata: &[StoredChunkMetadata],
 ) -> anyhow::Result<()> {
     std::fs::create_dir_all(path).map_err(|e| {
@@ -59,7 +67,7 @@ fn read_header(path: &Path) -> anyhow::Result<IndexHeader> {
     Ok(header)
 }
 
-fn read_vectors(path: &Path, header: &IndexHeader) -> anyhow::Result<VectorStore> {
+fn read_vectors(path: &Path, header: &IndexHeader) -> anyhow::Result<Vector> {
     let vectors_path = path.join("vectors.bin");
     let raw_bytes = std::fs::read(&vectors_path)
         .map_err(|e| anyhow::anyhow!("Failed to read '{}': {}", vectors_path.display(), e))?;
@@ -71,10 +79,10 @@ fn read_vectors(path: &Path, header: &IndexHeader) -> anyhow::Result<VectorStore
         );
     }
     if raw_bytes.is_empty() {
-        Ok(VectorStore { data: vec![], dims: 0, count: 0 })
+        Ok(Vector { data: vec![], dims: 0, count: 0 })
     } else {
         let flat: &[f32] = bytemuck::cast_slice(&raw_bytes);
-        Ok(VectorStore { data: flat.to_vec(), dims: header.embedding_dims, count: header.chunk_count })
+        Ok(Vector { data: flat.to_vec(), dims: header.embedding_dims, count: header.chunk_count })
     }
 }
 
@@ -97,7 +105,7 @@ fn read_metadata(path: &Path) -> anyhow::Result<Vec<StoredChunkMetadata>> {
     }
 }
 
-fn validate_consistency(header: &IndexHeader, vectors: &VectorStore, metadata: &[StoredChunkMetadata]) -> anyhow::Result<()> {
+fn validate_consistency(header: &IndexHeader, vectors: &Vector, metadata: &[StoredChunkMetadata]) -> anyhow::Result<()> {
     if vectors.len() != header.chunk_count || metadata.len() != header.chunk_count {
         anyhow::bail!(
             "index consistency error: header.chunk_count = {}, vectors.len() = {}, metadata.len() = {}",
@@ -150,7 +158,7 @@ mod tests {
 
         let header = matching_header();
         let raw = make_vectors();
-        let vector_store = VectorStore::from_vec_vec(raw.clone()).unwrap();
+        let vector_store = Vector::from_vec_vec(raw.clone()).unwrap();
         let metadata = vec![
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -213,7 +221,7 @@ mod tests {
 
         let header = matching_header();
         let raw = make_vectors();
-        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
+        let vector_store = Vector::from_vec_vec(raw).unwrap();
         let metadata = vec![
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -428,7 +436,7 @@ mod tests {
 
         let header = matching_header();
         let raw = make_vectors();
-        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
+        let vector_store = Vector::from_vec_vec(raw).unwrap();
         let metadata = vec![
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -564,7 +572,7 @@ mod tests {
 
         let header = matching_header();
         let raw = make_vectors();
-        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
+        let vector_store = Vector::from_vec_vec(raw).unwrap();
 
         std::fs::create_dir_all(&temp_dir).unwrap();
         let header_json = serde_json::to_string_pretty(&header).unwrap();
@@ -659,7 +667,7 @@ mod tests {
             chunk_count: 0,
             last_indexed_commit: None,
         };
-        let vector_store = VectorStore::from_vec_vec(vec![]).unwrap();
+        let vector_store = Vector::from_vec_vec(vec![]).unwrap();
         let metadata: Vec<StoredChunkMetadata> = vec![];
 
         write_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
@@ -707,7 +715,7 @@ mod tests {
             last_indexed_commit: None,
         };
         let raw = vec![vec![1.0, 2.0, 3.0, 4.0]];
-        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
+        let vector_store = Vector::from_vec_vec(raw).unwrap();
         let metadata = vec![StoredChunkMetadata {
             source_path: "doc.md".to_string(),
             source_revision: "abc".to_string(),
@@ -736,7 +744,7 @@ mod tests {
         persist_path: &Path,
         subdir: &str,
         header: &IndexHeader,
-        vectors: &VectorStore,
+        vectors: &Vector,
         metadata: &[StoredChunkMetadata],
     ) -> anyhow::Result<()> {
         write_index(&persist_path.join(subdir), header, vectors, metadata)
@@ -766,7 +774,7 @@ mod tests {
             last_indexed_commit: None,
         };
         let raw = vec![vec![1.0, 2.0, 3.0, 4.0]];
-        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
+        let vector_store = Vector::from_vec_vec(raw).unwrap();
         let metadata = vec![StoredChunkMetadata {
             source_path: "doc.md".to_string(),
             source_revision: "abc".to_string(),

@@ -11,12 +11,19 @@ use crate::support::{Console, create_console};
 // Search service bootstrap (moved from search/index_access.rs)
 // ---------------------------------------------------------------------------
 
+/// On-disk size breakdown of the persisted index directories.
+struct IndexSizeInfo {
+    total_bytes: u64,
+    file_bytes: u64,
+    git_bytes: u64,
+}
+
 trait ServeIndexAccess: Send + Sync {
     fn check_size(
         &self,
         persist_path: &std::path::Path,
         max_size_mb: u64,
-    ) -> anyhow::Result<Option<crate::index::IndexSizeInfo>>;
+    ) -> anyhow::Result<Option<IndexSizeInfo>>;
 
     fn load_merged(
         &self,
@@ -34,11 +41,11 @@ impl ServeIndexAccess for ServeIndexAccessImpl {
         &self,
         persist_path: &std::path::Path,
         max_size_mb: u64,
-    ) -> anyhow::Result<Option<crate::index::IndexSizeInfo>> {
+    ) -> anyhow::Result<Option<IndexSizeInfo>> {
         let total_size = crate::support::dir_size(persist_path);
         let max_bytes = max_size_mb * 1024 * 1024;
         if total_size > max_bytes {
-            Ok(Some(crate::index::IndexSizeInfo {
+            Ok(Some(IndexSizeInfo {
                 total_bytes: total_size,
                 file_bytes: if persist_path.join("file").exists() {
                     crate::support::dir_size(&persist_path.join("file"))
@@ -185,7 +192,8 @@ async fn shutdown_signal() {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::index::{IndexSizeInfo, LoadMergedResult, MergedIndex, VectorStore};
+    use crate::domain::Vector;
+    use crate::index::{LoadMergedResult, MergedIndex};
 
     // ------------------------------------------------------------------
     // Fake implementations of the two seam traits
@@ -227,7 +235,7 @@ mod tests {
                 Some(msg) => Err(anyhow::anyhow!("{}", msg)),
                 None => Ok(LoadMergedResult {
                     merged: MergedIndex {
-                        vectors: VectorStore::from_vec_vec(vec![]).unwrap(),
+                        vectors: Vector::from_vec_vec(vec![]).unwrap(),
                         metadata: vec![],
                         bm25_embeddings: None,
                         bm25_header: None,
