@@ -1,4 +1,4 @@
-# Project Context
+# Context Rules
 
 **IMPORTANT** - you must follow the contents of this context document, if not possible, raise to the user to decide.
 
@@ -17,7 +17,7 @@
 - **Naming:** Snake_case for files and functions. Types are PascalCase. Constants are UPPER_SNAKE_CASE. Variable naming should be specific to carry their function. E.g. `token_counter` should not be `counter`, which can be confusing.
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).
 - **No Dead Code** No `allow(dead_code)`. It should only be used during long incremental refactors, and must be removed once possible.
-- **Module Interface at Top** Public types, contract, methods should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
+- **File ordering** Public types, contract, methods should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
 - **Imports** Import at the file top. Avoid long module path in the code body. E.g. `crate::app::index::xxxx::bbbb::new`. Import from `super` when possible. To access sibling modules, do not re-export in the `mod.rs`.
 - **Config passing** Try to give a function what it needs, but do not split `Config` into multiple parameters.
 - **Forbidden Warning Suppression** No `#[allow(clippy::*)]` or similar workaround. An issue must be addressed.
@@ -48,7 +48,7 @@ When involving git operations, refer to @doc/AGENTS_GIT.md.
 
 ## Coding Principles
 - Follow development principles, such as separation of concerns, SOLID principles, correct abstraction levels (e.g. reflected by the type hierarchy, type and file layout, code reusability, etc), loose coupled code. The goal is simplicity and maintainability.
-- Given a change, do not first attempt to insert into current code base. First look at it from a higher perspective, discover refactor opportunities and maintain small file sizes.
+- Given a change, do not first attempt to insert into current code base. First look at it from a higher perspective, discover refactor opportunities to avoid violating context rules.
 - Favor trait-based design over procedural design.
 - Naming must reflect the abstraction level. If a newly introduced function violates this, considering renaming related types/functions/variables to maintain correct abstraction levels.
 - Avoid "helper" functions, they are where code is coupled out of class hierarchy. "helper" functions are functions that are outside the abstraction hierarchy, containing domain logic, serving the only purpose of code reuse. They are different from "utility/support" functions that are purely technical without complex domain logic. Utility functions do not have a position in the abstraction hierarchy.

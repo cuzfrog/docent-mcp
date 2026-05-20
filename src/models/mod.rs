@@ -1,15 +1,10 @@
 mod model;
-mod tokenizer;
 mod model_factory;
+mod tokenizer;
 
 pub use model::EmbeddingModel;
-pub use tokenizer::Tokenizer;
 pub use model_factory::{create_model_factory, ModelFactory};
+pub use tokenizer::Tokenizer;
 
-#[cfg(test)]
-mod model_factory_mock;
-
-#[cfg(test)]
-pub(crate) use model_factory_mock::mock_model_factory;
 #[cfg(test)]
 pub(crate) use tokenizer::MockTokenizer;
