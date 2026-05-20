@@ -1,6 +1,6 @@
-use crate::index::semantic_header::IndexHeader;
-use crate::index::stored_metadata::StoredChunkMetadata;
-use crate::index::semantic_store::{StoredIndex, VectorStore};
+use super::semantic_store::{StoredIndex, VectorStore};
+use super::stored_metadata::StoredChunkMetadata;
+use super::semantic_header::IndexHeader;
 use std::path::Path;
 
 /// Write the index directory: `header.json`, `vectors.bin`, and `metadata.bin`.
@@ -119,7 +119,7 @@ pub(super) fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
 mod tests {
     use super::*;
     use crate::index::stored_metadata::StoredChunkKind;
-    use crate::index::SCHEMA_VERSION;
+    use crate::index::semantic_header::SCHEMA_VERSION;
 
     fn matching_header() -> IndexHeader {
         IndexHeader {

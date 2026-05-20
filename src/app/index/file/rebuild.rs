@@ -1,12 +1,12 @@
 use crate::app::index::{IndexOutcome, IndexRequest};
 use crate::domain::IndexKind;
 use crate::domain::ChunkMetadata;
-use crate::index::IndexRepository;
+use crate::index::{create_index_repository, IndexRepository};
 use super::FileIndexer;
 
 impl FileIndexer {
     fn confirm_rebuild(&self, persist_path: &std::path::Path) -> anyhow::Result<bool> {
-        let repo = IndexRepository::new(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
+        let repo = create_index_repository(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
         match repo.load_one(IndexKind::File) {
             Ok(_) => {
                 self.console.warn(&format!(
@@ -51,7 +51,7 @@ impl FileIndexer {
         if !self.confirm_rebuild(&persist_path)? {
             return Ok(IndexOutcome::Aborted);
         }
-        let repo = IndexRepository::new(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
+        let repo = create_index_repository(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
         let (batch, dims) = self.index_files(request)?;
         let chunk_count = batch.metadata.len();
         let doc_count = ChunkMetadata::unique_count(&batch.metadata);

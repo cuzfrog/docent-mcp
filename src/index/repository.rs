@@ -3,13 +3,12 @@ use std::path::{Path, PathBuf};
 use crate::config::IndexConfig;
 use crate::domain::ChunkMetadata;
 use crate::domain::IndexedBatch;
-use crate::index::merged::LoadMergedResult;
-use crate::index::merger::IndexMerger;
-use crate::index::semantic_header::IndexHeader;
-use crate::index::semantic_store::VectorStore;
-use crate::index::source_index::SubIndex;
+use super::merged::LoadMergedResult;
+use super::merger::IndexMerger;
+use super::semantic_header::IndexHeader;
+use super::semantic_store::VectorStore;
+use super::source_index::SubIndex;
 use crate::domain::IndexKind;
-
 
 pub(crate) struct StoreMergedRequest {
     pub kind: IndexKind,
@@ -19,24 +18,48 @@ pub(crate) struct StoreMergedRequest {
     pub last_indexed_commit: Option<String>,
 }
 
-pub(crate) struct IndexRepository {
+pub(crate) trait IndexRepository: Send + Sync {
+    fn store(
+        &self,
+        kind: IndexKind,
+        batch: &IndexedBatch,
+        embedding_dims: usize,
+        doc_count: usize,
+        last_indexed_commit: Option<String>,
+    ) -> anyhow::Result<()>;
+
+    fn load_merged(&self) -> anyhow::Result<LoadMergedResult>;
+
+    fn store_merged(&self, req: &StoreMergedRequest) -> anyhow::Result<(usize, usize)>;
+
+    fn load_one(&self, kind: IndexKind) -> anyhow::Result<SubIndex>;
+
+    fn exists(&self, kind: IndexKind) -> bool;
+}
+
+pub(crate) fn create_index_repository(
+    persist_path: &Path,
+    config: &IndexConfig,
+    bm25_k1: f32,
+    bm25_b: f32,
+) -> impl IndexRepository {
+    FileSystemIndexRepository {
+        persist_path: persist_path.to_path_buf(),
+        config: config.clone(),
+        bm25_k1,
+        bm25_b,
+    }
+}
+
+struct FileSystemIndexRepository {
     persist_path: PathBuf,
     config: IndexConfig,
     bm25_k1: f32,
     bm25_b: f32,
 }
 
-impl IndexRepository {
-    pub fn new(persist_path: &Path, config: &IndexConfig, bm25_k1: f32, bm25_b: f32) -> Self {
-        Self {
-            persist_path: persist_path.to_path_buf(),
-            config: config.clone(),
-            bm25_k1,
-            bm25_b,
-        }
-    }
-
-    pub(crate) fn store(
+impl IndexRepository for FileSystemIndexRepository {
+    fn store(
         &self,
         kind: IndexKind,
         batch: &IndexedBatch,
@@ -63,7 +86,7 @@ impl IndexRepository {
         )
     }
 
-    pub(crate) fn load_merged(&self) -> anyhow::Result<LoadMergedResult> {
+    fn load_merged(&self) -> anyhow::Result<LoadMergedResult> {
         let mut notices = Vec::new();
         let file = self.load_and_repair_sub_index(IndexKind::File, &mut notices)?;
         let git = self.load_and_repair_sub_index(IndexKind::Git, &mut notices)?;
@@ -98,10 +121,7 @@ impl IndexRepository {
         Ok(LoadMergedResult { merged, notices })
     }
 
-    pub(crate) fn store_merged(
-        &self,
-        req: &StoreMergedRequest,
-    ) -> anyhow::Result<(usize, usize)> {
+    fn store_merged(&self, req: &StoreMergedRequest) -> anyhow::Result<(usize, usize)> {
         let doc_count = ChunkMetadata::unique_count(&req.merged_metadata);
         let chunk_count = req.merged_metadata.len();
         let header = IndexHeader::from_config(
@@ -124,17 +144,19 @@ impl IndexRepository {
         Ok((chunk_count, doc_count))
     }
 
-    pub(crate) fn load_one(&self, kind: IndexKind) -> anyhow::Result<SubIndex> {
+    fn load_one(&self, kind: IndexKind) -> anyhow::Result<SubIndex> {
         SubIndex::load(&self.persist_path, kind)
     }
 
-    pub(crate) fn exists(&self, kind: IndexKind) -> bool {
+    fn exists(&self, kind: IndexKind) -> bool {
         self.persist_path
             .join(kind.subdir())
             .join("header.json")
             .exists()
     }
+}
 
+impl FileSystemIndexRepository {
     fn load_and_repair_sub_index(
         &self,
         kind: IndexKind,

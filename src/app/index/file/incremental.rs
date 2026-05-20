@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::app::index::{IndexOutcome, IndexRequest};
 use crate::domain::IndexKind;
 use crate::domain::ChunkMetadata;
-use crate::index::{IndexRepository, StoreMergedRequest, VectorStore};
+use crate::index::{create_index_repository, IndexRepository, StoreMergedRequest, VectorStore};
 use super::FileIndexer;
 
 type ExistingIndex = (HashMap<String, String>, Vec<ChunkMetadata>, VectorStore, bool);
@@ -36,7 +36,7 @@ impl From<anyhow::Error> for IndexLoadError {
 impl FileIndexer {
     fn load_existing_index(&self) -> Result<ExistingIndex, IndexLoadError> {
         let persist_path = std::path::PathBuf::from(&self.index_config.persist_path);
-        let repo = IndexRepository::new(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
+        let repo = create_index_repository(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
         match repo.load_one(IndexKind::File) {
             Ok(stored) => {
                 if let Err(e) = stored.header.validate_against(&self.index_config) {
@@ -61,7 +61,7 @@ impl FileIndexer {
         request: &IndexRequest,
     ) -> anyhow::Result<IndexOutcome> {
         let persist_path = std::path::PathBuf::from(&self.index_config.persist_path);
-        let repo = IndexRepository::new(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
+        let repo = create_index_repository(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
         let (old_hashes, old_metadata, old_vectors, index_exists) = match self.load_existing_index() {
             Ok(v) => v,
             Err(IndexLoadError::NeedsRebuild(reason)) => {

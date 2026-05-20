@@ -4,7 +4,7 @@ use std::time::Instant;
 use crate::app::index::{IndexOutcome, IndexRequest};
 use crate::domain::IndexKind;
 use crate::domain::ChunkMetadata;
-use crate::index::IndexRepository;
+use crate::index::{create_index_repository, IndexRepository};
 use super::GitIndexer;
 
 impl GitIndexer {
@@ -61,7 +61,7 @@ impl GitIndexer {
         }
         let head_commit = crate::app::index::git::history::resolve_head_commit(&request.input_path, &self.git_config.branch)?;
         let (batch, dims, embed_secs) = self.embed_docs(&docs)?;
-        let repo = IndexRepository::new(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
+        let repo = create_index_repository(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
         let chunk_count = batch.metadata.len();
         let doc_count = ChunkMetadata::unique_count(&batch.metadata);
         repo.store(IndexKind::Git, &batch, dims, doc_count, Some(head_commit))?;

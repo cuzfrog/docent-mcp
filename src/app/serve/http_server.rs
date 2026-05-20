@@ -4,6 +4,7 @@ use axum::Router;
 
 use crate::app::serve::mcp_server::{MCPServer, create_mcp_server};
 use crate::config::Config;
+use crate::index::IndexRepository;
 use crate::support::{Console, create_console};
 
 // ---------------------------------------------------------------------------
@@ -62,7 +63,7 @@ impl ServeIndexAccess for ServeIndexAccessImpl {
         k1: f32,
         b: f32,
     ) -> anyhow::Result<crate::index::LoadMergedResult> {
-        let repo = crate::index::IndexRepository::new(persist_path, config, k1, b);
+        let repo = crate::index::create_index_repository(persist_path, config, k1, b);
         repo.load_merged()
     }
 }

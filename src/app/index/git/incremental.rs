@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use crate::app::index::{IndexOutcome, IndexRequest};
 use crate::domain::IndexKind;
-use crate::index::{IndexRepository, StoreMergedRequest};
+use crate::index::{create_index_repository, IndexRepository, StoreMergedRequest};
 use super::GitIndexer;
 
 impl GitIndexer {
@@ -13,7 +13,7 @@ impl GitIndexer {
         persist_path: &Path,
         dims: usize,
     ) -> anyhow::Result<IndexOutcome> {
-        let repo = IndexRepository::new(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
+        let repo = create_index_repository(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
         let stored = repo.load_one(IndexKind::Git)?;
         let old_header = stored.header;
         let old_vectors = stored.vectors;

@@ -1,6 +1,6 @@
 use crate::domain::ChunkMetadata;
-use crate::index::bm25_header::Bm25IndexHeader;
-use crate::index::semantic_store::VectorStore;
+use super::bm25_header::Bm25IndexHeader;
+use super::semantic_store::VectorStore;
 
 /// Result of merging file/ + git/ sub-indices into a single in-memory index.
 pub(crate) struct MergedIndex {

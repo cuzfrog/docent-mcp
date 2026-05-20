@@ -1,13 +1,13 @@
 use std::path::Path;
 
 use crate::domain::ChunkMetadata;
-use crate::index::build_bm25;
-use crate::index::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
-use crate::index::bm25_io;
-use crate::index::semantic_header::IndexHeader;
-use crate::index::stored_metadata::StoredChunkMetadata;
-use crate::index::semantic_store::VectorStore;
-use crate::index::semantic_io::{read_index, write_index};
+use super::build_bm25;
+use super::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
+use super::bm25_io;
+use super::semantic_header::IndexHeader;
+use super::stored_metadata::StoredChunkMetadata;
+use super::semantic_store::VectorStore;
+use super::semantic_io::{read_index, write_index};
 use crate::domain::IndexKind;
 pub(crate) struct Bm25SubIndex {
     pub header: Bm25IndexHeader,

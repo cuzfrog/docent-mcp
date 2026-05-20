@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::index::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
+use super::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
 
 /// Write a BM25 index directory: `header.json` and `embeddings.json`.
 ///

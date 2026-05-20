@@ -1,7 +1,7 @@
 use crate::domain::ChunkMetadata;
-use crate::index::source_index::SubIndex;
-use crate::index::semantic_store::VectorStore;
-use crate::index::MergedIndex;
+use super::source_index::SubIndex;
+use super::semantic_store::VectorStore;
+use super::MergedIndex;
 
 pub(crate) struct IndexMerger;
 
