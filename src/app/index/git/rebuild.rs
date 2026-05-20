@@ -15,7 +15,7 @@ impl GitIndexer {
     ) -> anyhow::Result<(Vec<crate::app::index::git::extract::GitDocument>, f64)> {
         let walk_start = Instant::now();
         let pb_walk = self.console.progress(total_est as u64, "Walking commits");
-        let docs = super::index_git_history(
+        let docs = crate::app::index::git::history::index_git_history(
             &request.input_path,
             &self.git_config,
             None,
@@ -35,8 +35,8 @@ impl GitIndexer {
         let total_docs = docs.len();
         let embed_start = Instant::now();
         let pb_embed = self.console.progress(total_docs as u64, "Embedding");
-        let freshness = super::compute_freshness(docs);
-        let indexable = super::extract_documents(docs, &freshness);
+        let freshness = crate::app::index::git::freshness::compute_freshness(docs);
+        let indexable = crate::app::index::git::extract::extract_documents(docs, &freshness);
 
         let (batch, dims) = self.processor.run(&indexable, Some(pb_embed.as_ref()))?;
 
@@ -59,7 +59,7 @@ impl GitIndexer {
         if docs.is_empty() {
             return Ok(IndexOutcome::NoDocuments);
         }
-        let head_commit = super::resolve_head_commit(&request.input_path, &self.git_config.branch)?;
+        let head_commit = crate::app::index::git::history::resolve_head_commit(&request.input_path, &self.git_config.branch)?;
         let (batch, dims, embed_secs) = self.embed_docs(&docs)?;
         let repo = IndexRepository::new(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
         let chunk_count = batch.metadata.len();

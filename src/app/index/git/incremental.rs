@@ -25,7 +25,7 @@ impl GitIndexer {
         };
         let walk_start = Instant::now();
         let pb1 = self.console.progress(total_new as u64, "Walking commits");
-        let new_docs = super::index_git_history(
+        let new_docs = crate::app::index::git::history::index_git_history(
             &request.input_path,
             &self.git_config,
             last_commit.as_deref(),
@@ -41,14 +41,14 @@ impl GitIndexer {
         let total_new_docs = new_docs.len();
         let embed_start = Instant::now();
         let pb2 = self.console.progress(total_new_docs as u64, "Embedding documents");
-        let indexable = super::extract_documents(&new_docs, &vec![true; new_docs.len()]);
+        let indexable = crate::app::index::git::extract::extract_documents(&new_docs, &vec![true; new_docs.len()]);
 
         let (batch, dims) = self.processor.run(&indexable, Some(pb2.as_ref()))?;
 
         pb2.finish();
         let embed_secs = embed_start.elapsed().as_secs_f64();
-        let head_commit = super::resolve_head_commit(&request.input_path, &self.git_config.branch)?;
-        let merged = super::merge_git_incremental(
+        let head_commit = crate::app::index::git::history::resolve_head_commit(&request.input_path, &self.git_config.branch)?;
+        let merged = crate::app::index::git::merge::merge_git_incremental(
             old_metadata, old_vectors, &new_docs, &batch.metadata, &batch.vectors,
         );
         let (merged_vectors, merged_metadata) = merged;
