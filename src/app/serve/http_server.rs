@@ -4,7 +4,6 @@ use axum::Router;
 
 use crate::app::serve::mcp_server::{MCPServer, create_mcp_server};
 use crate::config::Config;
-use crate::index::IndexRepository;
 use crate::support::{Console, create_console};
 
 // ---------------------------------------------------------------------------
@@ -71,7 +70,7 @@ impl ServeIndexAccess for ServeIndexAccessImpl {
         b: f32,
     ) -> anyhow::Result<crate::index::LoadMergedResult> {
         let repo = crate::index::create_index_repository(persist_path, config, k1, b);
-        repo.load_merged()
+        crate::index::load_merged(&repo, persist_path)
     }
 }
 
@@ -114,9 +113,6 @@ fn build_search_service(
             config.search.bm25.b,
         )
         .map_err(|e| anyhow::anyhow!("Failed to load merged index: {}", e))?;
-    for notice in &result.notices {
-        console.info(notice);
-    }
     let merged = result.merged;
 
     let factory = crate::models::create_model_factory(
@@ -241,7 +237,6 @@ mod tests {
                         bm25_header: None,
                         built_at: "test".to_string(),
                     },
-                    notices: vec![],
                 }),
             }
         }

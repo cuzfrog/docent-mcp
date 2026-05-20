@@ -2,8 +2,8 @@ use std::path::Path;
 use std::time::Instant;
 
 use crate::app::index::{IndexOutcome, IndexRequest};
-use crate::domain::{IndexKind, Vector};
-use crate::index::{create_index_repository, IndexRepository, StoreMergedRequest};
+use crate::domain::{IndexKind, ChunkMetadata, IndexedBatch, Vector};
+use crate::index::{create_index_repository, IndexRepository};
 use super::GitIndexer;
 
 impl GitIndexer {
@@ -14,19 +14,16 @@ impl GitIndexer {
         dims: usize,
     ) -> anyhow::Result<IndexOutcome> {
         let repo = create_index_repository(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
-        let (old_vectors, old_metadata, last_commit) = match repo.load_one(IndexKind::Git) {
-            Ok(stored) => {
+        let (old_vectors, old_metadata, last_commit) = match repo.load(IndexKind::Git) {
+            Ok(Some(stored)) => {
                 let last_commit = stored.header.last_indexed_commit.clone();
                 (stored.vectors, stored.metadata, last_commit)
             }
-            Err(e) => {
-                if e.to_string().contains("no index found") {
-                    let empty = Vector::from_vec_vec(vec![])?;
-                    (empty, vec![], None)
-                } else {
-                    return Err(e);
-                }
+            Ok(None) => {
+                let empty = Vector::from_vec_vec(vec![])?;
+                (empty, vec![], None)
             }
+            Err(e) => return Err(e),
         };
         let total_new = match self.check_git_size(&request.input_path, dims, last_commit.as_deref())? {
             Some(n) => n,
@@ -61,13 +58,10 @@ impl GitIndexer {
             old_metadata, old_vectors, &new_docs, &batch.metadata, &batch.vectors,
         );
         let (merged_vectors, merged_metadata) = merged;
-        let (chunk_count, doc_count) = repo.store_merged(&StoreMergedRequest {
-            kind: IndexKind::Git,
-            merged_vectors,
-            merged_metadata,
-            dims,
-            last_indexed_commit: Some(head_commit),
-        })?;
+        let doc_count = ChunkMetadata::unique_count(&merged_metadata);
+        let chunk_count = merged_metadata.len();
+        let batch = IndexedBatch { vectors: merged_vectors, metadata: merged_metadata };
+        repo.store(IndexKind::Git, &batch, dims, doc_count, Some(head_commit))?;
         Ok(IndexOutcome::Indexed {
             kind: IndexKind::Git,
             rebuilt: false,

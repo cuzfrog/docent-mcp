@@ -22,9 +22,7 @@ pub enum IndexOutcome {
         walk_secs: Option<f64>,
         embed_secs: Option<f64>,
     },
-    NeedsRebuild {
-        reason: String,
-    },
+
 }
 
 impl IndexOutcome {
@@ -94,9 +92,7 @@ impl IndexOutcome {
                     vec![("info", msg)]
                 }
             }
-            IndexOutcome::NeedsRebuild { reason } => {
-                vec![("warn", reason.clone())]
-            }
+
         }
     }
 }

@@ -11,8 +11,7 @@ pub(crate) struct MergedIndex {
     pub(crate) built_at: String,
 }
 
-/// Wrapper around [`MergedIndex`] + any repair notices emitted during loading.
+/// Wrapper around [`MergedIndex`] loaded from disk.
 pub(crate) struct LoadMergedResult {
     pub(crate) merged: MergedIndex,
-    pub(crate) notices: Vec<String>,
 }

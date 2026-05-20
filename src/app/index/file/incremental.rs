@@ -3,15 +3,15 @@ use std::collections::HashMap;
 use crate::app::index::{IndexOutcome, IndexRequest};
 use crate::domain::IndexKind;
 use crate::domain::ChunkMetadata;
+use crate::domain::IndexedBatch;
 use crate::domain::Vector;
-use crate::index::{create_index_repository, IndexRepository, StoreMergedRequest};
+use crate::index::{create_index_repository, IndexRepository};
 use super::FileIndexer;
 
 type ExistingIndex = (HashMap<String, String>, Vec<ChunkMetadata>, Vector, bool);
 
 #[derive(Debug)]
 enum IndexLoadError {
-    NeedsRebuild(String),
     NotFound,
     Other(anyhow::Error),
 }
@@ -19,7 +19,6 @@ enum IndexLoadError {
 impl std::fmt::Display for IndexLoadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            IndexLoadError::NeedsRebuild(reason) => write!(f, "{}", reason),
             IndexLoadError::NotFound => write!(f, "no index found"),
             IndexLoadError::Other(e) => write!(f, "{}", e),
         }
@@ -38,22 +37,13 @@ impl FileIndexer {
     fn load_existing_index(&self) -> Result<ExistingIndex, IndexLoadError> {
         let persist_path = std::path::PathBuf::from(&self.index_config.persist_path);
         let repo = create_index_repository(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
-        match repo.load_one(IndexKind::File) {
-            Ok(stored) => {
-                if let Err(e) = stored.header.validate_against(&self.index_config) {
-                    self.console.warn(&format!("{}", e));
-                    return Err(IndexLoadError::NeedsRebuild(format!("{}", e)));
-                }
+        match repo.load(IndexKind::File) {
+            Ok(Some(stored)) => {
                 let old_hashes = super::merge::extract_old_hashes(&stored.metadata);
                 Ok((old_hashes, stored.metadata, stored.vectors, true))
             }
-            Err(e) => {
-                if e.to_string().contains("no index found") {
-                    Err(IndexLoadError::NotFound)
-                } else {
-                    Err(e.into())
-                }
-            }
+            Ok(None) => Err(IndexLoadError::NotFound),
+            Err(e) => Err(IndexLoadError::Other(e)),
         }
     }
 
@@ -65,11 +55,6 @@ impl FileIndexer {
         let repo = create_index_repository(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
         let (old_hashes, old_metadata, old_vectors, index_exists) = match self.load_existing_index() {
             Ok(v) => v,
-            Err(IndexLoadError::NeedsRebuild(reason)) => {
-                return Ok(IndexOutcome::NeedsRebuild {
-                    reason: format!("{} Run with --rebuild to re-index.", reason),
-                });
-            }
             Err(IndexLoadError::NotFound) => {
                 (HashMap::new(), vec![], Vector::from_vec_vec(vec![])?, false)
             }
@@ -94,13 +79,10 @@ impl FileIndexer {
             &all_files, &old_metadata, &old_vectors, &batch.metadata, &batch.vectors,
         );
         let (merged_vectors, merged_metadata) = merged;
-        let (chunk_count, doc_count) = repo.store_merged(&StoreMergedRequest {
-            kind: IndexKind::File,
-            merged_vectors,
-            merged_metadata,
-            dims,
-            last_indexed_commit: None,
-        })?;
+        let doc_count = ChunkMetadata::unique_count(&merged_metadata);
+        let chunk_count = merged_metadata.len();
+        let batch = IndexedBatch { vectors: merged_vectors, metadata: merged_metadata };
+        repo.store(IndexKind::File, &batch, dims, doc_count, None)?;
         Ok(IndexOutcome::Indexed {
             kind: IndexKind::File,
             rebuilt: false,
