@@ -26,7 +26,7 @@ pub fn create_search_service(
     search_config: &SearchConfig,
 ) -> anyhow::Result<Arc<dyn SearchService>> {
     let merged = repo.load_merged()?;
-    let (semantic_backend, bm25_backend) = build_backends(&merged, embedder);
+    let (semantic_backend, bm25_backend) = build_backends(&merged, embedder, search_config.bm25.k1, search_config.bm25.b);
 
     let fusion = create_fusion(
         &search_config.fusion.strategy,

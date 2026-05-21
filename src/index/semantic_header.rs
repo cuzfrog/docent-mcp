@@ -2,7 +2,7 @@ use crate::config::IndexConfig;
 use crate::domain::ChunkMetadata;
 use serde::{Deserialize, Serialize};
 
-pub(crate) const SCHEMA_VERSION: u32 = 7;
+pub(crate) const SEMANTIC_SCHEMA_VERSION: u32 = 7;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IndexHeader {
@@ -27,7 +27,7 @@ impl IndexHeader {
         doc_count: usize,
     ) -> Self {
         IndexHeader {
-            schema_version: SCHEMA_VERSION,
+            schema_version: SEMANTIC_SCHEMA_VERSION,
             embedding_model: config.embedding_model.clone(),
             embedding_dims,
             chunk_size: config.chunk_size,
@@ -40,10 +40,10 @@ impl IndexHeader {
     }
 
     pub(crate) fn validate_against(&self, config: &IndexConfig) -> anyhow::Result<()> {
-        if self.schema_version != SCHEMA_VERSION {
+        if self.schema_version != SEMANTIC_SCHEMA_VERSION {
             anyhow::bail!(
                 "schema_version mismatch: expected {}, found {}. Run with --rebuild to re-index.",
-                SCHEMA_VERSION,
+                SEMANTIC_SCHEMA_VERSION,
                 self.schema_version,
             );
         }
@@ -89,7 +89,7 @@ mod tests {
 
     fn matching_header() -> IndexHeader {
         IndexHeader {
-            schema_version: SCHEMA_VERSION,
+            schema_version: SEMANTIC_SCHEMA_VERSION,
             embedding_model: "test-model".to_string(),
             embedding_dims: 4,
             chunk_size: 256,

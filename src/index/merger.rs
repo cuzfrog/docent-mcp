@@ -1,7 +1,6 @@
 use crate::domain::ChunkMetadata;
-use super::bm25_header::Bm25IndexHeader;
-use super::source_index::Index;
 use crate::domain::Vector;
+use super::source_index::Index;
 use super::MergedIndex;
 
 pub(crate) struct IndexMerger;
@@ -34,20 +33,20 @@ impl IndexMerger {
             )
             .collect();
 
-        let (bm25_embeddings, bm25_header) = match (file_index.as_ref(), git_index.as_ref()) {
+        let (bm25_embeddings, bm25_avgdl) = match (file_index.as_ref(), git_index.as_ref()) {
             (Some(f), Some(g)) => {
                 let mut combined = f.bm25.embeddings.clone();
                 combined.extend(g.bm25.embeddings.clone());
-                let header = if g.bm25.header.chunk_count > f.bm25.header.chunk_count {
-                    g.bm25.header.clone()
+                let avgdl = if g.bm25.embeddings.len() > f.bm25.embeddings.len() {
+                    g.bm25.header.avgdl
                 } else {
-                    f.bm25.header.clone()
+                    f.bm25.header.avgdl
                 };
-                (combined, header)
+                (combined, avgdl)
             }
-            (Some(f), None) => (f.bm25.embeddings.clone(), f.bm25.header.clone()),
-            (None, Some(g)) => (g.bm25.embeddings.clone(), g.bm25.header.clone()),
-            (None, None) => (vec![], Bm25IndexHeader::default()),
+            (Some(f), None) => (f.bm25.embeddings.clone(), f.bm25.header.avgdl),
+            (None, Some(g)) => (g.bm25.embeddings.clone(), g.bm25.header.avgdl),
+            (None, None) => (vec![], 0.0),
         };
 
         let built_at = file_index
@@ -60,7 +59,7 @@ impl IndexMerger {
             vectors: all_vectors,
             metadata: all_metadata,
             bm25_embeddings,
-            bm25_header,
+            bm25_avgdl,
             built_at,
         })
     }
@@ -101,14 +100,9 @@ mod tests {
     }
 
     fn dummy_bm25() -> Bm25Index {
+        use crate::index::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
         Bm25Index {
-            header: Bm25IndexHeader {
-                schema_version: crate::index::bm25_header::BM25_SCHEMA_VERSION,
-                k1: 1.2,
-                b: 0.75,
-                avgdl: 10.0,
-                chunk_count: 1,
-            },
+            header: Bm25IndexHeader { schema_version: BM25_SCHEMA_VERSION, avgdl: 10.0 },
             embeddings: vec![bm25::Embedding(vec![])],
         }
     }
@@ -136,7 +130,7 @@ mod tests {
         assert_eq!(merged.vectors.len(), 2);
         assert_eq!(merged.metadata.len(), 2);
         assert_eq!(merged.bm25_embeddings.len(), 2);
-        assert_eq!(merged.bm25_header.chunk_count, 1);
+        assert_eq!(merged.bm25_avgdl, 10.0);
         // built_at picks file when both present
         assert_eq!(merged.built_at, "2026-01-01");
     }
@@ -182,13 +176,13 @@ mod tests {
         assert_eq!(merged.vectors.len(), 0);
         assert_eq!(merged.metadata.len(), 0);
         assert!(merged.bm25_embeddings.is_empty());
-        assert_eq!(merged.bm25_header.chunk_count, 0);
+        assert_eq!(merged.bm25_avgdl, 0.0);
         assert!(merged.built_at.is_empty());
     }
 
     #[test]
     fn test_merge_bm25_empty() {
-        let empty_header = Bm25IndexHeader::default();
+        use crate::index::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
         let file = Index {
             semantic: SemanticIndex {
                 header: dummy_header("2026-01-01"),
@@ -196,7 +190,7 @@ mod tests {
                 metadata: dummy_metadata(),
             },
             bm25: Bm25Index {
-                header: Bm25IndexHeader { chunk_count: 0, ..empty_header.clone() },
+                header: Bm25IndexHeader { schema_version: BM25_SCHEMA_VERSION, avgdl: 0.0 },
                 embeddings: vec![],
             },
         };
@@ -207,13 +201,47 @@ mod tests {
                 metadata: dummy_metadata(),
             },
             bm25: Bm25Index {
-                header: Bm25IndexHeader { chunk_count: 0, ..empty_header },
+                header: Bm25IndexHeader { schema_version: BM25_SCHEMA_VERSION, avgdl: 0.0 },
                 embeddings: vec![],
             },
         };
 
         let merged = IndexMerger::merge(Some(file), Some(git)).unwrap();
         assert!(merged.bm25_embeddings.is_empty());
-        assert_eq!(merged.bm25_header.chunk_count, 0);
+        assert_eq!(merged.bm25_avgdl, 0.0);
+    }
+
+    #[test]
+    fn test_merge_picks_larger_avgdl_for_combined() {
+        use crate::index::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
+        // File has 1 embedding, git has 2 → picks git's avgdl
+        let file = Index {
+            semantic: SemanticIndex {
+                header: dummy_header("2026-01-01"),
+                vectors: Vector::from_vec_vec(vec![vec![1.0, 0.0, 0.0, 0.0]]).unwrap(),
+                metadata: dummy_metadata(),
+            },
+            bm25: Bm25Index {
+                header: Bm25IndexHeader { schema_version: BM25_SCHEMA_VERSION, avgdl: 10.0 },
+                embeddings: vec![bm25::Embedding(vec![])],
+            },
+        };
+        let git = Index {
+            semantic: SemanticIndex {
+                header: dummy_header("2026-01-02"),
+                vectors: Vector::from_vec_vec(vec![vec![0.0, 1.0, 0.0, 0.0]]).unwrap(),
+                metadata: dummy_metadata(),
+            },
+            bm25: Bm25Index {
+                header: Bm25IndexHeader { schema_version: BM25_SCHEMA_VERSION, avgdl: 20.0 },
+                embeddings: vec![
+                    bm25::Embedding(vec![]),
+                    bm25::Embedding(vec![]),
+                ],
+            },
+        };
+
+        let merged = IndexMerger::merge(Some(file), Some(git)).unwrap();
+        assert_eq!(merged.bm25_avgdl, 20.0);
     }
 }

@@ -17,7 +17,7 @@
 - **Naming:** Snake_case for files and functions. Types are PascalCase. Constants are UPPER_SNAKE_CASE. Variable naming should be specific to carry their function. E.g. `token_counter` should not be `counter`, which can be confusing.
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).
 - **No Dead Code** No `allow(dead_code)`. It should only be used during long incremental refactors, and must be removed once possible.
-- **File ordering** Public types, contract, methods should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
+- **File ordering** Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
 - **Imports** Import at the file top. Avoid long module path in the code body, like `crate::app::index::xxxx::bbbb::new`. Import from `super` when possible. To access sibling modules, do not re-export in the `mod.rs`.
 - **Config passing** Try to give a function what it needs, but do not split `Config` into multiple parameters.
 - **Forbidden Warning Suppression** No `#[allow(clippy::*)]` or similar workaround. An issue must be addressed.
@@ -27,14 +27,7 @@
 - **Clean mod.rs** The file should not contain anything except module definition and re-export.
 
 ### Test Mocking
-* `pub fn mock_xxxx()` to create a shared mock for testing.
-* `struct MockXxxxx` implements the trait, this is achieved by `mockall` crate.
-* Do not test mock itself.
-* Mocks should not violate visibility rules. A trait only used in its parent module should not have its mock exposed outside its parent module. A mock with manually implemented logic should be placed in a companion file, such as `abc_mock.rs` with test scope along with its counterpart file `abc.rs`.
-* Use `#[cfg_attr(test, mockall::automock)]` on a trait to create mock.
-* Use `#[cfg(test)]` to re-export a mock when needed.
-
-Manual implementeation of a mock's behavior should be avoided as possible. Try to use mocks directly in unit tests with expected calls.
+When writing mocks, refer to @doc/AGENTS_MOCKING.md.
 
 ### Single file layout (ordered from top to bottom)
 1. imports

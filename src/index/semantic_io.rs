@@ -128,11 +128,11 @@ mod tests {
     use super::*;
 
     use crate::domain::IndexKind;
-    use crate::index::semantic_header::SCHEMA_VERSION;
+    use crate::index::semantic_header::SEMANTIC_SCHEMA_VERSION;
 
     fn matching_header() -> IndexHeader {
         IndexHeader {
-            schema_version: SCHEMA_VERSION,
+            schema_version: SEMANTIC_SCHEMA_VERSION,
             embedding_model: "test-model".to_string(),
             embedding_dims: 4,
             chunk_size: 256,
@@ -485,7 +485,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = IndexHeader {
-            schema_version: SCHEMA_VERSION,
+            schema_version: SEMANTIC_SCHEMA_VERSION,
             embedding_model: "test-model".to_string(),
             embedding_dims: 4,
             chunk_size: 256,
@@ -658,7 +658,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = IndexHeader {
-            schema_version: SCHEMA_VERSION,
+            schema_version: SEMANTIC_SCHEMA_VERSION,
             embedding_model: "test-model".to_string(),
             embedding_dims: 4,
             chunk_size: 256,
@@ -705,7 +705,7 @@ mod tests {
         let nested_path = temp_dir.join("nested").join("subdir").join("index");
 
         let header = IndexHeader {
-            schema_version: SCHEMA_VERSION,
+            schema_version: SEMANTIC_SCHEMA_VERSION,
             embedding_model: "test-model".to_string(),
             embedding_dims: 4,
             chunk_size: 256,
@@ -764,7 +764,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = IndexHeader {
-            schema_version: SCHEMA_VERSION,
+            schema_version: SEMANTIC_SCHEMA_VERSION,
             embedding_model: "test-model".to_string(),
             embedding_dims: 4,
             chunk_size: 256,

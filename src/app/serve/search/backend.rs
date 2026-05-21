@@ -101,6 +101,8 @@ impl ScoreBackend for ZeroScoreBackend {
 pub(super) fn build_backends(
     merged: &MergedIndex,
     embedder: Arc<Mutex<dyn Embedder>>,
+    k1: f32,
+    b: f32,
 ) -> (Arc<dyn ScoreBackend>, Arc<dyn ScoreBackend>) {
     let vector_store = Arc::new(merged.vectors.clone());
     let semantic = Arc::new(VectorScoreBackend::new(
@@ -111,9 +113,9 @@ pub(super) fn build_backends(
     let bm25: Arc<dyn ScoreBackend> = if !merged.bm25_embeddings.is_empty() {
         let backend = build_bm25_backend(
             &merged.bm25_embeddings,
-            merged.bm25_header.k1,
-            merged.bm25_header.b,
-            merged.bm25_header.avgdl,
+            k1,
+            b,
+            merged.bm25_avgdl,
         );
         Arc::new(backend)
     } else {

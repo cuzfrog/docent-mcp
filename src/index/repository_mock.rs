@@ -1,11 +1,9 @@
 use crate::domain::ChunkMetadata;
 use crate::domain::Vector;
-use super::bm25_header::Bm25IndexHeader;
-use super::merged::MergedIndex;
-use super::repository::MockIndexRepository;
+use super::repository::{MergedIndex, MockIndexRepository};
 
 /// Create a `MockIndexRepository` whose `load_merged` returns a `MergedIndex`
-/// with the given fields and a default `Bm25IndexHeader`.
+/// with the given fields.
 pub fn mock_repository_returning_merged(
     vectors: Vector,
     metadata: Vec<ChunkMetadata>,
@@ -16,7 +14,7 @@ pub fn mock_repository_returning_merged(
         vectors,
         metadata,
         bm25_embeddings,
-        bm25_header: Bm25IndexHeader::default(),
+        bm25_avgdl: 0.0,
         built_at,
     };
     let mut mock = MockIndexRepository::new();
