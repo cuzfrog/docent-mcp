@@ -1,5 +1,7 @@
 use super::counter::{create_token_counter, TokenCounter};
 use super::sectioning::{build_newline_positions, chunk_section, split_into_sections};
+use std::sync::Arc;
+
 use crate::models::Tokenizer;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -49,7 +51,7 @@ impl Chunker for DocumentChunker {
 pub fn create_chunker(
     chunk_size: usize,
     chunk_overlap: usize,
-    tokenizer: Box<dyn Tokenizer>,
+    tokenizer: Arc<dyn Tokenizer>,
 ) -> Box<dyn Chunker> {
     let token_counter = create_token_counter(tokenizer);
     Box::new(DocumentChunker::new(

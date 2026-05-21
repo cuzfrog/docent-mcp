@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::models::Tokenizer;
 
 #[cfg_attr(test, mockall::automock)]
@@ -8,13 +10,13 @@ pub trait TokenCounter: Send + Sync {
 }
 
 pub(super) fn create_token_counter(
-    tokenizer: Box<dyn Tokenizer>,
+    tokenizer: Arc<dyn Tokenizer>,
 ) -> Box<dyn TokenCounter> {
     Box::new(HuggingFaceTokenCounter { tokenizer })
 }
 
 struct HuggingFaceTokenCounter {
-    tokenizer: Box<dyn Tokenizer>,
+    tokenizer: Arc<dyn Tokenizer>,
 }
 
 impl TokenCounter for HuggingFaceTokenCounter {
@@ -27,6 +29,7 @@ impl TokenCounter for HuggingFaceTokenCounter {
 mod tests {
     use crate::models::MockTokenizer;
     use mockall::predicate::eq;
+    use std::sync::Arc;
 
     #[test]
     fn test_delegation() {
@@ -36,7 +39,7 @@ mod tests {
             .with(eq("test text"))
             .once()
             .return_const((0, vec![]));
-        let counter = super::create_token_counter(Box::new(mock_tokenizer));
+        let counter = super::create_token_counter(Arc::new(mock_tokenizer));
         counter.encode_with_offsets("test text");
     }
 }

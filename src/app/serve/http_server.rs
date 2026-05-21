@@ -8,7 +8,7 @@ use axum::Router;
 use crate::app::serve::mcp_server::{MCPServer, create_mcp_server};
 use crate::config::Config;
 use crate::index::IndexRepository;
-use crate::support::{Console, create_console};
+use crate::support::Console;
 
 // ---------------------------------------------------------------------------
 // Search service bootstrap
@@ -44,12 +44,14 @@ fn check_index_size(persist_path: &Path, max_size_mb: u64) -> anyhow::Result<Opt
     }
 }
 
-fn build_search_service(
+/// Validate the search environment: check index size and that the index can be loaded.
+/// Returns an error if the user aborts or the index is unreadable.
+fn validate_search_environment(
     repo: &dyn IndexRepository,
     config: &Config,
     console: &dyn Console,
     check_size: impl Fn(&Path, u64) -> anyhow::Result<Option<IndexSizeInfo>>,
-) -> anyhow::Result<Arc<dyn crate::app::serve::search::SearchService>> {
+) -> anyhow::Result<()> {
     let persist_path = config.persist_path_buf();
 
     if let Some(info) = check_size(&persist_path, config.index.max_size_mb)? {
@@ -79,20 +81,7 @@ fn build_search_service(
     repo.load_merged()
         .map_err(|e| anyhow::anyhow!("Failed to load merged index: {}", e))?;
 
-    let factory = crate::models::create_model_factory(
-        &config.index.embedding_model,
-        Path::new(&config.index.cache_dir),
-    )
-    .map_err(|e| anyhow::anyhow!("Failed to create model factory: {}", e))?;
-    let model = factory.build_model().map_err(|e| {
-        anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e)
-    })?;
-    let embedder: Arc<Mutex<dyn crate::index::Embedder>> =
-        Arc::new(Mutex::new(crate::index::create_embedder(model)));
-    let search_service =
-        crate::app::serve::search::create_search_service(repo, embedder, &config.search)?;
-
-    Ok(search_service)
+    Ok(())
 }
 
 #[async_trait]
@@ -102,18 +91,33 @@ pub trait HttpServer: Send + Sync {
 
 pub fn create_http_server(config: Config, console: Box<dyn Console>) -> anyhow::Result<impl HttpServer> {
     let repo = crate::index::create_index_repository(&config);
-    let search_service = build_search_service(&repo, &config, &*console, |path, max| {
+    validate_search_environment(&repo, &config, &*console, |path, max| {
         check_index_size(path, max)
     })?;
+
+    let factory = crate::models::create_model_factory(
+        &config.index.embedding_model,
+        std::path::Path::new(&config.index.cache_dir),
+    )
+    .map_err(|e| anyhow::anyhow!("Failed to create model factory: {}", e))?;
+    let model = factory.build_model().map_err(|e| {
+        anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e)
+    })?;
+    let embedder: Arc<Mutex<dyn crate::index::Embedder>> =
+        Arc::new(Mutex::new(crate::index::create_embedder(model)));
+    let search_service =
+        crate::app::serve::search::create_search_service(&repo, embedder, &config.search)?;
+
     let mcp = create_mcp_server(search_service);
     let router = mcp.into_router()?;
+    let console: Arc<dyn Console> = Arc::from(console);
     Ok(TokioHttpServer { router, config, console })
 }
 
 struct TokioHttpServer {
     router: Router,
     config: Config,
-    console: Box<dyn Console>,
+    console: Arc<dyn Console>,
 }
 
 #[async_trait]
@@ -132,8 +136,9 @@ impl HttpServer for TokioHttpServer {
             local_addr,
         ));
 
+        let console = self.console.clone();
         axum::serve(listener, self.router.clone())
-            .with_graceful_shutdown(shutdown_signal())
+            .with_graceful_shutdown(shutdown_signal(console))
             .await
             .context("Server error")?;
 
@@ -141,13 +146,11 @@ impl HttpServer for TokioHttpServer {
     }
 }
 
-async fn shutdown_signal() {
+async fn shutdown_signal(console: Arc<dyn Console>) {
     if let Err(e) = tokio::signal::ctrl_c().await {
-        let console = create_console(false);
-        Console::info(&console, &format!("Shutdown signal error: {}", e));
+        console.warn(&format!("Shutdown signal error: {}", e));
     } else {
-        let console = create_console(false);
-        Console::info(&console, "Shutting down...");
+        console.info("Shutting down...");
     }
 }
 
@@ -207,7 +210,7 @@ mod tests {
     // ------------------------------------------------------------------
 
     /// The user is warned the index is oversized and declines to continue.
-    /// `build_search_service` must return an error with "Aborted by user".
+    /// `validate_search_environment` must return an error with "Aborted by user".
     #[test]
     fn oversized_index_aborts_when_not_confirmed() {
         let repo = mock_repository_returning_merged(
@@ -217,7 +220,9 @@ mod tests {
             "test".to_string(),
         );
         let console = FakeConsole { confirm_answer: false };
-        let result = build_search_service(&repo, &Config::default(), &console, oversized_checker());
+        let result = validate_search_environment(
+            &repo, &Config::default(), &console, oversized_checker(),
+        );
         assert!(result.is_err(), "expected error on user abort");
         let err_msg = result.err().unwrap().to_string();
         assert!(
@@ -226,14 +231,16 @@ mod tests {
         );
     }
 
-    /// The user confirms despite the oversized warning.  `build_search_service`
+    /// The user confirms despite the oversized warning.  `validate_search_environment`
     /// must not abort at the size-check step; the subsequent load error is
     /// what terminates the call (we avoid the heavyweight model-factory path).
     #[test]
     fn oversized_index_continues_when_confirmed() {
         let repo = mock_repository_with_error("simulated load error");
         let console = FakeConsole { confirm_answer: true };
-        let result = build_search_service(&repo, &Config::default(), &console, oversized_checker());
+        let result = validate_search_environment(
+            &repo, &Config::default(), &console, oversized_checker(),
+        );
         let err = result.err().unwrap().to_string();
         assert!(
             !err.contains("Aborted by user"),
@@ -251,7 +258,9 @@ mod tests {
     fn merged_index_loading_error_propagates() {
         let repo = mock_repository_with_error("disk read failure");
         let console = FakeConsole { confirm_answer: false };
-        let result = build_search_service(&repo, &Config::default(), &console, ok_checker());
+        let result = validate_search_environment(
+            &repo, &Config::default(), &console, ok_checker(),
+        );
         assert!(result.is_err(), "expected error from load_merged");
         let msg = result.err().unwrap().to_string();
         assert!(

@@ -3,26 +3,28 @@ use std::sync::Arc;
 use crate::app::index::processor::IndexingProcessor;
 use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
 use crate::config::{Config, FileConfig};
-use crate::models::ModelFactory;
+use crate::index::IndexRepository;
 use crate::support::Console;
 
 pub(crate) struct FileIndexer {
     pub(crate) console: Box<dyn Console>,
     pub(crate) config: Config,
     pub(crate) processor: Box<dyn IndexingProcessor>,
+    pub(crate) repo: Arc<dyn IndexRepository>,
 }
 
 pub(crate) fn create_file_indexer(
     config: &Config,
     console: Box<dyn Console>,
-    _model_factory: Arc<dyn ModelFactory>,
     processor: Box<dyn IndexingProcessor>,
+    repo: Arc<dyn IndexRepository>,
 ) -> impl Indexer {
     config.file.as_ref().expect("FileIndexer requires file config");
     FileIndexer {
         console,
         config: config.clone(),
         processor,
+        repo,
     }
 }
 

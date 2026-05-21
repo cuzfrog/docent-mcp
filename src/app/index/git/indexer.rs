@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::app::index::processor::IndexingProcessor;
 use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
 use crate::config::{Config, GitConfig};
+use crate::index::IndexRepository;
 use crate::models::ModelFactory;
 use crate::support::Console;
 
@@ -11,6 +12,7 @@ pub(crate) struct GitIndexer {
     pub(crate) config: Config,
     pub(crate) model_factory: Arc<dyn ModelFactory>,
     pub(crate) processor: Box<dyn IndexingProcessor>,
+    pub(crate) repo: Arc<dyn IndexRepository>,
 }
 
 pub(crate) fn create_git_indexer(
@@ -18,6 +20,7 @@ pub(crate) fn create_git_indexer(
     console: Box<dyn Console>,
     model_factory: Arc<dyn ModelFactory>,
     processor: Box<dyn IndexingProcessor>,
+    repo: Arc<dyn IndexRepository>,
 ) -> impl Indexer {
     config.git.as_ref().expect("GitIndexer requires git config");
     GitIndexer {
@@ -25,6 +28,7 @@ pub(crate) fn create_git_indexer(
         config: config.clone(),
         model_factory,
         processor,
+        repo,
     }
 }
 

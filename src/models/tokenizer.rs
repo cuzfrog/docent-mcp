@@ -5,12 +5,12 @@ pub trait Tokenizer: Send + Sync {
     fn encode_with_offsets(&self, text: &str) -> (usize, Vec<(usize, usize)>);
 }
 
-pub(super) fn create_tokenizer(tokenizer: tokenizers::Tokenizer) -> Box<dyn Tokenizer> {
-    Box::new(TokenizerImpl { inner: tokenizer })
-}
-
 struct TokenizerImpl {
     inner: tokenizers::Tokenizer,
+}
+
+pub(super) fn create_tokenizer(tokenizer: tokenizers::Tokenizer) -> Box<dyn Tokenizer> {
+    Box::new(TokenizerImpl { inner: tokenizer })
 }
 
 impl Tokenizer for TokenizerImpl {

@@ -1,7 +1,6 @@
 use crate::app::index::{IndexOutcome, IndexRequest};
 use crate::domain::IndexKind;
 use crate::domain::ChunkMetadata;
-use crate::index::{create_index_repository, IndexRepository};
 use super::FileIndexer;
 
 impl FileIndexer {
@@ -44,11 +43,10 @@ impl FileIndexer {
         if !self.confirm_rebuild()? {
             return Ok(IndexOutcome::Aborted);
         }
-        let repo = create_index_repository(&self.config);
         let (batch, dims) = self.index_files(request)?;
         let chunk_count = batch.metadata.len();
         let doc_count = ChunkMetadata::unique_count(&batch.metadata);
-        repo.store(IndexKind::File, &batch, dims, doc_count, None)?;
+        self.repo.store(IndexKind::File, &batch, dims, doc_count, None)?;
         Ok(IndexOutcome::Indexed {
             kind: IndexKind::File,
             rebuilt: true,

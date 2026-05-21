@@ -5,7 +5,6 @@ use crate::domain::IndexKind;
 use crate::domain::ChunkMetadata;
 use crate::domain::IndexedBatch;
 use crate::domain::Vector;
-use crate::index::{create_index_repository, IndexRepository};
 use super::FileIndexer;
 
 type ExistingIndex = (HashMap<String, String>, Vec<ChunkMetadata>, Vector, bool);
@@ -35,8 +34,7 @@ impl From<anyhow::Error> for IndexLoadError {
 
 impl FileIndexer {
     fn load_existing_index(&self) -> Result<ExistingIndex, IndexLoadError> {
-        let repo = create_index_repository(&self.config);
-        match repo.load(IndexKind::File) {
+        match self.repo.load(IndexKind::File) {
             Ok(Some(stored)) => {
                 let old_hashes = super::merge::extract_old_hashes(&stored.semantic.metadata);
                 Ok((old_hashes, stored.semantic.metadata, stored.semantic.vectors, true))
@@ -50,7 +48,6 @@ impl FileIndexer {
         &self,
         request: &IndexRequest,
     ) -> anyhow::Result<IndexOutcome> {
-        let repo = create_index_repository(&self.config);
         let (old_hashes, old_metadata, old_vectors, index_exists) = match self.load_existing_index() {
             Ok(v) => v,
             Err(IndexLoadError::NotFound) => {
@@ -80,7 +77,7 @@ impl FileIndexer {
         let doc_count = ChunkMetadata::unique_count(&merged_metadata);
         let chunk_count = merged_metadata.len();
         let batch = IndexedBatch { vectors: merged_vectors, metadata: merged_metadata };
-        repo.store(IndexKind::File, &batch, dims, doc_count, None)?;
+        self.repo.store(IndexKind::File, &batch, dims, doc_count, None)?;
         Ok(IndexOutcome::Indexed {
             kind: IndexKind::File,
             rebuilt: false,

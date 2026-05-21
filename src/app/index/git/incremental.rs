@@ -2,7 +2,6 @@ use std::time::Instant;
 
 use crate::app::index::{IndexOutcome, IndexRequest};
 use crate::domain::{IndexKind, ChunkMetadata, IndexedBatch, Vector};
-use crate::index::{create_index_repository, IndexRepository};
 use super::GitIndexer;
 
 impl GitIndexer {
@@ -11,8 +10,7 @@ impl GitIndexer {
         request: &IndexRequest,
         dims: usize,
     ) -> anyhow::Result<IndexOutcome> {
-        let repo = create_index_repository(&self.config);
-        let (old_vectors, old_metadata, last_commit) = match repo.load(IndexKind::Git) {
+        let (old_vectors, old_metadata, last_commit) = match self.repo.load(IndexKind::Git) {
             Ok(Some(stored)) => {
                 let last_commit = stored.semantic.header.last_indexed_commit.clone();
                 (stored.semantic.vectors, stored.semantic.metadata, last_commit)
@@ -59,7 +57,7 @@ impl GitIndexer {
         let doc_count = ChunkMetadata::unique_count(&merged_metadata);
         let chunk_count = merged_metadata.len();
         let batch = IndexedBatch { vectors: merged_vectors, metadata: merged_metadata };
-        repo.store(IndexKind::Git, &batch, dims, doc_count, Some(head_commit))?;
+        self.repo.store(IndexKind::Git, &batch, dims, doc_count, Some(head_commit))?;
         Ok(IndexOutcome::Indexed {
             kind: IndexKind::Git,
             rebuilt: false,
