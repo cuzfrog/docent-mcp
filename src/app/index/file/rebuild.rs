@@ -5,7 +5,8 @@ use crate::index::{create_index_repository, IndexRepository};
 use super::FileIndexer;
 
 impl FileIndexer {
-    fn confirm_rebuild(&self, persist_path: &std::path::Path) -> anyhow::Result<bool> {
+    fn confirm_rebuild(&self) -> anyhow::Result<bool> {
+        let persist_path = self.config.persist_path_buf();
         self.console.warn(&format!(
             "Warning: this will delete the existing index at '{}' and rebuild it from scratch.",
             persist_path.display()
@@ -40,8 +41,7 @@ impl FileIndexer {
         &self,
         request: &IndexRequest,
     ) -> anyhow::Result<IndexOutcome> {
-        let persist_path = std::path::PathBuf::from(&self.config.index.persist_path);
-        if !self.confirm_rebuild(&persist_path)? {
+        if !self.confirm_rebuild()? {
             return Ok(IndexOutcome::Aborted);
         }
         let repo = create_index_repository(&self.config);
