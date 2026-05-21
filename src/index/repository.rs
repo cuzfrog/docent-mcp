@@ -7,10 +7,13 @@ use crate::domain::IndexKind;
 use super::bm25_builder::build_bm25;
 use super::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
 use super::bm25_io;
+use super::merger::IndexMerger;
+use super::merged::MergedIndex;
 use super::semantic_io::{read_semantic_index, write_semantic_index};
 use super::source_index::{Bm25Index, Index, SemanticIndex};
 use super::stored_metadata::StoredChunkMetadata;
 
+#[cfg_attr(test, mockall::automock)]
 pub(crate) trait IndexRepository: Send + Sync {
     fn store(
         &self,
@@ -22,6 +25,8 @@ pub(crate) trait IndexRepository: Send + Sync {
     ) -> anyhow::Result<()>;
 
     fn load(&self, kind: IndexKind) -> anyhow::Result<Option<Index>>;
+
+    fn load_merged(&self) -> anyhow::Result<MergedIndex>;
 }
 
 pub(crate) fn create_index_repository(
@@ -68,6 +73,37 @@ impl IndexRepository for FileSystemIndexRepository {
         let idx = self.load_sub_index(kind)?;
         idx.semantic.header.validate_against(&self.config.index)?;
         Ok(Some(idx))
+    }
+
+    fn load_merged(&self) -> anyhow::Result<MergedIndex> {
+        let file = self.load(IndexKind::File)?;
+        let git = self.load(IndexKind::Git)?;
+
+        if file.is_none() && git.is_none() {
+            anyhow::bail!(
+                "No index found at '{}'. Run 'docent index-file' or 'docent index-git' first.",
+                self.config.persist_path_buf().display()
+            );
+        }
+
+        if let (Some(ref f), Some(ref g)) = (&file, &git) {
+            if f.semantic.header.embedding_model != g.semantic.header.embedding_model {
+                anyhow::bail!(
+                    "embedding_model mismatch between file/ and git/ subdirs: '{}' vs '{}'",
+                    f.semantic.header.embedding_model,
+                    g.semantic.header.embedding_model
+                );
+            }
+            if f.semantic.header.embedding_dims != g.semantic.header.embedding_dims {
+                anyhow::bail!(
+                    "embedding_dims mismatch between file/ and git/ subdirs: {} vs {}",
+                    f.semantic.header.embedding_dims,
+                    g.semantic.header.embedding_dims
+                );
+            }
+        }
+
+        IndexMerger::merge(file, git)
     }
 }
 

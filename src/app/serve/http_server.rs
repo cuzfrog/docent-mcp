@@ -1,13 +1,17 @@
+use std::path::Path;
+use std::sync::{Arc, Mutex};
+
 use anyhow::Context;
 use async_trait::async_trait;
 use axum::Router;
 
 use crate::app::serve::mcp_server::{MCPServer, create_mcp_server};
 use crate::config::Config;
+use crate::index::IndexRepository;
 use crate::support::{Console, create_console};
 
 // ---------------------------------------------------------------------------
-// Search service bootstrap (moved from search/index_access.rs)
+// Search service bootstrap
 // ---------------------------------------------------------------------------
 
 /// On-disk size breakdown of the persisted index directories.
@@ -17,66 +21,38 @@ struct IndexSizeInfo {
     git_bytes: u64,
 }
 
-trait ServeIndexAccess: Send + Sync {
-    fn check_size(
-        &self,
-        persist_path: &std::path::Path,
-        max_size_mb: u64,
-    ) -> anyhow::Result<Option<IndexSizeInfo>>;
-
-    fn load_merged(
-        &self,
-        config: &crate::config::Config,
-    ) -> anyhow::Result<crate::index::MergedIndex>;
-}
-
-struct ServeIndexAccessImpl;
-
-impl ServeIndexAccess for ServeIndexAccessImpl {
-    fn check_size(
-        &self,
-        persist_path: &std::path::Path,
-        max_size_mb: u64,
-    ) -> anyhow::Result<Option<IndexSizeInfo>> {
-        let total_size = crate::support::dir_size(persist_path);
-        let max_bytes = max_size_mb * 1024 * 1024;
-        if total_size > max_bytes {
-            Ok(Some(IndexSizeInfo {
-                total_bytes: total_size,
-                file_bytes: if persist_path.join("file").exists() {
-                    crate::support::dir_size(&persist_path.join("file"))
-                } else {
-                    0
-                },
-                git_bytes: if persist_path.join("git").exists() {
-                    crate::support::dir_size(&persist_path.join("git"))
-                } else {
-                    0
-                },
-            }))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn load_merged(
-        &self,
-        config: &crate::config::Config,
-    ) -> anyhow::Result<crate::index::MergedIndex> {
-        let repo = crate::index::create_index_repository(config);
-        crate::index::load_merged(&repo, &config.persist_path_buf())
+/// Check whether the index exceeds the configured size limit.
+fn check_index_size(persist_path: &Path, max_size_mb: u64) -> anyhow::Result<Option<IndexSizeInfo>> {
+    let total_size = crate::support::dir_size(persist_path);
+    let max_bytes = max_size_mb * 1024 * 1024;
+    if total_size > max_bytes {
+        Ok(Some(IndexSizeInfo {
+            total_bytes: total_size,
+            file_bytes: if persist_path.join("file").exists() {
+                crate::support::dir_size(&persist_path.join("file"))
+            } else {
+                0
+            },
+            git_bytes: if persist_path.join("git").exists() {
+                crate::support::dir_size(&persist_path.join("git"))
+            } else {
+                0
+            },
+        }))
+    } else {
+        Ok(None)
     }
 }
 
 fn build_search_service(
-    index_access: &dyn ServeIndexAccess,
-    config: &crate::config::Config,
-    console: &dyn crate::support::Console,
-) -> anyhow::Result<std::sync::Arc<dyn crate::app::serve::search::SearchService>> {
-    use std::sync::{Arc, Mutex};
+    repo: &dyn IndexRepository,
+    config: &Config,
+    console: &dyn Console,
+    check_size: impl Fn(&Path, u64) -> anyhow::Result<Option<IndexSizeInfo>>,
+) -> anyhow::Result<Arc<dyn crate::app::serve::search::SearchService>> {
     let persist_path = config.persist_path_buf();
 
-    if let Some(info) = index_access.check_size(&persist_path, config.index.max_size_mb)? {
+    if let Some(info) = check_size(&persist_path, config.index.max_size_mb)? {
         console.warn(&format!(
             "The total index is {:.1} MB, which exceeds the configured limit of {} MB.",
             info.total_bytes as f64 / (1024.0 * 1024.0),
@@ -99,13 +75,13 @@ fn build_search_service(
         }
     }
 
-    let merged = index_access
-        .load_merged(config)
+    // Validate the index can be loaded before building the model.
+    repo.load_merged()
         .map_err(|e| anyhow::anyhow!("Failed to load merged index: {}", e))?;
 
     let factory = crate::models::create_model_factory(
         &config.index.embedding_model,
-        std::path::Path::new(&config.index.cache_dir),
+        Path::new(&config.index.cache_dir),
     )
     .map_err(|e| anyhow::anyhow!("Failed to create model factory: {}", e))?;
     let model = factory.build_model().map_err(|e| {
@@ -114,7 +90,7 @@ fn build_search_service(
     let embedder: Arc<Mutex<dyn crate::index::Embedder>> =
         Arc::new(Mutex::new(crate::index::create_embedder(model)));
     let search_service =
-        crate::app::serve::search::create_search_service(merged, embedder, &config.search)?;
+        crate::app::serve::search::create_search_service(repo, embedder, &config.search)?;
 
     Ok(search_service)
 }
@@ -125,7 +101,10 @@ pub trait HttpServer: Send + Sync {
 }
 
 pub fn create_http_server(config: Config, console: Box<dyn Console>) -> anyhow::Result<impl HttpServer> {
-    let search_service = build_search_service(&ServeIndexAccessImpl, &config, &*console)?;
+    let repo = crate::index::create_index_repository(&config);
+    let search_service = build_search_service(&repo, &config, &*console, |path, max| {
+        check_index_size(path, max)
+    })?;
     let mcp = create_mcp_server(search_service);
     let router = mcp.into_router()?;
     Ok(TokioHttpServer { router, config, console })
@@ -177,56 +156,12 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::domain::Vector;
-    use crate::index::{Bm25IndexHeader, MergedIndex};
+    use crate::index::{mock_repository_returning_merged, mock_repository_with_error};
 
     // ------------------------------------------------------------------
-    // Fake implementations of the two seam traits
+    // Fake Console
     // ------------------------------------------------------------------
 
-    /// Lightweight fake that controls what `check_size` and `load_merged` return.
-    struct FakeAccess {
-        /// When `true`, `check_size` returns an oversized `IndexSizeInfo`.
-        oversized: bool,
-        /// When `Some`, `load_merged` returns `Err` with this message.
-        load_err: Option<String>,
-    }
-
-    impl ServeIndexAccess for FakeAccess {
-        fn check_size(
-            &self,
-            _persist_path: &std::path::Path,
-            _max_size_mb: u64,
-        ) -> anyhow::Result<Option<IndexSizeInfo>> {
-            if self.oversized {
-                Ok(Some(IndexSizeInfo {
-                    total_bytes: 600 * 1024 * 1024,
-                    file_bytes: 600 * 1024 * 1024,
-                    git_bytes: 0,
-                }))
-            } else {
-                Ok(None)
-            }
-        }
-
-        fn load_merged(
-            &self,
-            _config: &crate::config::Config,
-        ) -> anyhow::Result<MergedIndex> {
-            match &self.load_err {
-                Some(msg) => Err(anyhow::anyhow!("{}", msg)),
-                None => Ok(MergedIndex {
-                    vectors: Vector::from_vec_vec(vec![]).unwrap(),
-                    metadata: vec![],
-                    bm25_embeddings: vec![],
-                    bm25_header: Bm25IndexHeader::default(),
-                    built_at: "test".to_string(),
-                }),
-            }
-        }
-    }
-
-    /// Minimal `Console` that records the confirm answer and silently
-    /// discards info/warn output.  `bool` fields are `Send + Sync`.
     struct FakeConsole {
         confirm_answer: bool,
     }
@@ -250,6 +185,24 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
+
+    fn oversized_checker() -> impl Fn(&Path, u64) -> anyhow::Result<Option<IndexSizeInfo>> {
+        |_, _| {
+            Ok(Some(IndexSizeInfo {
+                total_bytes: 600 * 1024 * 1024,
+                file_bytes: 600 * 1024 * 1024,
+                git_bytes: 0,
+            }))
+        }
+    }
+
+    fn ok_checker() -> impl Fn(&Path, u64) -> anyhow::Result<Option<IndexSizeInfo>> {
+        |_, _| Ok(None)
+    }
+
+    // ------------------------------------------------------------------
     // Tests
     // ------------------------------------------------------------------
 
@@ -257,9 +210,14 @@ mod tests {
     /// `build_search_service` must return an error with "Aborted by user".
     #[test]
     fn oversized_index_aborts_when_not_confirmed() {
-        let access = FakeAccess { oversized: true, load_err: None };
+        let repo = mock_repository_returning_merged(
+            Vector::from_vec_vec(vec![]).unwrap(),
+            vec![],
+            vec![],
+            "test".to_string(),
+        );
         let console = FakeConsole { confirm_answer: false };
-        let result = build_search_service(&access, &Config::default(), &console);
+        let result = build_search_service(&repo, &Config::default(), &console, oversized_checker());
         assert!(result.is_err(), "expected error on user abort");
         let err_msg = result.err().unwrap().to_string();
         assert!(
@@ -273,12 +231,9 @@ mod tests {
     /// what terminates the call (we avoid the heavyweight model-factory path).
     #[test]
     fn oversized_index_continues_when_confirmed() {
-        let access = FakeAccess {
-            oversized: true,
-            load_err: Some("simulated load error".to_string()),
-        };
+        let repo = mock_repository_with_error("simulated load error");
         let console = FakeConsole { confirm_answer: true };
-        let result = build_search_service(&access, &Config::default(), &console);
+        let result = build_search_service(&repo, &Config::default(), &console, oversized_checker());
         let err = result.err().unwrap().to_string();
         assert!(
             !err.contains("Aborted by user"),
@@ -294,12 +249,9 @@ mod tests {
     /// propagated as "Failed to load merged index: …".
     #[test]
     fn merged_index_loading_error_propagates() {
-        let access = FakeAccess {
-            oversized: false,
-            load_err: Some("disk read failure".to_string()),
-        };
+        let repo = mock_repository_with_error("disk read failure");
         let console = FakeConsole { confirm_answer: false };
-        let result = build_search_service(&access, &Config::default(), &console);
+        let result = build_search_service(&repo, &Config::default(), &console, ok_checker());
         assert!(result.is_err(), "expected error from load_merged");
         let msg = result.err().unwrap().to_string();
         assert!(
