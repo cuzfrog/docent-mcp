@@ -15,6 +15,9 @@ pub(crate) use index_loader::load_merged;
 
 pub(crate) use merged::MergedIndex;
 
+#[cfg(test)]
+pub(crate) use bm25_header::Bm25IndexHeader;
+
 mod embedder;
 pub(crate) use embedder::{Embedder, create_embedder};
 

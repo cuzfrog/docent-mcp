@@ -55,7 +55,7 @@ mod tests {
     use super::*;
     use crate::config::{SearchConfig, FusionConfig, RankingConfig, Bm25Config};
     use crate::domain::Vector;
-use crate::index::MergedIndex;
+    use crate::index::{Bm25IndexHeader, MergedIndex};
     use crate::domain::{IndexKind, ChunkMetadata, DocumentContext};
     use crate::index::mock_embedder;
 
@@ -119,8 +119,8 @@ use crate::index::MergedIndex;
             ])
             .unwrap(),
             metadata,
-            bm25_embeddings: None,
-            bm25_header: None,
+            bm25_embeddings: vec![],
+            bm25_header: Bm25IndexHeader::default(),
             built_at: "now".to_string(),
         };
         let embedder: Arc<Mutex<dyn Embedder>> =

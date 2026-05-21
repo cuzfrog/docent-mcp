@@ -108,14 +108,18 @@ pub(super) fn build_backends(
         vector_store,
     )) as Arc<dyn ScoreBackend>;
 
-    let bm25: Arc<dyn ScoreBackend> = match (&merged.bm25_embeddings, &merged.bm25_header) {
-        (Some(embeddings), Some(header)) => {
-            let backend = build_bm25_backend(embeddings, header.k1, header.b, header.avgdl);
-            Arc::new(backend)
-        }
-        _ => Arc::new(ZeroScoreBackend {
+    let bm25: Arc<dyn ScoreBackend> = if !merged.bm25_embeddings.is_empty() {
+        let backend = build_bm25_backend(
+            &merged.bm25_embeddings,
+            merged.bm25_header.k1,
+            merged.bm25_header.b,
+            merged.bm25_header.avgdl,
+        );
+        Arc::new(backend)
+    } else {
+        Arc::new(ZeroScoreBackend {
             chunk_count: merged.metadata.len(),
-        }),
+        })
     };
 
     (semantic, bm25)

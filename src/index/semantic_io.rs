@@ -16,7 +16,7 @@ pub(super) struct StoredIndex {
 /// Creates `path` (and any missing parents) if it does not exist (`create_dir_all`
 /// is idempotent).  Does **not** validate that `vectors.len()` equals
 /// `metadata.len()` or that dimensions are consistent — the caller is responsible.
-pub(super) fn write_index(
+pub(super) fn write_semantic_index(
     path: &Path,
     header: &IndexHeader,
     vectors: &Vector,
@@ -115,7 +115,7 @@ fn validate_consistency(header: &IndexHeader, vectors: &Vector, metadata: &[Stor
     Ok(())
 }
 
-pub(super) fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
+pub(super) fn read_semantic_index(path: &Path) -> anyhow::Result<StoredIndex> {
     let header = read_header(path)?;
     let vectors = read_vectors(path, &header)?;
     let metadata = read_metadata(path)?;
@@ -202,12 +202,12 @@ mod tests {
             },
         ];
 
-        write_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
+        write_semantic_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
 
         let vectors_meta = std::fs::metadata(temp_dir.join("vectors.bin")).unwrap();
         assert_eq!(vectors_meta.len(), 3 * 4 * 4);
 
-        let stored = read_index(&temp_dir).unwrap();
+        let stored = read_semantic_index(&temp_dir).unwrap();
         assert_eq!(stored.header, header);
         assert_eq!(stored.vectors, vector_store);
         assert_eq!(stored.metadata, metadata);
@@ -265,7 +265,7 @@ mod tests {
             },
         ];
 
-        write_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
+        write_semantic_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
 
         let expected_bytes = header.chunk_count * header.embedding_dims * 4;
         let actual_bytes = std::fs::metadata(temp_dir.join("vectors.bin"))
@@ -279,7 +279,7 @@ mod tests {
     #[test]
     fn test_read_index_nonexistent_path() {
         let path = Path::new("/nonexistent/docent_test_no_such_index");
-        let result = read_index(path);
+        let result = read_semantic_index(path);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("no index found at"));
@@ -292,7 +292,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
         std::fs::create_dir_all(&temp_dir).unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("no index found at"));
@@ -356,7 +356,7 @@ mod tests {
 
         std::fs::write(temp_dir.join("vectors.bin"), [0u8; 8]).unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("corrupted"));
@@ -422,7 +422,7 @@ mod tests {
 
         std::fs::write(temp_dir.join("vectors.bin"), [0u8; 60]).unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("corrupted"));
@@ -467,9 +467,9 @@ mod tests {
             },
         ];
 
-        write_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
+        write_semantic_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("consistency error"));
@@ -558,7 +558,7 @@ mod tests {
         let metadata_bytes = bincode::serialize(&metadata).unwrap();
         std::fs::write(temp_dir.join("metadata.bin"), &metadata_bytes).unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("consistency error"));
@@ -582,7 +582,7 @@ mod tests {
         // Write vectors.bin manually
         std::fs::write(temp_dir.join("vectors.bin"), vector_store.as_bytes()).unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("metadata file not found at"));
@@ -644,7 +644,7 @@ mod tests {
         let metadata_bytes = bincode::serialize(&metadata).unwrap();
         std::fs::write(temp_dir.join("metadata.bin"), &metadata_bytes).unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("vectors.bin"));
@@ -671,9 +671,9 @@ mod tests {
         let vector_store = Vector::from_vec_vec(vec![]).unwrap();
         let metadata: Vec<StoredChunkMetadata> = vec![];
 
-        write_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
+        write_semantic_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
 
-        let stored = read_index(&temp_dir).unwrap();
+        let stored = read_semantic_index(&temp_dir).unwrap();
         assert_eq!(stored.header, header);
         assert!(stored.vectors.is_empty());
         assert!(stored.metadata.is_empty());
@@ -689,7 +689,7 @@ mod tests {
         std::fs::create_dir_all(&temp_dir).unwrap();
         std::fs::write(temp_dir.join("header.json"), "not valid json").unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("Failed to parse"));
@@ -731,7 +731,7 @@ mod tests {
             is_fresh: None,
         }];
 
-        write_index(&nested_path, &header, &vector_store, &metadata).unwrap();
+        write_semantic_index(&nested_path, &header, &vector_store, &metadata).unwrap();
 
         assert!(nested_path.exists());
         assert!(nested_path.join("header.json").exists());
@@ -748,14 +748,14 @@ mod tests {
         vectors: &Vector,
         metadata: &[StoredChunkMetadata],
     ) -> anyhow::Result<()> {
-        write_index(&persist_path.join(subdir), header, vectors, metadata)
+        write_semantic_index(&persist_path.join(subdir), header, vectors, metadata)
     }
 
     fn read_subdir(
         persist_path: &Path,
         subdir: &str,
     ) -> anyhow::Result<StoredIndex> {
-        read_index(&persist_path.join(subdir))
+        read_semantic_index(&persist_path.join(subdir))
     }
 
     #[test]

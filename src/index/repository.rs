@@ -7,8 +7,8 @@ use crate::domain::IndexKind;
 use super::bm25_builder::build_bm25;
 use super::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
 use super::bm25_io;
-use super::semantic_io::{read_index, write_index};
-use super::source_index::{Bm25SubIndex, SubIndex};
+use super::semantic_io::{read_semantic_index, write_semantic_index};
+use super::source_index::{Bm25Index, Index, SemanticIndex};
 use super::stored_metadata::StoredChunkMetadata;
 
 pub(crate) trait IndexRepository: Send + Sync {
@@ -21,7 +21,7 @@ pub(crate) trait IndexRepository: Send + Sync {
         last_indexed_commit: Option<String>,
     ) -> anyhow::Result<()>;
 
-    fn load(&self, kind: IndexKind) -> anyhow::Result<Option<SubIndex>>;
+    fn load(&self, kind: IndexKind) -> anyhow::Result<Option<Index>>;
 }
 
 pub(crate) fn create_index_repository(
@@ -55,24 +55,19 @@ impl IndexRepository for FileSystemIndexRepository {
         let vector_store = crate::domain::Vector::from_vec_vec(batch.vectors.clone())?;
         let source_dir = self.config.persist_path_buf().join(kind.subdir());
 
-        self.write_semantic_index(&source_dir, &header, &vector_store, &batch.metadata)?;
+        self.store_semantic(&source_dir, &header, &vector_store, &batch.metadata)?;
         self.write_bm25_index(&source_dir, &batch.metadata)?;
 
         Ok(())
     }
 
-    fn load(&self, kind: IndexKind) -> anyhow::Result<Option<SubIndex>> {
+    fn load(&self, kind: IndexKind) -> anyhow::Result<Option<Index>> {
         if !self.sub_exists(kind) {
             return Ok(None);
         }
-        let mut sub = self.load_sub_index(kind)?;
-        sub.header.validate_against(&self.config.index)?;
-        if sub.bm25.is_none() && !sub.metadata.is_empty() {
-            let source_dir = self.config.persist_path_buf().join(kind.subdir());
-            let bm25_sub = self.write_bm25_index(&source_dir, &sub.metadata)?;
-            sub.bm25 = Some(bm25_sub);
-        }
-        Ok(Some(sub))
+        let idx = self.load_sub_index(kind)?;
+        idx.semantic.header.validate_against(&self.config.index)?;
+        Ok(Some(idx))
     }
 }
 
@@ -82,7 +77,7 @@ impl FileSystemIndexRepository {
         header_path.exists()
     }
 
-    fn write_semantic_index(
+    fn store_semantic(
         &self,
         source_dir: &Path,
         header: &super::semantic_header::IndexHeader,
@@ -94,14 +89,14 @@ impl FileSystemIndexRepository {
             .cloned()
             .map(Into::into)
             .collect();
-        write_index(source_dir, header, vectors, &stored_metadata)
+        write_semantic_index(source_dir, header, vectors, &stored_metadata)
     }
 
     fn write_bm25_index(
         &self,
         source_dir: &Path,
         metadata: &[ChunkMetadata],
-    ) -> anyhow::Result<Bm25SubIndex> {
+    ) -> anyhow::Result<Bm25Index> {
         let chunk_texts: Vec<&str> = metadata.iter().map(|m| m.chunk_text.as_str()).collect();
         let (bm25_embeddings, bm25_avgdl) = build_bm25(&chunk_texts, self.config.search.bm25.k1, self.config.search.bm25.b);
 
@@ -115,36 +110,43 @@ impl FileSystemIndexRepository {
         };
         bm25_io::write_bm25_index(&bm25_dir, &bm25_header, &bm25_embeddings)?;
 
-        Ok(Bm25SubIndex {
+        Ok(Bm25Index {
             header: bm25_header,
             embeddings: bm25_embeddings,
         })
     }
 
-    fn load_sub_index(&self, kind: IndexKind) -> anyhow::Result<SubIndex> {
+    fn load_sub_index(&self, kind: IndexKind) -> anyhow::Result<Index> {
         let source_dir = self.config.persist_path_buf().join(kind.subdir());
 
-        let stored = read_index(&source_dir)?;
+        let stored = read_semantic_index(&source_dir)?;
         let metadata: Vec<ChunkMetadata> = stored
             .metadata
             .into_iter()
             .map(ChunkMetadata::from)
             .collect();
 
-        let bm25_dir = source_dir.join("bm25");
-        let bm25 = if bm25_dir.join("header.json").exists() {
-            let (header, embeddings) = bm25_io::read_bm25_index(&bm25_dir)?;
-            Some(Bm25SubIndex { header, embeddings })
-        } else {
-            None
-        };
-
-        Ok(SubIndex {
+        let semantic = SemanticIndex {
             header: stored.header,
             vectors: stored.vectors,
             metadata,
-            bm25,
-        })
+        };
+
+        let bm25_dir = source_dir.join("bm25");
+        let bm25 = if bm25_dir.join("header.json").exists() {
+            let (header, embeddings) = bm25_io::read_bm25_index(&bm25_dir)?;
+            Bm25Index { header, embeddings }
+        } else if !semantic.metadata.is_empty() {
+            // Lazy build: old index without bm25/ subdirectory on disk
+            self.write_bm25_index(&source_dir, &semantic.metadata)?
+        } else {
+            Bm25Index {
+                header: Bm25IndexHeader::default(),
+                embeddings: vec![],
+            }
+        };
+
+        Ok(Index { semantic, bm25 })
     }
 }
 

@@ -177,7 +177,7 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::domain::Vector;
-    use crate::index::MergedIndex;
+    use crate::index::{Bm25IndexHeader, MergedIndex};
 
     // ------------------------------------------------------------------
     // Fake implementations of the two seam traits
@@ -217,8 +217,8 @@ mod tests {
                 None => Ok(MergedIndex {
                     vectors: Vector::from_vec_vec(vec![]).unwrap(),
                     metadata: vec![],
-                    bm25_embeddings: None,
-                    bm25_header: None,
+                    bm25_embeddings: vec![],
+                    bm25_header: Bm25IndexHeader::default(),
                     built_at: "test".to_string(),
                 }),
             }

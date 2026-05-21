@@ -14,8 +14,8 @@ impl GitIndexer {
         let repo = create_index_repository(&self.config);
         let (old_vectors, old_metadata, last_commit) = match repo.load(IndexKind::Git) {
             Ok(Some(stored)) => {
-                let last_commit = stored.header.last_indexed_commit.clone();
-                (stored.vectors, stored.metadata, last_commit)
+                let last_commit = stored.semantic.header.last_indexed_commit.clone();
+                (stored.semantic.vectors, stored.semantic.metadata, last_commit)
             }
             Ok(None) => {
                 let empty = Vector::from_vec_vec(vec![])?;

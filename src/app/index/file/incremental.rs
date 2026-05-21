@@ -38,8 +38,8 @@ impl FileIndexer {
         let repo = create_index_repository(&self.config);
         match repo.load(IndexKind::File) {
             Ok(Some(stored)) => {
-                let old_hashes = super::merge::extract_old_hashes(&stored.metadata);
-                Ok((old_hashes, stored.metadata, stored.vectors, true))
+                let old_hashes = super::merge::extract_old_hashes(&stored.semantic.metadata);
+                Ok((old_hashes, stored.semantic.metadata, stored.semantic.vectors, true))
             }
             Ok(None) => Err(IndexLoadError::NotFound),
             Err(e) => Err(IndexLoadError::Other(e)),

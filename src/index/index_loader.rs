@@ -20,18 +20,18 @@ pub(crate) fn load_merged(
     }
 
     if let (Some(ref f), Some(ref g)) = (&file, &git) {
-        if f.header.embedding_model != g.header.embedding_model {
+        if f.semantic.header.embedding_model != g.semantic.header.embedding_model {
             anyhow::bail!(
                 "embedding_model mismatch between file/ and git/ subdirs: '{}' vs '{}'",
-                f.header.embedding_model,
-                g.header.embedding_model
+                f.semantic.header.embedding_model,
+                g.semantic.header.embedding_model
             );
         }
-        if f.header.embedding_dims != g.header.embedding_dims {
+        if f.semantic.header.embedding_dims != g.semantic.header.embedding_dims {
             anyhow::bail!(
                 "embedding_dims mismatch between file/ and git/ subdirs: {} vs {}",
-                f.header.embedding_dims,
-                g.header.embedding_dims
+                f.semantic.header.embedding_dims,
+                g.semantic.header.embedding_dims
             );
         }
     }

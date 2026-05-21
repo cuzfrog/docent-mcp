@@ -12,3 +12,15 @@ pub(crate) struct Bm25IndexHeader {
     pub(crate) avgdl: f32,
     pub(super) chunk_count: usize,
 }
+
+impl Default for Bm25IndexHeader {
+    fn default() -> Self {
+        Self {
+            schema_version: BM25_SCHEMA_VERSION,
+            k1: 0.0,
+            b: 0.0,
+            avgdl: 0.0,
+            chunk_count: 0,
+        }
+    }
+}
