@@ -24,11 +24,11 @@ impl FileIndexer {
         &self,
         request: &IndexRequest,
     ) -> anyhow::Result<(crate::domain::IndexedBatch, usize)> {
-        let all_files = super::discover::discover_files(&request.input_path, &self.file_config.glob_patterns)?;
+        let all_files = super::discover::discover_files(&request.input_path, &self.file_config().glob_patterns)?;
         self.console
             .info(&format!("Scanning: {} files found", all_files.len()));
         let pb = self.console.progress(all_files.len() as u64, "Indexing files");
-        let docs = super::extract::extract_documents(&all_files, &request.input_path, self.file_config.file_size_limit_mb)?;
+        let docs = super::extract::extract_documents(&all_files, &request.input_path, self.file_config().file_size_limit_mb)?;
 
         let (batch, dims) = self.processor.run(&docs, Some(pb.as_ref()))?;
 
@@ -40,11 +40,11 @@ impl FileIndexer {
         &self,
         request: &IndexRequest,
     ) -> anyhow::Result<IndexOutcome> {
-        let persist_path = std::path::PathBuf::from(&self.index_config.persist_path);
+        let persist_path = std::path::PathBuf::from(&self.config.index.persist_path);
         if !self.confirm_rebuild(&persist_path)? {
             return Ok(IndexOutcome::Aborted);
         }
-        let repo = create_index_repository(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
+        let repo = create_index_repository(&self.config);
         let (batch, dims) = self.index_files(request)?;
         let chunk_count = batch.metadata.len();
         let doc_count = ChunkMetadata::unique_count(&batch.metadata);

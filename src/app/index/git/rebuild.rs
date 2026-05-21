@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::time::Instant;
 
 use crate::app::index::{IndexOutcome, IndexRequest};
@@ -17,7 +16,7 @@ impl GitIndexer {
         let pb_walk = self.console.progress(total_est as u64, "Walking commits");
         let docs = crate::app::index::git::history::index_git_history(
             &request.input_path,
-            &self.git_config,
+            self.git_config(),
             None,
             true,
             request.verbose,
@@ -48,7 +47,6 @@ impl GitIndexer {
     pub(super) fn rebuild(
         &self,
         request: &IndexRequest,
-        persist_path: &Path,
         dims: usize,
     ) -> anyhow::Result<IndexOutcome> {
         let total_est = match self.check_git_size(&request.input_path, dims, None)? {
@@ -59,9 +57,9 @@ impl GitIndexer {
         if docs.is_empty() {
             return Ok(IndexOutcome::NoDocuments);
         }
-        let head_commit = crate::app::index::git::history::resolve_head_commit(&request.input_path, &self.git_config.branch)?;
+        let head_commit = crate::app::index::git::history::resolve_head_commit(&request.input_path, &self.git_config().branch)?;
         let (batch, dims, embed_secs) = self.embed_docs(&docs)?;
-        let repo = create_index_repository(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
+        let repo = create_index_repository(&self.config);
         let chunk_count = batch.metadata.len();
         let doc_count = ChunkMetadata::unique_count(&batch.metadata);
         repo.store(IndexKind::Git, &batch, dims, doc_count, Some(head_commit))?;

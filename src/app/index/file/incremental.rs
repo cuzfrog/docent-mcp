@@ -35,8 +35,7 @@ impl From<anyhow::Error> for IndexLoadError {
 
 impl FileIndexer {
     fn load_existing_index(&self) -> Result<ExistingIndex, IndexLoadError> {
-        let persist_path = std::path::PathBuf::from(&self.index_config.persist_path);
-        let repo = create_index_repository(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
+        let repo = create_index_repository(&self.config);
         match repo.load(IndexKind::File) {
             Ok(Some(stored)) => {
                 let old_hashes = super::merge::extract_old_hashes(&stored.metadata);
@@ -51,8 +50,7 @@ impl FileIndexer {
         &self,
         request: &IndexRequest,
     ) -> anyhow::Result<IndexOutcome> {
-        let persist_path = std::path::PathBuf::from(&self.index_config.persist_path);
-        let repo = create_index_repository(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
+        let repo = create_index_repository(&self.config);
         let (old_hashes, old_metadata, old_vectors, index_exists) = match self.load_existing_index() {
             Ok(v) => v,
             Err(IndexLoadError::NotFound) => {
@@ -60,7 +58,7 @@ impl FileIndexer {
             }
             Err(IndexLoadError::Other(e)) => return Err(e),
         };
-        let all_files = super::discover::discover_files(&request.input_path, &self.file_config.glob_patterns)?;
+        let all_files = super::discover::discover_files(&request.input_path, &self.file_config().glob_patterns)?;
         let diff = super::diff::diff_files(&all_files, &old_hashes, &request.input_path)?;
         self.console.info(&format!(
             "Processing Files: {} new/changed, {} deleted, {} unchanged",
@@ -70,7 +68,7 @@ impl FileIndexer {
             return Ok(IndexOutcome::UpToDate);
         }
         let pb = self.console.progress(diff.to_index.len() as u64, "Indexing files");
-        let docs = super::extract::extract_documents(&diff.to_index, &request.input_path, self.file_config.file_size_limit_mb)?;
+        let docs = super::extract::extract_documents(&diff.to_index, &request.input_path, self.file_config().file_size_limit_mb)?;
 
         let (batch, dims) = self.processor.run(&docs, Some(pb.as_ref()))?;
 

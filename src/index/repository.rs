@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use crate::config::IndexConfig;
+use crate::config::Config;
 use crate::domain::ChunkMetadata;
 use crate::domain::IndexedBatch;
 use crate::domain::IndexKind;
@@ -25,24 +25,15 @@ pub(crate) trait IndexRepository: Send + Sync {
 }
 
 pub(crate) fn create_index_repository(
-    persist_path: &Path,
-    config: &IndexConfig,
-    bm25_k1: f32,
-    bm25_b: f32,
+    config: &Config,
 ) -> impl IndexRepository {
     FileSystemIndexRepository {
-        persist_path: persist_path.to_path_buf(),
         config: config.clone(),
-        bm25_k1,
-        bm25_b,
     }
 }
 
 struct FileSystemIndexRepository {
-    persist_path: PathBuf,
-    config: IndexConfig,
-    bm25_k1: f32,
-    bm25_b: f32,
+    config: Config,
 }
 
 impl IndexRepository for FileSystemIndexRepository {
@@ -55,14 +46,14 @@ impl IndexRepository for FileSystemIndexRepository {
         last_indexed_commit: Option<String>,
     ) -> anyhow::Result<()> {
         let header = super::semantic_header::IndexHeader::from_config(
-            &self.config,
+            &self.config.index,
             embedding_dims,
             &batch.metadata,
             last_indexed_commit.clone(),
             doc_count,
         );
         let vector_store = crate::domain::Vector::from_vec_vec(batch.vectors.clone())?;
-        let source_dir = self.persist_path.join(kind.subdir());
+        let source_dir = self.config.persist_path_buf().join(kind.subdir());
 
         self.write_semantic_index(&source_dir, &header, &vector_store, &batch.metadata)?;
         self.write_bm25_index(&source_dir, &batch.metadata)?;
@@ -75,9 +66,9 @@ impl IndexRepository for FileSystemIndexRepository {
             return Ok(None);
         }
         let mut sub = self.load_sub_index(kind)?;
-        sub.header.validate_against(&self.config)?;
+        sub.header.validate_against(&self.config.index)?;
         if sub.bm25.is_none() && !sub.metadata.is_empty() {
-            let source_dir = self.persist_path.join(kind.subdir());
+            let source_dir = self.config.persist_path_buf().join(kind.subdir());
             let bm25_sub = self.write_bm25_index(&source_dir, &sub.metadata)?;
             sub.bm25 = Some(bm25_sub);
         }
@@ -87,7 +78,7 @@ impl IndexRepository for FileSystemIndexRepository {
 
 impl FileSystemIndexRepository {
     fn sub_exists(&self, kind: IndexKind) -> bool {
-        let header_path = self.persist_path.join(kind.subdir()).join("header.json");
+        let header_path = self.config.persist_path_buf().join(kind.subdir()).join("header.json");
         header_path.exists()
     }
 
@@ -112,13 +103,13 @@ impl FileSystemIndexRepository {
         metadata: &[ChunkMetadata],
     ) -> anyhow::Result<Bm25SubIndex> {
         let chunk_texts: Vec<&str> = metadata.iter().map(|m| m.chunk_text.as_str()).collect();
-        let (bm25_embeddings, bm25_avgdl) = build_bm25(&chunk_texts, self.bm25_k1, self.bm25_b);
+        let (bm25_embeddings, bm25_avgdl) = build_bm25(&chunk_texts, self.config.search.bm25.k1, self.config.search.bm25.b);
 
         let bm25_dir = source_dir.join("bm25");
         let bm25_header = Bm25IndexHeader {
             schema_version: BM25_SCHEMA_VERSION,
-            k1: self.bm25_k1,
-            b: self.bm25_b,
+            k1: self.config.search.bm25.k1,
+            b: self.config.search.bm25.b,
             avgdl: bm25_avgdl,
             chunk_count: metadata.len(),
         };
@@ -131,7 +122,7 @@ impl FileSystemIndexRepository {
     }
 
     fn load_sub_index(&self, kind: IndexKind) -> anyhow::Result<SubIndex> {
-        let source_dir = self.persist_path.join(kind.subdir());
+        let source_dir = self.config.persist_path_buf().join(kind.subdir());
 
         let stored = read_index(&source_dir)?;
         let metadata: Vec<ChunkMetadata> = stored

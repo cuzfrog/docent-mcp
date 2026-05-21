@@ -1,18 +1,14 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::app::index::processor::IndexingProcessor;
 use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
-use crate::config::Config;
+use crate::config::{Config, GitConfig};
 use crate::models::ModelFactory;
 use crate::support::Console;
 
 pub(crate) struct GitIndexer {
     pub(crate) console: Box<dyn Console>,
-    pub(crate) index_config: crate::config::IndexConfig,
-    pub(crate) git_config: crate::config::GitConfig,
-    pub(crate) bm25_k1: f32,
-    pub(crate) bm25_b: f32,
+    pub(crate) config: Config,
     pub(crate) model_factory: Arc<dyn ModelFactory>,
     pub(crate) processor: Box<dyn IndexingProcessor>,
 }
@@ -23,13 +19,10 @@ pub(crate) fn create_git_indexer(
     model_factory: Arc<dyn ModelFactory>,
     processor: Box<dyn IndexingProcessor>,
 ) -> impl Indexer {
-    let gc = config.git.as_ref().expect("GitIndexer requires git config");
+    config.git.as_ref().expect("GitIndexer requires git config");
     GitIndexer {
         console,
-        index_config: config.index.clone(),
-        git_config: gc.clone(),
-        bm25_k1: config.search.bm25.k1,
-        bm25_b: config.search.bm25.b,
+        config: config.clone(),
         model_factory,
         processor,
     }
@@ -37,13 +30,18 @@ pub(crate) fn create_git_indexer(
 
 impl Indexer for GitIndexer {
     fn run(&self, request: &IndexRequest) -> anyhow::Result<IndexOutcome> {
-        let persist_path = PathBuf::from(&self.index_config.persist_path);
         let dims = self.model_factory.dims();
 
         if request.rebuild {
-            self.rebuild(request, &persist_path, dims)
+            self.rebuild(request, dims)
         } else {
-            self.incremental(request, &persist_path, dims)
+            self.incremental(request, dims)
         }
+    }
+}
+
+impl GitIndexer {
+    pub(super) fn git_config(&self) -> &GitConfig {
+        self.config.git.as_ref().expect("GitIndexer requires git config")
     }
 }

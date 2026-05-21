@@ -27,9 +27,7 @@ trait ServeIndexAccess: Send + Sync {
     fn load_merged(
         &self,
         persist_path: &std::path::Path,
-        config: &crate::config::IndexConfig,
-        k1: f32,
-        b: f32,
+        config: &crate::config::Config,
     ) -> anyhow::Result<crate::index::MergedIndex>;
 }
 
@@ -65,11 +63,9 @@ impl ServeIndexAccess for ServeIndexAccessImpl {
     fn load_merged(
         &self,
         persist_path: &std::path::Path,
-        config: &crate::config::IndexConfig,
-        k1: f32,
-        b: f32,
+        config: &crate::config::Config,
     ) -> anyhow::Result<crate::index::MergedIndex> {
-        let repo = crate::index::create_index_repository(persist_path, config, k1, b);
+        let repo = crate::index::create_index_repository(config);
         crate::index::load_merged(&repo, persist_path)
     }
 }
@@ -108,9 +104,7 @@ fn build_search_service(
     let merged = index_access
         .load_merged(
             &persist_path,
-            &config.index,
-            config.search.bm25.k1,
-            config.search.bm25.b,
+            config,
         )
         .map_err(|e| anyhow::anyhow!("Failed to load merged index: {}", e))?;
 
@@ -222,9 +216,7 @@ mod tests {
         fn load_merged(
             &self,
             _persist_path: &std::path::Path,
-            _config: &crate::config::IndexConfig,
-            _k1: f32,
-            _b: f32,
+            _config: &crate::config::Config,
         ) -> anyhow::Result<MergedIndex> {
             match &self.load_err {
                 Some(msg) => Err(anyhow::anyhow!("{}", msg)),

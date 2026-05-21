@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::time::Instant;
 
 use crate::app::index::{IndexOutcome, IndexRequest};
@@ -10,10 +9,9 @@ impl GitIndexer {
     pub(super) fn incremental(
         &self,
         request: &IndexRequest,
-        persist_path: &Path,
         dims: usize,
     ) -> anyhow::Result<IndexOutcome> {
-        let repo = create_index_repository(persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
+        let repo = create_index_repository(&self.config);
         let (old_vectors, old_metadata, last_commit) = match repo.load(IndexKind::Git) {
             Ok(Some(stored)) => {
                 let last_commit = stored.header.last_indexed_commit.clone();
@@ -33,7 +31,7 @@ impl GitIndexer {
         let pb1 = self.console.progress(total_new as u64, "Walking commits");
         let new_docs = crate::app::index::git::history::index_git_history(
             &request.input_path,
-            &self.git_config,
+            self.git_config(),
             last_commit.as_deref(),
             false,
             request.verbose,
@@ -53,7 +51,7 @@ impl GitIndexer {
 
         pb2.finish();
         let embed_secs = embed_start.elapsed().as_secs_f64();
-        let head_commit = crate::app::index::git::history::resolve_head_commit(&request.input_path, &self.git_config.branch)?;
+        let head_commit = crate::app::index::git::history::resolve_head_commit(&request.input_path, &self.git_config().branch)?;
         let merged = crate::app::index::git::merge::merge_git_incremental(
             old_metadata, old_vectors, &new_docs, &batch.metadata, &batch.vectors,
         );

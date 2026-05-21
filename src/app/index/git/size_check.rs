@@ -9,13 +9,13 @@ impl GitIndexer {
         dims: usize,
         since_commit: Option<&str>,
     ) -> anyhow::Result<Option<usize>> {
-        let total = crate::app::index::git::estimate::estimate_commit_count(repo_path, &self.git_config, since_commit)?;
+        let total = crate::app::index::git::estimate::estimate_commit_count(repo_path, self.git_config(), since_commit)?;
         let estimated_mb = crate::app::index::git::estimate::estimate_git_index_size(total, dims) / (1024 * 1024);
         let advice = "To reduce the size:\n  - Set [git] depth_limit to a smaller value in docent.toml\n  - Increase [index] max_size_mb in docent.toml".to_string();
-        if estimated_mb > self.index_config.max_size_mb {
+        if estimated_mb > self.config.index.max_size_mb {
             self.console.warn(&format_size_warning(
                 estimated_mb,
-                self.index_config.max_size_mb,
+                self.config.index.max_size_mb,
                 &advice,
             ));
             if !self.console.confirm("Continue?")? {
