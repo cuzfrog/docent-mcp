@@ -58,19 +58,23 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - For multi-file module, since each file is its own module, all other things must be file private or `pub(super)`
 - Unit tests should be collocated with its prod code.
 - Integration tests outside the module should only test the exposed `pub trait` or `pub(crate) trait`.
-- In each module, search `MODULE.md` for its api, responsibilities, and files layout. Only types/functions with explicit `pub` should be exposed. You must follow its specifications. You cannot change the visibility. You should not modify this file. You cannot add any other public types/functions.
+- In each module, search `MODULE.md` for its api, responsibilities, and files layout. You must follow its specifications. You cannot change the visibility. You should not modify this file. You cannot add any other public types/functions.
 - all `mod` in `mod.rs` must be private. Any exposed types must use explicit re-export.
 - Cross boundary domain types, config types, DTOs are exempted from the visibility rule.
 
-`MODULE.md` format (inside parenthesis is comments):
+`MODULE.md` frontmatter format:
+```md
+---
+readonly: [mod.rs]
+---
 ```
-# Module - MODULE_NAME
-(implicitly for mod.rs)
-
-- <any public export> (if there are entries, only mentioned exports are allowed)
-
-## FILE.rs or DIR/ (a child module)
-- <any public export> (only mentioned exports are allowed)
+or
+```md
+---
+visible:
+  - path: Type1
+    modifier: pub(super)
+---
 ```
 
 ### SOLID principles:
