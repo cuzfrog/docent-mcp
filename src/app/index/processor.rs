@@ -6,19 +6,13 @@ use crate::domain::ChunkMetadata;
 use crate::domain::{IndexableDocument, IndexedBatch};
 use crate::index::{create_embedder, Embedder};
 use crate::models::ModelFactory;
-use crate::support::Progress;
 
 use rayon::prelude::*;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 const BATCH_SIZE: usize = 64;
 
 pub trait IndexingProcessor: Send + Sync {
-    fn run(
-        &self,
-        docs: &[IndexableDocument],
-        progress: Option<&dyn Progress>,
-    ) -> anyhow::Result<(IndexedBatch, usize)>;
+    fn run(&self, docs: &[IndexableDocument]) -> anyhow::Result<(IndexedBatch, usize)>;
 }
 
 pub fn create_processor(
@@ -45,26 +39,18 @@ struct ParallelBatchIndexingProcessor {
 }
 
 impl IndexingProcessor for ParallelBatchIndexingProcessor {
-    fn run(
-        &self,
-        docs: &[IndexableDocument],
-        progress: Option<&dyn Progress>,
-    ) -> anyhow::Result<(IndexedBatch, usize)> {
-        let all_chunks = self.chunk_documents(docs, progress);
+    fn run(&self, docs: &[IndexableDocument]) -> anyhow::Result<(IndexedBatch, usize)> {
+        let all_chunks = self.chunk_documents(docs);
 
         let chunk_texts: Vec<&str> = all_chunks.iter().map(|(_, c)| c.text.as_str()).collect();
 
         let mut all_vectors: Vec<Vec<f32>> = Vec::with_capacity(chunk_texts.len());
         let mut embedder = self.embedder.lock().unwrap();
         for batch in chunk_texts.chunks(BATCH_SIZE) {
-            let batch_size = batch.len() as u64;
             let batch: Vec<String> = batch.iter().map(|s| s.to_string()).collect();
             let vectors = embedder
                 .embed(&batch)
                 .map_err(|e| anyhow::anyhow!("Embedding operation failed: {}", e))?;
-            if let Some(p) = progress {
-                p.tick(batch_size);
-            }
             all_vectors.extend(vectors);
         }
         drop(embedder);
@@ -94,34 +80,23 @@ impl IndexingProcessor for ParallelBatchIndexingProcessor {
 }
 
 impl ParallelBatchIndexingProcessor {
-    fn chunk_documents(
-        &self,
-        docs: &[IndexableDocument],
-        progress: Option<&dyn Progress>,
-    ) -> Vec<(usize, Chunk)> {
+    fn chunk_documents(&self, docs: &[IndexableDocument]) -> Vec<(usize, Chunk)> {
         struct DocChunksResult {
             doc_index: usize,
             chunks: Vec<Chunk>,
         }
-
-        let doc_chunk_progress = AtomicU64::new(0);
 
         let all_results: Vec<DocChunksResult> = docs
             .par_iter()
             .enumerate()
             .map(|(i, doc)| {
                 let chunks = self.chunker.chunk(&doc.body);
-                let _ = doc_chunk_progress.fetch_add(1, Ordering::Relaxed);
                 DocChunksResult {
                     doc_index: i,
                     chunks,
                 }
             })
             .collect();
-
-        if let Some(p) = progress {
-            p.tick(doc_chunk_progress.load(Ordering::Relaxed));
-        }
 
         let mut all_chunks: Vec<(usize, Chunk)> = Vec::new();
         for result in all_results {
@@ -139,8 +114,6 @@ mod tests {
     use crate::app::index::chunking::MockChunker;
     use crate::domain::IndexKind;
     use crate::index::mock_embedder;
-    use crate::support::MockProgress;
-    use std::sync::Arc;
 
     fn make_processor(chunker: Box<dyn Chunker>) -> Box<dyn IndexingProcessor> {
         let embedder = Box::new(mock_embedder());
@@ -182,7 +155,7 @@ mod tests {
         let processor = make_processor(Box::new(mock_chunker));
 
         let doc = make_test_document("Hello world");
-        let result = processor.run(&[doc], None);
+        let result = processor.run(&[doc]);
         assert!(result.is_ok());
 
         let (batch, dims) = result.unwrap();
@@ -210,7 +183,7 @@ mod tests {
             make_test_document("First document"),
             make_test_document("Second document"),
         ];
-        let result = processor.run(&docs, None);
+        let result = processor.run(&docs);
         assert!(result.is_ok());
 
         let (batch, dims) = result.unwrap();
@@ -220,44 +193,12 @@ mod tests {
     }
 
     #[test]
-    fn test_processor_reports_full_progress() {
-        let mut mock_chunker = MockChunker::new();
-        mock_chunker.expect_chunk().returning(|body| {
-            vec![Chunk {
-                text: body.to_string(),
-                token_count: 0,
-                section_heading: None,
-                chunk_index: 0,
-                line_start: 0,
-                line_end: 0,
-            }]
-        });
-        let processor = make_processor(Box::new(mock_chunker));
-
-        let total_ticked = Arc::new(AtomicU64::new(0));
-        let tick_accum = total_ticked.clone();
-
-        let mut mock_progress = MockProgress::new();
-        mock_progress.expect_tick().returning(move |n| {
-            tick_accum.fetch_add(n, Ordering::SeqCst);
-        });
-        // tick_msg and finish are never called by the engine — no expectations needed
-
-        let doc = make_test_document("Hello world");
-        let result = processor.run(&[doc], Some(&mock_progress));
-        assert!(result.is_ok());
-
-        // One tick from chunk_documents (1 doc) + one tick from embedding batch (1 chunk) = 2
-        assert_eq!(total_ticked.load(Ordering::SeqCst), 2);
-    }
-
-    #[test]
     fn test_processor_run_empty_docs() {
         let mut mock_chunker = MockChunker::new();
         mock_chunker.expect_chunk().returning(|_| vec![]);
         let processor = make_processor(Box::new(mock_chunker));
 
-        let result = processor.run(&[], None);
+        let result = processor.run(&[]);
         assert!(result.is_ok());
 
         let (batch, _) = result.unwrap();
@@ -289,7 +230,7 @@ mod tests {
             kind: IndexKind::File,
             is_fresh: Some(true),
         };
-        let (batch, _) = processor.run(&[doc], None).unwrap();
+        let (batch, _) = processor.run(&[doc]).unwrap();
         assert!(!batch.metadata.is_empty());
         let meta = &batch.metadata[0];
         assert_eq!(meta.doc_ctx.source_path, "src/main.rs".into());
@@ -318,7 +259,7 @@ mod tests {
         // A longer document that will be chunked into multiple pieces
         let body = "one two three four five six seven eight nine ten".repeat(5);
         let doc = make_test_document(&body);
-        let (batch, _) = processor.run(&[doc], None).unwrap();
+        let (batch, _) = processor.run(&[doc]).unwrap();
 
         // Each chunk should have a corresponding vector
         assert_eq!(batch.vectors.len(), batch.metadata.len());

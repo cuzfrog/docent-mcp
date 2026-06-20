@@ -169,21 +169,11 @@ mod tests {
         confirm_answer: bool,
     }
 
-    struct NoOpProgress;
-    impl crate::support::Progress for NoOpProgress {
-        fn tick(&self, _n: u64) {}
-        fn tick_msg(&self, _msg: &str) {}
-        fn finish(&self) {}
-    }
-
     impl Console for FakeConsole {
         fn info(&self, _msg: &str) {}
         fn warn(&self, _msg: &str) {}
         fn confirm(&self, _prompt: &str) -> anyhow::Result<bool> {
             Ok(self.confirm_answer)
-        }
-        fn progress(&self, _total: u64, _label: &str) -> Box<dyn crate::support::Progress> {
-            Box::new(NoOpProgress)
         }
     }
 

@@ -27,12 +27,10 @@ impl FileIndexer {
         let all_files = super::discover::discover_files(&request.input_path, &self.file_config().glob_patterns)?;
         self.console
             .info(&format!("Scanning: {} files found", all_files.len()));
-        let pb = self.console.progress(all_files.len() as u64, "Indexing files");
         let docs = super::extract::extract_documents(&all_files, &request.input_path, self.file_config().file_size_limit_mb)?;
 
-        let (batch, dims) = self.processor.run(&docs, Some(pb.as_ref()))?;
+        let (batch, dims) = self.processor.run(&docs)?;
 
-        pb.finish();
         Ok((batch, dims))
     }
 

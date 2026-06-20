@@ -21,33 +21,26 @@ impl GitIndexer {
             }
             Err(e) => return Err(e),
         };
-        let total_new = match self.check_git_size(&request.input_path, dims, last_commit.as_deref())? {
-            Some(n) => n,
-            None => return Ok(IndexOutcome::Aborted),
-        };
+        if self.check_git_size(&request.input_path, dims, last_commit.as_deref())?.is_none() {
+            return Ok(IndexOutcome::Aborted);
+        }
         let walk_start = Instant::now();
-        let pb1 = self.console.progress(total_new as u64, "Walking commits");
         let new_docs = crate::app::index::git::history::index_git_history(
             &request.input_path,
             self.git_config(),
             last_commit.as_deref(),
             false,
             request.verbose,
-            Some(pb1.as_ref()),
         )?;
-        pb1.finish();
         let walk_secs = walk_start.elapsed().as_secs_f64();
         if new_docs.is_empty() {
             return Ok(IndexOutcome::UpToDate);
         }
-        let total_new_docs = new_docs.len();
         let embed_start = Instant::now();
-        let pb2 = self.console.progress(total_new_docs as u64, "Embedding documents");
         let indexable = crate::app::index::git::extract::extract_documents(&new_docs, &vec![true; new_docs.len()]);
 
-        let (batch, dims) = self.processor.run(&indexable, Some(pb2.as_ref()))?;
+        let (batch, dims) = self.processor.run(&indexable)?;
 
-        pb2.finish();
         let embed_secs = embed_start.elapsed().as_secs_f64();
         let head_commit = crate::app::index::git::history::resolve_head_commit(&request.input_path, &self.git_config().branch)?;
         let merged = crate::app::index::git::merge::merge_git_incremental(

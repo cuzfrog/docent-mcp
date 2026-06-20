@@ -7,5 +7,6 @@
 target/
 .venv/
 __pycache__
+tmp/
 e2e-tests/.ddr-index/
 node_modules/

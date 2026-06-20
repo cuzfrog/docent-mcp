@@ -19,10 +19,10 @@ pub trait Application: Send + Sync {
 }
 
 pub fn create_application(config: &Config) -> anyhow::Result<impl Application> {
-    let console: Box<dyn Console> = Box::new(create_console(config.verbose));
+    let console: Box<dyn Console> = Box::new(create_console());
     let server: Box<dyn HttpServer> = Box::new(crate::app::serve::create_http_server(
         config.clone(),
-        Box::new(create_console(config.verbose)),
+        Box::new(create_console()),
     )?);
 
     let factory: Arc<dyn ModelFactory> = Arc::from(create_model_factory(
@@ -37,7 +37,7 @@ pub fn create_application(config: &Config) -> anyhow::Result<impl Application> {
             create_indexer(
                 kind,
                 config,
-                Box::new(create_console(config.verbose)),
+                Box::new(create_console()),
                 Arc::clone(&factory),
             )?,
         );
@@ -130,7 +130,7 @@ mod tests {
         };
         let app = AppImpl {
             config: config.clone(),
-            console: Box::new(create_console(false)),
+            console: Box::new(create_console()),
             server: Box::new(MockHttpServer),
             indexers: HashMap::new(),
         };

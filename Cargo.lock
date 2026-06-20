@@ -814,7 +814,6 @@ dependencies = [
  "fastembed",
  "git2",
  "globset",
- "indicatif",
  "mockall",
  "rayon",
  "reqwest",

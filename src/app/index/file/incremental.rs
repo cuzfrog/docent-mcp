@@ -64,12 +64,9 @@ impl FileIndexer {
         if diff.to_index.is_empty() && diff.deleted_count == 0 && index_exists {
             return Ok(IndexOutcome::UpToDate);
         }
-        let pb = self.console.progress(diff.to_index.len() as u64, "Indexing files");
         let docs = super::extract::extract_documents(&diff.to_index, &request.input_path, self.file_config().file_size_limit_mb)?;
 
-        let (batch, dims) = self.processor.run(&docs, Some(pb.as_ref()))?;
-
-        pb.finish();
+        let (batch, dims) = self.processor.run(&docs)?;
         let merged = super::merge::merge_incremental(
             &all_files, &old_metadata, &old_vectors, &batch.metadata, &batch.vectors,
         );
