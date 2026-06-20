@@ -1,17 +1,25 @@
-use crate::index::semantic_header::IndexHeader;
-use crate::index::stored_metadata::StoredChunkMetadata;
-use crate::index::semantic_store::{StoredIndex, VectorStore};
+use crate::domain::Vector;
+use super::stored_metadata::StoredChunkMetadata;
+use super::semantic_header::IndexHeader;
 use std::path::Path;
+
+/// In-memory representation of a persisted semantic index.
+#[derive(Debug)]
+pub(super) struct StoredIndex {
+    pub(super) header: IndexHeader,
+    pub(super) vectors: Vector,
+    pub(super) metadata: Vec<StoredChunkMetadata>,
+}
 
 /// Write the index directory: `header.json`, `vectors.bin`, and `metadata.bin`.
 ///
 /// Creates `path` (and any missing parents) if it does not exist (`create_dir_all`
 /// is idempotent).  Does **not** validate that `vectors.len()` equals
 /// `metadata.len()` or that dimensions are consistent — the caller is responsible.
-pub(super) fn write_index(
+pub(super) fn write_semantic_index(
     path: &Path,
     header: &IndexHeader,
-    vectors: &VectorStore,
+    vectors: &Vector,
     metadata: &[StoredChunkMetadata],
 ) -> anyhow::Result<()> {
     std::fs::create_dir_all(path).map_err(|e| {
@@ -59,7 +67,7 @@ fn read_header(path: &Path) -> anyhow::Result<IndexHeader> {
     Ok(header)
 }
 
-fn read_vectors(path: &Path, header: &IndexHeader) -> anyhow::Result<VectorStore> {
+fn read_vectors(path: &Path, header: &IndexHeader) -> anyhow::Result<Vector> {
     let vectors_path = path.join("vectors.bin");
     let raw_bytes = std::fs::read(&vectors_path)
         .map_err(|e| anyhow::anyhow!("Failed to read '{}': {}", vectors_path.display(), e))?;
@@ -71,10 +79,10 @@ fn read_vectors(path: &Path, header: &IndexHeader) -> anyhow::Result<VectorStore
         );
     }
     if raw_bytes.is_empty() {
-        Ok(VectorStore { data: vec![], dims: 0, count: 0 })
+        Ok(Vector { data: vec![], dims: 0, count: 0 })
     } else {
         let flat: &[f32] = bytemuck::cast_slice(&raw_bytes);
-        Ok(VectorStore { data: flat.to_vec(), dims: header.embedding_dims, count: header.chunk_count })
+        Ok(Vector { data: flat.to_vec(), dims: header.embedding_dims, count: header.chunk_count })
     }
 }
 
@@ -97,7 +105,7 @@ fn read_metadata(path: &Path) -> anyhow::Result<Vec<StoredChunkMetadata>> {
     }
 }
 
-fn validate_consistency(header: &IndexHeader, vectors: &VectorStore, metadata: &[StoredChunkMetadata]) -> anyhow::Result<()> {
+fn validate_consistency(header: &IndexHeader, vectors: &Vector, metadata: &[StoredChunkMetadata]) -> anyhow::Result<()> {
     if vectors.len() != header.chunk_count || metadata.len() != header.chunk_count {
         anyhow::bail!(
             "index consistency error: header.chunk_count = {}, vectors.len() = {}, metadata.len() = {}",
@@ -107,7 +115,7 @@ fn validate_consistency(header: &IndexHeader, vectors: &VectorStore, metadata: &
     Ok(())
 }
 
-pub(super) fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
+pub(super) fn read_semantic_index(path: &Path) -> anyhow::Result<StoredIndex> {
     let header = read_header(path)?;
     let vectors = read_vectors(path, &header)?;
     let metadata = read_metadata(path)?;
@@ -118,12 +126,13 @@ pub(super) fn read_index(path: &Path) -> anyhow::Result<StoredIndex> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::index::stored_metadata::StoredChunkKind;
-    use crate::index::SCHEMA_VERSION;
+
+    use crate::domain::IndexKind;
+    use crate::index::semantic_header::SEMANTIC_SCHEMA_VERSION;
 
     fn matching_header() -> IndexHeader {
         IndexHeader {
-            schema_version: SCHEMA_VERSION,
+            schema_version: SEMANTIC_SCHEMA_VERSION,
             embedding_model: "test-model".to_string(),
             embedding_dims: 4,
             chunk_size: 256,
@@ -150,7 +159,7 @@ mod tests {
 
         let header = matching_header();
         let raw = make_vectors();
-        let vector_store = VectorStore::from_vec_vec(raw.clone()).unwrap();
+        let vector_store = Vector::from_vec_vec(raw.clone()).unwrap();
         let metadata = vec![
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -162,7 +171,7 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -175,7 +184,7 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -188,17 +197,17 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
         ];
 
-        write_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
+        write_semantic_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
 
         let vectors_meta = std::fs::metadata(temp_dir.join("vectors.bin")).unwrap();
         assert_eq!(vectors_meta.len(), 3 * 4 * 4);
 
-        let stored = read_index(&temp_dir).unwrap();
+        let stored = read_semantic_index(&temp_dir).unwrap();
         assert_eq!(stored.header, header);
         assert_eq!(stored.vectors, vector_store);
         assert_eq!(stored.metadata, metadata);
@@ -213,7 +222,7 @@ mod tests {
 
         let header = matching_header();
         let raw = make_vectors();
-        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
+        let vector_store = Vector::from_vec_vec(raw).unwrap();
         let metadata = vec![
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -225,7 +234,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -238,7 +247,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -251,12 +260,12 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
         ];
 
-        write_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
+        write_semantic_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
 
         let expected_bytes = header.chunk_count * header.embedding_dims * 4;
         let actual_bytes = std::fs::metadata(temp_dir.join("vectors.bin"))
@@ -270,7 +279,7 @@ mod tests {
     #[test]
     fn test_read_index_nonexistent_path() {
         let path = Path::new("/nonexistent/docent_test_no_such_index");
-        let result = read_index(path);
+        let result = read_semantic_index(path);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("no index found at"));
@@ -283,7 +292,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
         std::fs::create_dir_all(&temp_dir).unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("no index found at"));
@@ -308,7 +317,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -321,7 +330,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -334,7 +343,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
         ];
@@ -347,7 +356,7 @@ mod tests {
 
         std::fs::write(temp_dir.join("vectors.bin"), [0u8; 8]).unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("corrupted"));
@@ -374,7 +383,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -387,7 +396,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -400,7 +409,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
         ];
@@ -413,7 +422,7 @@ mod tests {
 
         std::fs::write(temp_dir.join("vectors.bin"), [0u8; 60]).unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("corrupted"));
@@ -428,7 +437,7 @@ mod tests {
 
         let header = matching_header();
         let raw = make_vectors();
-        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
+        let vector_store = Vector::from_vec_vec(raw).unwrap();
         let metadata = vec![
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -440,7 +449,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -453,14 +462,14 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
         ];
 
-        write_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
+        write_semantic_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("consistency error"));
@@ -476,7 +485,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = IndexHeader {
-            schema_version: SCHEMA_VERSION,
+            schema_version: SEMANTIC_SCHEMA_VERSION,
             embedding_model: "test-model".to_string(),
             embedding_dims: 4,
             chunk_size: 256,
@@ -498,7 +507,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -511,7 +520,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -524,7 +533,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -537,7 +546,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
         ];
@@ -549,7 +558,7 @@ mod tests {
         let metadata_bytes = bincode::serialize(&metadata).unwrap();
         std::fs::write(temp_dir.join("metadata.bin"), &metadata_bytes).unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("consistency error"));
@@ -564,7 +573,7 @@ mod tests {
 
         let header = matching_header();
         let raw = make_vectors();
-        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
+        let vector_store = Vector::from_vec_vec(raw).unwrap();
 
         std::fs::create_dir_all(&temp_dir).unwrap();
         let header_json = serde_json::to_string_pretty(&header).unwrap();
@@ -573,7 +582,7 @@ mod tests {
         // Write vectors.bin manually
         std::fs::write(temp_dir.join("vectors.bin"), vector_store.as_bytes()).unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("metadata file not found at"));
@@ -598,7 +607,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -611,7 +620,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
             StoredChunkMetadata {
@@ -624,7 +633,7 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: StoredChunkKind::File,
+                kind: IndexKind::File,
                 is_fresh: None,
             },
         ];
@@ -635,7 +644,7 @@ mod tests {
         let metadata_bytes = bincode::serialize(&metadata).unwrap();
         std::fs::write(temp_dir.join("metadata.bin"), &metadata_bytes).unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("vectors.bin"));
@@ -649,7 +658,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = IndexHeader {
-            schema_version: SCHEMA_VERSION,
+            schema_version: SEMANTIC_SCHEMA_VERSION,
             embedding_model: "test-model".to_string(),
             embedding_dims: 4,
             chunk_size: 256,
@@ -659,12 +668,12 @@ mod tests {
             chunk_count: 0,
             last_indexed_commit: None,
         };
-        let vector_store = VectorStore::from_vec_vec(vec![]).unwrap();
+        let vector_store = Vector::from_vec_vec(vec![]).unwrap();
         let metadata: Vec<StoredChunkMetadata> = vec![];
 
-        write_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
+        write_semantic_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
 
-        let stored = read_index(&temp_dir).unwrap();
+        let stored = read_semantic_index(&temp_dir).unwrap();
         assert_eq!(stored.header, header);
         assert!(stored.vectors.is_empty());
         assert!(stored.metadata.is_empty());
@@ -680,7 +689,7 @@ mod tests {
         std::fs::create_dir_all(&temp_dir).unwrap();
         std::fs::write(temp_dir.join("header.json"), "not valid json").unwrap();
 
-        let result = read_index(&temp_dir);
+        let result = read_semantic_index(&temp_dir);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("Failed to parse"));
@@ -696,7 +705,7 @@ mod tests {
         let nested_path = temp_dir.join("nested").join("subdir").join("index");
 
         let header = IndexHeader {
-            schema_version: SCHEMA_VERSION,
+            schema_version: SEMANTIC_SCHEMA_VERSION,
             embedding_model: "test-model".to_string(),
             embedding_dims: 4,
             chunk_size: 256,
@@ -707,7 +716,7 @@ mod tests {
             last_indexed_commit: None,
         };
         let raw = vec![vec![1.0, 2.0, 3.0, 4.0]];
-        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
+        let vector_store = Vector::from_vec_vec(raw).unwrap();
         let metadata = vec![StoredChunkMetadata {
             source_path: "doc.md".to_string(),
             source_revision: "abc".to_string(),
@@ -718,11 +727,11 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: StoredChunkKind::File,
+            kind: IndexKind::File,
             is_fresh: None,
         }];
 
-        write_index(&nested_path, &header, &vector_store, &metadata).unwrap();
+        write_semantic_index(&nested_path, &header, &vector_store, &metadata).unwrap();
 
         assert!(nested_path.exists());
         assert!(nested_path.join("header.json").exists());
@@ -736,17 +745,17 @@ mod tests {
         persist_path: &Path,
         subdir: &str,
         header: &IndexHeader,
-        vectors: &VectorStore,
+        vectors: &Vector,
         metadata: &[StoredChunkMetadata],
     ) -> anyhow::Result<()> {
-        write_index(&persist_path.join(subdir), header, vectors, metadata)
+        write_semantic_index(&persist_path.join(subdir), header, vectors, metadata)
     }
 
     fn read_subdir(
         persist_path: &Path,
         subdir: &str,
     ) -> anyhow::Result<StoredIndex> {
-        read_index(&persist_path.join(subdir))
+        read_semantic_index(&persist_path.join(subdir))
     }
 
     #[test]
@@ -755,7 +764,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
 
         let header = IndexHeader {
-            schema_version: SCHEMA_VERSION,
+            schema_version: SEMANTIC_SCHEMA_VERSION,
             embedding_model: "test-model".to_string(),
             embedding_dims: 4,
             chunk_size: 256,
@@ -766,7 +775,7 @@ mod tests {
             last_indexed_commit: None,
         };
         let raw = vec![vec![1.0, 2.0, 3.0, 4.0]];
-        let vector_store = VectorStore::from_vec_vec(raw).unwrap();
+        let vector_store = Vector::from_vec_vec(raw).unwrap();
         let metadata = vec![StoredChunkMetadata {
             source_path: "doc.md".to_string(),
             source_revision: "abc".to_string(),
@@ -777,7 +786,7 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: StoredChunkKind::File,
+            kind: IndexKind::File,
             is_fresh: None,
         }];
 

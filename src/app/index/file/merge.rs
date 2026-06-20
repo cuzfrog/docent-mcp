@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use crate::domain::ChunkMetadata;
-use crate::index::VectorStore;
+use crate::domain::Vector;
 
 
 /// Extract old file hashes (source_path → source_revision) from stored metadata.
@@ -32,7 +32,7 @@ pub(crate) fn extract_old_hashes(metadata: &[ChunkMetadata]) -> HashMap<String, 
 pub fn merge_incremental(
     sorted_files: &[PathBuf],
     old_metadata: &[ChunkMetadata],
-    old_vectors: &VectorStore,
+    old_vectors: &Vector,
     fresh_metadata: &[ChunkMetadata],
     fresh_vectors: &[Vec<f32>],
 ) -> (Vec<Vec<f32>>, Vec<ChunkMetadata>) {
@@ -142,7 +142,7 @@ mod tests {
 
         // Old data: a.md and c.md (unchanged), in sorted order
         let old_metadata = vec![meta_a.clone(), meta_c.clone()];
-        let old_vectors = VectorStore::from_vec_vec(vec![vec_a.clone(), vec_c.clone()]).unwrap();
+        let old_vectors = Vector::from_vec_vec(vec![vec_a.clone(), vec_c.clone()]).unwrap();
 
         let meta_b1 = ChunkMetadata {
             doc_ctx: DocumentContext {
@@ -204,7 +204,7 @@ mod tests {
         let vec_a = vec![1.0f32];
 
         let old_metadata = vec![meta_a.clone()];
-        let old_vectors = VectorStore::from_vec_vec(vec![vec_a.clone()]).unwrap();
+        let old_vectors = Vector::from_vec_vec(vec![vec_a.clone()]).unwrap();
 
         let fresh_metadata: Vec<ChunkMetadata> = vec![];
         let fresh_vectors: Vec<Vec<f32>> = vec![];
@@ -227,7 +227,7 @@ mod tests {
         let sorted_files = vec![PathBuf::from("a.md"), PathBuf::from("b.md")];
 
         let old_metadata: Vec<ChunkMetadata> = vec![];
-        let old_vectors = VectorStore::from_vec_vec(vec![]).unwrap();
+        let old_vectors = Vector::from_vec_vec(vec![]).unwrap();
 
         let meta_a = make_meta("a.md", "hash_a", "A", "chunk text", 0);
         let meta_b1 = ChunkMetadata {
@@ -300,7 +300,7 @@ mod tests {
 
         // Old data includes a.md, b.md, c.md in sorted order
         let old_metadata = vec![meta_a.clone(), meta_b.clone(), meta_c.clone()];
-        let old_vectors = VectorStore::from_vec_vec(vec![vec_a.clone(), vec_b.clone(), vec_c.clone()]).unwrap();
+        let old_vectors = Vector::from_vec_vec(vec![vec_a.clone(), vec_b.clone(), vec_c.clone()]).unwrap();
 
         let fresh_metadata: Vec<ChunkMetadata> = vec![];
         let fresh_vectors: Vec<Vec<f32>> = vec![];

@@ -1,14 +1,15 @@
-use super::semantic_header::IndexHeader;
-use super::stored_metadata::StoredChunkMetadata;
-
+/// A dense vector store — a flat `Vec<f32>` array with known dimension count.
+///
+/// The vectors are stored contiguously in row-major order:
+/// `data[i * dims .. (i+1) * dims]` is the i-th vector.
 #[derive(Debug, Clone, PartialEq)]
-pub struct VectorStore {
-    pub(super) data: Vec<f32>,
-    pub(super) dims: usize,
-    pub(super) count: usize,
+pub struct Vector {
+    pub(crate) data: Vec<f32>,
+    pub(crate) dims: usize,
+    pub(crate) count: usize,
 }
 
-impl VectorStore {
+impl Vector {
     pub fn from_vec_vec(vecs: Vec<Vec<f32>>) -> anyhow::Result<Self> {
         let count = vecs.len();
         if count == 0 {
@@ -41,7 +42,7 @@ impl VectorStore {
     }
 
     pub fn into_vec_vec(self) -> Vec<Vec<f32>> {
-        let VectorStore { data, dims, count } = self;
+        let Vector { data, dims, count } = self;
         let mut result = Vec::with_capacity(count);
         for i in 0..count {
             let start = i * dims;
@@ -57,7 +58,7 @@ impl VectorStore {
         bytemuck::cast_slice(&self.data)
     }
 
-    pub fn concat(a: &VectorStore, b: &VectorStore) -> anyhow::Result<Self> {
+    pub fn concat(a: &Vector, b: &Vector) -> anyhow::Result<Self> {
         anyhow::ensure!(
             a.dims == b.dims || a.is_empty() || b.is_empty(),
             "dimension mismatch: {} vs {}",
@@ -83,7 +84,7 @@ mod tests {
             vec![4.0, 5.0, 6.0],
             vec![7.0, 8.0, 9.0],
         ];
-        let store = VectorStore::from_vec_vec(orig.clone()).unwrap();
+        let store = Vector::from_vec_vec(orig.clone()).unwrap();
         assert_eq!(store.len(), 3);
         assert_eq!(store.dims(), 3);
         assert!(!store.is_empty());
@@ -95,7 +96,7 @@ mod tests {
 
     #[test]
     fn test_from_vec_vec_empty() {
-        let store = VectorStore::from_vec_vec(vec![]).unwrap();
+        let store = Vector::from_vec_vec(vec![]).unwrap();
         assert_eq!(store.len(), 0);
         assert_eq!(store.dims(), 0);
         assert!(store.is_empty());
@@ -104,7 +105,7 @@ mod tests {
 
     #[test]
     fn test_from_vec_vec_inconsistent_dims() {
-        let result = VectorStore::from_vec_vec(vec![
+        let result = Vector::from_vec_vec(vec![
             vec![1.0, 2.0],
             vec![3.0],
         ]);
@@ -115,14 +116,14 @@ mod tests {
 
     #[test]
     fn test_concat_two_nonempty() {
-        let a = VectorStore::from_vec_vec(vec![
+        let a = Vector::from_vec_vec(vec![
             vec![1.0, 0.0],
             vec![0.0, 1.0],
         ]).unwrap();
-        let b = VectorStore::from_vec_vec(vec![
+        let b = Vector::from_vec_vec(vec![
             vec![2.0, 0.0],
         ]).unwrap();
-        let c = VectorStore::concat(&a, &b).unwrap();
+        let c = Vector::concat(&a, &b).unwrap();
         assert_eq!(c.len(), 3);
         assert_eq!(c.dims(), 2);
         assert_eq!(c.get(0), &[1.0, 0.0]);
@@ -131,27 +132,27 @@ mod tests {
 
     #[test]
     fn test_concat_empty_left() {
-        let a = VectorStore::from_vec_vec(vec![]).unwrap();
-        let b = VectorStore::from_vec_vec(vec![vec![1.0]]).unwrap();
-        let c = VectorStore::concat(&a, &b).unwrap();
+        let a = Vector::from_vec_vec(vec![]).unwrap();
+        let b = Vector::from_vec_vec(vec![vec![1.0]]).unwrap();
+        let c = Vector::concat(&a, &b).unwrap();
         assert_eq!(c.len(), 1);
         assert_eq!(c.dims(), 1);
     }
 
     #[test]
     fn test_concat_empty_right() {
-        let a = VectorStore::from_vec_vec(vec![vec![1.0]]).unwrap();
-        let b = VectorStore::from_vec_vec(vec![]).unwrap();
-        let c = VectorStore::concat(&a, &b).unwrap();
+        let a = Vector::from_vec_vec(vec![vec![1.0]]).unwrap();
+        let b = Vector::from_vec_vec(vec![]).unwrap();
+        let c = Vector::concat(&a, &b).unwrap();
         assert_eq!(c.len(), 1);
         assert_eq!(c.dims(), 1);
     }
 
     #[test]
     fn test_concat_dimension_mismatch() {
-        let a = VectorStore::from_vec_vec(vec![vec![1.0, 0.0]]).unwrap();
-        let b = VectorStore::from_vec_vec(vec![vec![1.0]]).unwrap();
-        let result = VectorStore::concat(&a, &b);
+        let a = Vector::from_vec_vec(vec![vec![1.0, 0.0]]).unwrap();
+        let b = Vector::from_vec_vec(vec![vec![1.0]]).unwrap();
+        let result = Vector::concat(&a, &b);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("dimension mismatch"));
@@ -159,7 +160,7 @@ mod tests {
 
     #[test]
     fn test_as_bytes() {
-        let store = VectorStore::from_vec_vec(vec![
+        let store = Vector::from_vec_vec(vec![
             vec![1.0f32, 2.0f32],
         ]).unwrap();
         let bytes = store.as_bytes();
@@ -168,16 +169,8 @@ mod tests {
 
     #[test]
     fn test_get_out_of_bounds_panics() {
-        let store = VectorStore::from_vec_vec(vec![vec![1.0, 2.0]]).unwrap();
-        // get() uses slice indexing which panics on OOB
+        let store = Vector::from_vec_vec(vec![vec![1.0, 2.0]]).unwrap();
         let result = std::panic::catch_unwind(|| store.get(5));
         assert!(result.is_err());
     }
-}
-
-#[derive(Debug)]
-pub(super) struct StoredIndex {
-    pub(super) header: IndexHeader,
-    pub(super) vectors: VectorStore,
-    pub(super) metadata: Vec<StoredChunkMetadata>,
 }

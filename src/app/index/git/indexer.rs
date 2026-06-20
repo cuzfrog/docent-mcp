@@ -1,21 +1,18 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::app::index::processor::IndexingProcessor;
 use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
-use crate::domain::IndexKind;
-use crate::config::Config;
+use crate::config::{Config, GitConfig};
+use crate::index::IndexRepository;
 use crate::models::ModelFactory;
 use crate::support::Console;
 
 pub(crate) struct GitIndexer {
     pub(crate) console: Box<dyn Console>,
-    pub(crate) index_config: crate::config::IndexConfig,
-    pub(crate) git_config: crate::config::GitConfig,
-    pub(crate) bm25_k1: f32,
-    pub(crate) bm25_b: f32,
+    pub(crate) config: Config,
     pub(crate) model_factory: Arc<dyn ModelFactory>,
     pub(crate) processor: Box<dyn IndexingProcessor>,
+    pub(crate) repo: Arc<dyn IndexRepository>,
 }
 
 pub(crate) fn create_git_indexer(
@@ -23,35 +20,32 @@ pub(crate) fn create_git_indexer(
     console: Box<dyn Console>,
     model_factory: Arc<dyn ModelFactory>,
     processor: Box<dyn IndexingProcessor>,
+    repo: Arc<dyn IndexRepository>,
 ) -> impl Indexer {
-    let gc = config.git.as_ref().expect("GitIndexer requires git config");
+    config.git.as_ref().expect("GitIndexer requires git config");
     GitIndexer {
         console,
-        index_config: config.index.clone(),
-        git_config: gc.clone(),
-        bm25_k1: config.search.bm25.k1,
-        bm25_b: config.search.bm25.b,
+        config: config.clone(),
         model_factory,
         processor,
+        repo,
     }
 }
 
 impl Indexer for GitIndexer {
     fn run(&self, request: &IndexRequest) -> anyhow::Result<IndexOutcome> {
-        let persist_path = PathBuf::from(&self.index_config.persist_path);
         let dims = self.model_factory.dims();
 
         if request.rebuild {
-            self.rebuild(request, &persist_path, dims)
+            self.rebuild(request, dims)
         } else {
-            let repo = crate::index::IndexRepository::new(&persist_path, &self.index_config, self.bm25_k1, self.bm25_b);
-            if !repo.exists(IndexKind::Git) {
-                anyhow::bail!(
-                    "No existing Git index found at '{}'. Use `docent index-git --rebuild` to create one.",
-                    persist_path.display()
-                );
-            }
-            self.incremental(request, &persist_path, dims)
+            self.incremental(request, dims)
         }
+    }
+}
+
+impl GitIndexer {
+    pub(super) fn git_config(&self) -> &GitConfig {
+        self.config.git.as_ref().expect("GitIndexer requires git config")
     }
 }

@@ -7,6 +7,5 @@ mod types;
 pub(super) use types::{IndexOutcome, IndexRequest};
 
 mod indexer;
-pub use indexer::Indexer;
-pub(super) use indexer::create_indexer;
+pub(super) use indexer::{Indexer, create_indexer};
 

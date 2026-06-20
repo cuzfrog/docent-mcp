@@ -799,7 +799,7 @@ dependencies = [
 
 [[package]]
 name = "docent-mcp"
-version = "0.7.0"
+version = "0.7.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -814,7 +814,6 @@ dependencies = [
  "fastembed",
  "git2",
  "globset",
- "indicatif",
  "mockall",
  "rayon",
  "reqwest",

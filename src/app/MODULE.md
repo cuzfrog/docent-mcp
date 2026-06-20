@@ -1,16 +1,10 @@
+---
+readonly: [mod.rs]
+---
+
 # Module - app
 
 This module represents the application's execution hierarchy and workflow.
-
-```
-pub use application::{Application, create_application};
-pub use init::run_init;
-pub use list_models::list_models;
-```
-
-## mod.rs
-* `pub trait Application`
-* `pub fn create_application`
 
 ## index/
 * `pub trait Indexer`

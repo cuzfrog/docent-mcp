@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::index::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
+use super::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
 
 /// Write a BM25 index directory: `header.json` and `embeddings.json`.
 ///
@@ -48,7 +48,7 @@ pub(crate) fn read_bm25_index(path: &Path) -> anyhow::Result<(Bm25IndexHeader, V
 
     if header.schema_version != BM25_SCHEMA_VERSION {
         anyhow::bail!(
-            "BM25 schema version mismatch: expected {}, found {} at '{}'",
+            "BM25 schema version mismatch: expected {}, found {} at '{}'. Rebuild the index.",
             BM25_SCHEMA_VERSION,
             header.schema_version,
             header_path.display()
@@ -59,14 +59,6 @@ pub(crate) fn read_bm25_index(path: &Path) -> anyhow::Result<(Bm25IndexHeader, V
     let embeddings_bytes = std::fs::read(&embeddings_path)?;
     let raw: Vec<Vec<(u32, f32)>> = serde_json::from_slice(&embeddings_bytes)
         .map_err(|e| anyhow::anyhow!("Failed to parse BM25 embeddings at '{}': {}", embeddings_path.display(), e))?;
-
-    if raw.len() != header.chunk_count {
-        anyhow::bail!(
-            "BM25 embedding count mismatch: header says {}, but found {} embeddings",
-            header.chunk_count,
-            raw.len()
-        );
-    }
 
     // Convert back to bm25::Embedding<u32>
     let embeddings: Vec<bm25::Embedding<u32>> = raw
@@ -87,16 +79,9 @@ pub(crate) fn read_bm25_index(path: &Path) -> anyhow::Result<(Bm25IndexHeader, V
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::index::bm25_header::Bm25IndexHeader;
 
     fn sample_header() -> Bm25IndexHeader {
-        Bm25IndexHeader {
-            schema_version: BM25_SCHEMA_VERSION,
-            k1: 1.5,
-            b: 0.75,
-            avgdl: 100.0,
-            chunk_count: 3,
-        }
+        Bm25IndexHeader { schema_version: BM25_SCHEMA_VERSION, avgdl: 100.0 }
     }
 
     fn sample_embeddings() -> Vec<bm25::Embedding<u32>> {
@@ -183,36 +168,11 @@ mod tests {
     }
 
     #[test]
-    fn test_bm25_storage_chunk_count_mismatch() {
-        let temp_dir = std::env::temp_dir().join("docent_bm25_chunk_count_mismatch");
-        let _ = std::fs::remove_dir_all(&temp_dir);
-
-        let mut header = sample_header();
-        header.chunk_count = 999;
-        let embeddings = sample_embeddings();
-
-        write_bm25_index(&temp_dir, &header, &embeddings).unwrap();
-
-        let result = read_bm25_index(&temp_dir);
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("embedding count mismatch"));
-
-        let _ = std::fs::remove_dir_all(&temp_dir);
-    }
-
-    #[test]
     fn test_bm25_storage_empty() {
         let temp_dir = std::env::temp_dir().join("docent_bm25_empty");
         let _ = std::fs::remove_dir_all(&temp_dir);
 
-        let header = Bm25IndexHeader {
-            schema_version: BM25_SCHEMA_VERSION,
-            k1: 1.2,
-            b: 0.75,
-            avgdl: 0.0,
-            chunk_count: 0,
-        };
+        let header = Bm25IndexHeader { schema_version: BM25_SCHEMA_VERSION, avgdl: 0.0 };
         let embeddings: Vec<bm25::Embedding<u32>> = vec![];
 
         write_bm25_index(&temp_dir, &header, &embeddings).unwrap();

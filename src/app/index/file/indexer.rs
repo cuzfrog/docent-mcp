@@ -2,33 +2,29 @@ use std::sync::Arc;
 
 use crate::app::index::processor::IndexingProcessor;
 use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
-use crate::config::Config;
-use crate::models::ModelFactory;
+use crate::config::{Config, FileConfig};
+use crate::index::IndexRepository;
 use crate::support::Console;
 
 pub(crate) struct FileIndexer {
     pub(crate) console: Box<dyn Console>,
-    pub(crate) index_config: crate::config::IndexConfig,
-    pub(crate) file_config: crate::config::FileConfig,
-    pub(crate) bm25_k1: f32,
-    pub(crate) bm25_b: f32,
+    pub(crate) config: Config,
     pub(crate) processor: Box<dyn IndexingProcessor>,
+    pub(crate) repo: Arc<dyn IndexRepository>,
 }
 
 pub(crate) fn create_file_indexer(
     config: &Config,
     console: Box<dyn Console>,
-    _model_factory: Arc<dyn ModelFactory>,
     processor: Box<dyn IndexingProcessor>,
+    repo: Arc<dyn IndexRepository>,
 ) -> impl Indexer {
-    let fc = config.file.as_ref().expect("FileIndexer requires file config");
+    config.file.as_ref().expect("FileIndexer requires file config");
     FileIndexer {
         console,
-        index_config: config.index.clone(),
-        file_config: fc.clone(),
-        bm25_k1: config.search.bm25.k1,
-        bm25_b: config.search.bm25.b,
+        config: config.clone(),
         processor,
+        repo,
     }
 }
 
@@ -39,6 +35,12 @@ impl Indexer for FileIndexer {
         } else {
             self.incremental(request)
         }
+    }
+}
+
+impl FileIndexer {
+    pub(super) fn file_config(&self) -> &FileConfig {
+        self.config.file.as_ref().expect("FileIndexer requires file config")
     }
 }
 

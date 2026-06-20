@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::index::Embedder;
 use crate::index::MergedIndex;
-use crate::index::VectorStore;
+use crate::domain::Vector;
 
 pub trait ScoreBackend: Send + Sync {
     fn score(&self, query: &str) -> anyhow::Result<Vec<f32>>;
@@ -10,13 +10,13 @@ pub trait ScoreBackend: Send + Sync {
 
 pub(crate) struct VectorScoreBackend {
     embedder: Arc<Mutex<dyn Embedder>>,
-    vectors: Arc<VectorStore>,
+    vectors: Arc<Vector>,
 }
 
 impl VectorScoreBackend {
     pub(crate) fn new(
         embedder: Arc<Mutex<dyn Embedder>>,
-        vectors: Arc<VectorStore>,
+        vectors: Arc<Vector>,
     ) -> Self {
         Self { embedder, vectors }
     }
@@ -101,6 +101,8 @@ impl ScoreBackend for ZeroScoreBackend {
 pub(super) fn build_backends(
     merged: &MergedIndex,
     embedder: Arc<Mutex<dyn Embedder>>,
+    k1: f32,
+    b: f32,
 ) -> (Arc<dyn ScoreBackend>, Arc<dyn ScoreBackend>) {
     let vector_store = Arc::new(merged.vectors.clone());
     let semantic = Arc::new(VectorScoreBackend::new(
@@ -108,14 +110,18 @@ pub(super) fn build_backends(
         vector_store,
     )) as Arc<dyn ScoreBackend>;
 
-    let bm25: Arc<dyn ScoreBackend> = match (&merged.bm25_embeddings, &merged.bm25_header) {
-        (Some(embeddings), Some(header)) => {
-            let backend = build_bm25_backend(embeddings, header.k1, header.b, header.avgdl);
-            Arc::new(backend)
-        }
-        _ => Arc::new(ZeroScoreBackend {
+    let bm25: Arc<dyn ScoreBackend> = if !merged.bm25_embeddings.is_empty() {
+        let backend = build_bm25_backend(
+            &merged.bm25_embeddings,
+            k1,
+            b,
+            merged.bm25_avgdl,
+        );
+        Arc::new(backend)
+    } else {
+        Arc::new(ZeroScoreBackend {
             chunk_count: merged.metadata.len(),
-        }),
+        })
     };
 
     (semantic, bm25)
@@ -141,7 +147,7 @@ mod tests {
         let embedder: Arc<Mutex<dyn Embedder>> =
             Arc::new(Mutex::new(mock_embedder()));
         let vectors = Arc::new(
-            VectorStore::from_vec_vec(vec![
+            Vector::from_vec_vec(vec![
                 vec![9.0, 2.0, 0.0, 1.0],
                 vec![5.0, 2.0, 0.0, 1.0],
                 vec![1.0, 2.0, 0.0, 1.0],
@@ -160,7 +166,7 @@ mod tests {
     fn test_vector_backend_empty_vectors() {
         let embedder: Arc<Mutex<dyn Embedder>> =
             Arc::new(Mutex::new(mock_embedder()));
-        let vectors = Arc::new(VectorStore::from_vec_vec(vec![]).unwrap());
+        let vectors = Arc::new(Vector::from_vec_vec(vec![]).unwrap());
         let backend = VectorScoreBackend::new(embedder, vectors);
         let scores = backend.score("anything").unwrap();
         assert!(scores.is_empty());

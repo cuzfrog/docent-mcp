@@ -17,30 +17,23 @@
 - **Naming:** Snake_case for files and functions. Types are PascalCase. Constants are UPPER_SNAKE_CASE. Variable naming should be specific to carry their function. E.g. `token_counter` should not be `counter`, which can be confusing.
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).
 - **No Dead Code** No `allow(dead_code)`. It should only be used during long incremental refactors, and must be removed once possible.
-- **File ordering** Public types, contract, methods should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
-- **Imports** Import at the file top. Avoid long module path in the code body, like `crate::app::index::xxxx::bbbb::new`. Import from `super` when possible. To access sibling modules, do not re-export in the `mod.rs`.
+- **File ordering** Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
+- **No qualified imports** Import at the file top with `use`. Avoid qualified path in the code body, like `crate::app::index::xxxx::bbbb::new`. Import from `super` when possible. To access sibling modules, do not re-export in the `mod.rs`.
 - **Config passing** Try to give a function what it needs, but do not split `Config` into multiple parameters.
 - **Forbidden Warning Suppression** No `#[allow(clippy::*)]` or similar workaround. An issue must be addressed.
 - **No comments** Do not add comments except it's a consequential information and the code itself cannot tell.
-- **No "new" constructors** Do not create `new` constructors in a concrete struct. Use a standalone factory method, i.e. the module constructor that creates an impl of this trait. This avoids exposing the concrete struct. The factory method should return `impl Trait` when possible, avoid `Box<dyn Trait>`. The naming pattern is `create_X`, e.g., `pub fn create_model_factory() -> impl ModelFactory`.
+- **No "new" constructors** Do not create `new` constructors in a concrete struct. Use a standalone constructor method, i.e. the module constructor that creates an impl of this trait. This avoids exposing the concrete struct. The constructor method should return `impl Trait` when possible, avoid `Box<dyn Trait>`. The naming pattern is `create_X`, e.g., `pub fn create_model_factory() -> impl ModelFactory`. A constructor method should only be called by another constructor method, an implementation should not see the constructor method so that it can be tested with a mock.
 - **Use fixed dependency versions** Avoid `*` or `^` to prevent unintentional updates. `=` should be explicitly used. This applies to all dependencies, including python and javascript.
 - **Clean mod.rs** The file should not contain anything except module definition and re-export.
 
 ### Test Mocking
-* `pub fn mock_xxxx()` to create a shared mock for testing.
-* `struct MockXxxxx` implements the trait, this is achieved by `mockall` crate.
-* Do not test mock itself.
-* Mocks should not violate visibility rules. A trait only used in its parent module should not have its mock exposed outside its parent module. A mock with manually implemented logic should be placed in a companion file, such as `abc_mock.rs` with test scope along with its counterpart file `abc.rs`.
-* Use `#[cfg_attr(test, mockall::automock)]` on a trait to create mock.
-* Use `#[cfg(test)]` to re-export a mock when needed.
-
-Manual implementeation of a mock's behavior should be avoided as possible. Try to use mocks directly in unit tests with expected calls.
+When writing mocks, refer to @doc/AGENTS_MOCKING.md.
 
 ### Single file layout (ordered from top to bottom)
 1. imports
 2. domain types
 3. 1 pub trait
-4. factory method
+4. constructor method
 5. concrete implementation (struct)
 6. file private functions
 
@@ -60,24 +53,28 @@ When involving git operations, refer to @doc/AGENTS_GIT.md.
 
 ### Module visibility
 Minimal visibility or public surface of a type or a module. This ensures loose coupling and separation of concerns. If this is violated, e.g. a type or a module exposes multiple pub functions, it usually means the design is wrong.
-- A module should only have 1 trait and its factory method that are public. All other implementations should not be exposed.
+- A module should only have 1 trait and its constructor method that are public. All other implementations should not be exposed.
 - For a single file module, all other things in the file should be file private.
 - For multi-file module, since each file is its own module, all other things must be file private or `pub(super)`
 - Unit tests should be collocated with its prod code.
 - Integration tests outside the module should only test the exposed `pub trait` or `pub(crate) trait`.
-- In each module, search `MODULE.md` for its api, responsibilities, and files layout. Only types/functions with explicit `pub` should be exposed. You must follow its specifications. You cannot change the visibility. You should not modify this file. You cannot add any other public types/functions.
+- In each module, search `MODULE.md` for its api, responsibilities, and files layout. You must follow its specifications. You cannot change the visibility. You should not modify this file. You cannot add any other public types/functions.
 - all `mod` in `mod.rs` must be private. Any exposed types must use explicit re-export.
 - Cross boundary domain types, config types, DTOs are exempted from the visibility rule.
 
-`MODULE.md` format (inside parenthesis is comments):
+`MODULE.md` frontmatter format:
+```md
+---
+readonly: [mod.rs]
+---
 ```
-# Module - MODULE_NAME
-(implicitly for mod.rs)
-
-- <any public export> (if there are entries, only mentioned exports are allowed)
-
-## FILE.rs or DIR/ (a child module)
-- <any public export> (only mentioned exports are allowed)
+or
+```md
+---
+visible:
+  - path: Type1
+    modifier: pub(super)
+---
 ```
 
 ### SOLID principles:

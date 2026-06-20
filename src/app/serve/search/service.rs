@@ -3,7 +3,7 @@ use std::sync::Mutex;
 
 use crate::config::SearchConfig;
 use crate::index::Embedder;
-use crate::index::{MergedIndex};
+use crate::index::IndexRepository;
 use crate::app::serve::search::backend::build_backends;
 use super::fusion::create_fusion;
 use crate::app::serve::search::orchestrator::HybridSearchService;
@@ -21,11 +21,12 @@ pub trait SearchService: Send + Sync {
 }
 
 pub fn create_search_service(
-    merged: MergedIndex,
+    repo: &dyn IndexRepository,
     embedder: Arc<Mutex<dyn Embedder>>,
     search_config: &SearchConfig,
 ) -> anyhow::Result<Arc<dyn SearchService>> {
-    let (semantic_backend, bm25_backend) = build_backends(&merged, embedder);
+    let merged = repo.load_merged()?;
+    let (semantic_backend, bm25_backend) = build_backends(&merged, embedder, search_config.bm25.k1, search_config.bm25.b);
 
     let fusion = create_fusion(
         &search_config.fusion.strategy,
@@ -54,9 +55,10 @@ pub fn create_search_service(
 mod tests {
     use super::*;
     use crate::config::{SearchConfig, FusionConfig, RankingConfig, Bm25Config};
-    use crate::index::{MergedIndex, VectorStore};
+    use crate::domain::Vector;
     use crate::domain::{IndexKind, ChunkMetadata, DocumentContext};
     use crate::index::mock_embedder;
+    use crate::index::mock_repository_returning_merged;
 
     fn default_search_config() -> SearchConfig {
         SearchConfig {
@@ -111,21 +113,20 @@ mod tests {
             },
         ];
 
-        let merged = MergedIndex {
-            vectors: VectorStore::from_vec_vec(vec![
+        let repo = mock_repository_returning_merged(
+            Vector::from_vec_vec(vec![
                 vec![1.0, 0.0, 0.0, 0.0],
                 vec![0.0, 1.0, 0.0, 0.0],
             ])
             .unwrap(),
             metadata,
-            bm25_embeddings: None,
-            bm25_header: None,
-            built_at: "now".to_string(),
-        };
+            vec![],
+            "now".to_string(),
+        );
         let embedder: Arc<Mutex<dyn Embedder>> =
             Arc::new(Mutex::new(mock_embedder()));
         let search_config = default_search_config();
-        let service = create_search_service(merged, embedder, &search_config).unwrap();
+        let service = create_search_service(&repo, embedder, &search_config).unwrap();
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let results = rt.block_on(service.search("apples", 5, "")).unwrap();

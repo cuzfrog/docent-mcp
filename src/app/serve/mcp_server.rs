@@ -7,8 +7,8 @@ use rmcp::transport::streamable_http_server::{
     session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
 };
 use rmcp::ErrorData;
-use rmcp::{tool, tool_handler, tool_router};
 use rmcp::ServerHandler;
+use rmcp::{tool, tool_handler, tool_router};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -61,9 +61,9 @@ impl MCPServer for RmcpServer {
 #[tool_router]
 impl RmcpServer {
     #[tool(
-        description = "Search Design Decision Records by hybrid semantic and lexical relevance. \
-                       Provide a file_hint (path of the file you are reading) \
-                       to boost results from that source file."
+        description = "Search for the rationale behind a non-obvious code implementation. \
+                       Call this before assuming code is wrong or refactoring it. \
+                       Searches design decision records, documentation, and git history."
     )]
     async fn search_ddr(
         &self,

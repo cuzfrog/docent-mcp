@@ -1,29 +1,26 @@
-mod semantic_header;
-mod merger;
-mod semantic_store;
-mod stored_metadata;
+mod bm25_builder;
 mod bm25_header;
 mod bm25_io;
-mod semantic_io;
-mod merged;
+mod merger;
 mod repository;
+mod semantic_header;
+mod semantic_io;
 mod source_index;
-mod bm25_builder;
+mod stored_metadata;
 
-pub(crate) use repository::{IndexRepository, StoreMergedRequest};
-
-#[cfg(test)]
-pub(crate) use semantic_header::SCHEMA_VERSION;
-pub(crate) use merged::{IndexSizeInfo, LoadMergedResult, MergedIndex};
-pub(crate) use semantic_store::VectorStore;
-
-pub(crate) use bm25_builder::build_bm25;
+pub(crate) use repository::{create_index_repository, IndexRepository, MergedIndex};
 
 mod embedder;
-pub(crate) use embedder::{Embedder, create_embedder};
+pub(crate) use embedder::{create_embedder, Embedder};
 
 #[cfg(test)]
 mod embedder_mock;
 
 #[cfg(test)]
 pub(crate) use embedder_mock::mock_embedder;
+
+#[cfg(test)]
+mod repository_mock;
+
+#[cfg(test)]
+pub(crate) use repository_mock::*;

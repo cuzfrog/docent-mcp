@@ -1,3 +1,7 @@
+---
+readonly: [mod.rs]
+---
+
 # Module - Integration Tests
 
 Integration tests do not involve MCP server test, it's covered by e2e-tests.
