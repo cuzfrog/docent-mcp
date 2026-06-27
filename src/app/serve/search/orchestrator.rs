@@ -278,9 +278,9 @@ mod tests {
 
     #[test]
     fn test_file_hint_boost_exact_match() {
-        let semantic = vec![0.9, 0.8];
-        let bm25 = vec![0.1, 0.2];
-        let svc = build_hybrid_service_with_boost(semantic.clone(), bm25.clone(), &["a text", "b text"], 1.5);
+        let semantic_scores = vec![0.9, 0.8];
+        let bm25_scores = vec![0.1, 0.2];
+        let svc = build_hybrid_service_with_boost(semantic_scores.clone(), bm25_scores.clone(), &["a text", "b text"], 1.5);
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let results = rt.block_on(svc.search("test", 5, "doc1.md")).unwrap();
@@ -349,9 +349,9 @@ mod tests {
 
     #[test]
     fn test_file_hint_boost_only_affects_total_score() {
-        let semantic = vec![0.9, 0.6];
-        let bm25 = vec![0.2, 0.8];
-        let svc = build_hybrid_service_with_boost(semantic, bm25, &["doc A", "doc B"], 2.0);
+        let semantic_scores = vec![0.9, 0.6];
+        let bm25_scores = vec![0.2, 0.8];
+        let svc = build_hybrid_service_with_boost(semantic_scores, bm25_scores, &["doc A", "doc B"], 2.0);
 
         let rt = tokio::runtime::Runtime::new().unwrap();
 
