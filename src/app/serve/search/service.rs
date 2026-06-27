@@ -56,7 +56,7 @@ mod tests {
     use super::*;
     use crate::config::{SearchConfig, FusionConfig, RankingConfig, Bm25Config};
     use crate::domain::Vector;
-    use crate::domain::{IndexKind, ChunkMetadata, DocumentContext};
+    use crate::domain::{ChunkMetadata, DocumentContext};
     use crate::index::mock_embedder;
     use crate::index::mock_repository_returning_merged;
 
@@ -87,14 +87,12 @@ mod tests {
                     source_revision: Arc::from("hash1"),
                     title: Arc::from(""),
                     modified_at: None,
-                    kind: IndexKind::File,
                 },
                 chunk_text: "The quick brown fox jumps over the lazy dog.".to_string(),
                 section_heading: None,
                 chunk_index: 0,
                 line_start: 0,
                 line_end: 0,
-                is_fresh: None,
             },
             ChunkMetadata {
                 doc_ctx: DocumentContext {
@@ -102,14 +100,12 @@ mod tests {
                     source_revision: Arc::from("hash2"),
                     title: Arc::from(""),
                     modified_at: None,
-                    kind: IndexKind::File,
                 },
                 chunk_text: "Apples are delicious fruits.".to_string(),
                 section_heading: None,
                 chunk_index: 0,
                 line_start: 0,
                 line_end: 0,
-                is_fresh: None,
             },
         ];
 

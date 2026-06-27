@@ -63,7 +63,7 @@ impl RmcpServer {
     #[tool(
         description = "Search for the rationale behind a non-obvious code implementation. \
                        Call this before assuming code is wrong or refactoring it. \
-                       Searches design decision records, documentation, and git history."
+                       Searches design decision records and documentation."
     )]
     async fn search_ddr(
         &self,

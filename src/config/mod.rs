@@ -12,7 +12,6 @@ pub use types::{
     FusionConfig,
     Bm25Config,
     FileConfig,
-    GitConfig,
 };
 
 #[cfg(test)]

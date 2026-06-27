@@ -1,6 +1,5 @@
 mod chunking;
 mod file;
-mod git;
 mod processor;
 
 mod types;

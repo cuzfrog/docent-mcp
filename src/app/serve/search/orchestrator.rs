@@ -80,7 +80,7 @@ mod tests {
     use super::super::ranking::DecayRanker;
     use crate::app::serve::search::SearchService;
     use super::super::backend::ScoreBackend;
-    use crate::domain::{IndexKind, ChunkMetadata, DocumentContext};
+    use crate::domain::{ChunkMetadata, DocumentContext};
 
     use super::HybridSearchService;
 
@@ -114,14 +114,12 @@ mod tests {
                 source_revision: Arc::from("hash"),
                 title: Arc::from(title),
                 modified_at: None,
-                kind: IndexKind::File,
             },
             chunk_text: chunk_text.to_string(),
             section_heading: None,
             chunk_index,
             line_start: 0,
             line_end: 0,
-            is_fresh: None,
         }
     }
 

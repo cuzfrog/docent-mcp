@@ -22,7 +22,7 @@ same_src_score_decay = 0.85
     assert_eq!(config.index.chunk_overlap, 128);
     assert_eq!(config.server.log_level, "debug");
     assert_eq!(config.server.port, 0);
-    assert_eq!(config.search.ranking.same_src_score_decay, 0.85);
+    assert!((config.search.ranking.same_src_score_decay - 0.85).abs() < f32::EPSILON);
 }
 
 #[test]
@@ -39,8 +39,7 @@ fn test_missing_fields_get_defaults() {
     assert_eq!(config.index.chunk_overlap, super::defaults::default_chunk_overlap());
     assert_eq!(config.index.max_size_mb, super::defaults::default_max_size_mb());
     assert_eq!(config.server.log_level, super::defaults::default_log_level());
-    assert_eq!(config.search.ranking.same_src_score_decay, super::defaults::default_same_src_score_decay());
-    assert!(config.git.is_none());
+    assert!((config.search.ranking.same_src_score_decay - super::defaults::default_same_src_score_decay()).abs() < f32::EPSILON);
 }
 
 #[test]
@@ -82,24 +81,6 @@ embedding_model = "BGESmallENV15Q"
 "#;
     let config: Config = toml::from_str(toml_str).unwrap();
     assert!((config.search.ranking.same_src_score_decay - 0.9).abs() < f32::EPSILON);
-}
-
-#[test]
-fn test_git_config_deserialize() {
-    let toml_str = r#"
-[index]
-embedding_model = "BGESmallENV15Q"
-
-[git]
-depth_limit = 50
-branch = "develop"
-glob_patterns = ["*.rs", "*.md"]
-"#;
-    let config: Config = toml::from_str(toml_str).unwrap();
-    let git = config.git.expect("git config should be present");
-    assert_eq!(git.depth_limit, 50);
-    assert_eq!(git.branch, "develop");
-    assert_eq!(git.glob_patterns, vec!["*.rs".to_string(), "*.md".to_string()]);
 }
 
 #[test]

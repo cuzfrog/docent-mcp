@@ -110,7 +110,6 @@ pub(crate) fn rank_results(
         .take(limit)
         .map(|(total_score, orig_idx, meta)| {
             (orig_idx, SearchResult {
-                kind: meta.doc_ctx.kind,
                 title: meta.doc_ctx.title.to_string(),
                 source_path: meta.doc_ctx.source_path.to_string(),
                 source_revision: meta.doc_ctx.source_revision.to_string(),
@@ -122,7 +121,7 @@ pub(crate) fn rank_results(
                 line_end: meta.line_end,
                 section_heading: meta.section_heading.clone(),
                 modified_at: meta.doc_ctx.modified_at.as_ref().map(|s| s.to_string()),
-                is_fresh: meta.is_fresh.unwrap_or(false),
+                is_fresh: false,
                 index_time: index_time.to_string(),
             })
         })
@@ -134,7 +133,7 @@ mod tests {
     use super::*;
     use std::sync::Arc;
 
-    use crate::domain::{IndexKind, DocumentContext};
+    use crate::domain::DocumentContext;
 
     fn make_meta(
         source_path: &str,
@@ -148,14 +147,12 @@ mod tests {
                 source_revision: Arc::from("hash"),
                 title: Arc::from(title),
                 modified_at: None,
-                kind: IndexKind::File,
             },
             chunk_text: chunk_text.to_string(),
             section_heading: None,
             chunk_index,
             line_start: 0,
             line_end: 0,
-            is_fresh: None,
         }
     }
 

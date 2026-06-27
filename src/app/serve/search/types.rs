@@ -1,10 +1,7 @@
 use serde::Serialize;
 
-use crate::domain::IndexKind;
-
 #[derive(Debug, Serialize)]
 pub struct SearchResult {
-    pub kind: IndexKind,
     pub title: String,
     pub source_path: String,
     pub source_revision: String,

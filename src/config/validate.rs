@@ -52,20 +52,6 @@ impl Config {
         if self.search.bm25.b < 0.0 || self.search.bm25.b > 1.0 {
             anyhow::bail!("search.bm25.b must be in range 0.0..=1.0, got {}", self.search.bm25.b);
         }
-        if let Some(git) = &self.git {
-            if git.depth_limit < -1 {
-                anyhow::bail!(
-                    "git depth_limit must be >= -1, got {}",
-                    git.depth_limit
-                );
-            }
-            if git.branch.is_empty() {
-                anyhow::bail!("git branch must not be empty");
-            }
-            if git.glob_patterns.is_empty() {
-                anyhow::bail!("git glob_patterns must not be empty");
-            }
-        }
         if let Some(file) = &self.file {
             if file.glob_patterns.is_empty() {
                 anyhow::bail!("file glob_patterns must not be empty");
@@ -203,81 +189,6 @@ mod tests {
         };
         let err = config.validate().unwrap_err();
         assert!(err.to_string().contains("same_src_score_decay must be in range 0.0..=1.0"));
-    }
-
-    #[test]
-    fn test_git_depth_limit_below_min_validation_error() {
-        let config = Config {
-            index: IndexConfig {
-                embedding_model: "BGESmallENV15Q".to_string(),
-                ..IndexConfig::default()
-            },
-            git: Some(GitConfig {
-                depth_limit: -2,
-                branch: "main".to_string(),
-                glob_patterns: vec!["*.rs".to_string()],
-                enabled: true,
-            }),
-            ..Config::default()
-        };
-        let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("git depth_limit must be >= -1"));
-    }
-
-    #[test]
-    fn test_git_empty_branch_validation_error() {
-        let config = Config {
-            index: IndexConfig {
-                embedding_model: "BGESmallENV15Q".to_string(),
-                ..IndexConfig::default()
-            },
-            git: Some(GitConfig {
-                depth_limit: 10,
-                branch: "".to_string(),
-                glob_patterns: vec!["*.rs".to_string()],
-                enabled: true,
-            }),
-            ..Config::default()
-        };
-        let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("git branch must not be empty"));
-    }
-
-    #[test]
-    fn test_git_empty_glob_patterns_validation_error() {
-        let config = Config {
-            index: IndexConfig {
-                embedding_model: "BGESmallENV15Q".to_string(),
-                ..IndexConfig::default()
-            },
-            git: Some(GitConfig {
-                depth_limit: 10,
-                branch: "main".to_string(),
-                glob_patterns: vec![],
-                enabled: true,
-            }),
-            ..Config::default()
-        };
-        let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("git glob_patterns must not be empty"));
-    }
-
-    #[test]
-    fn test_git_depth_limit_negative_one_valid() {
-        let config = Config {
-            index: IndexConfig {
-                embedding_model: "BGESmallENV15Q".to_string(),
-                ..IndexConfig::default()
-            },
-            git: Some(GitConfig {
-                depth_limit: -1,
-                branch: "main".to_string(),
-                glob_patterns: vec!["*.rs".to_string()],
-                enabled: true,
-            }),
-            ..Config::default()
-        };
-        assert!(config.validate().is_ok());
     }
 
     #[test]

@@ -127,7 +127,6 @@ pub(super) fn read_semantic_index(path: &Path) -> anyhow::Result<StoredIndex> {
 mod tests {
     use super::*;
 
-    use crate::domain::IndexKind;
     use crate::index::semantic_header::SEMANTIC_SCHEMA_VERSION;
 
     fn matching_header() -> IndexHeader {
@@ -140,7 +139,6 @@ mod tests {
             built_at: "2026-01-01T00:00:00Z".to_string(),
             doc_count: 2,
             chunk_count: 3,
-            last_indexed_commit: None,
         }
     }
 
@@ -171,8 +169,6 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -184,8 +180,6 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
             StoredChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -197,8 +191,6 @@ mod tests {
                 line_start: 1,
                 line_end: 1,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
         ];
 
@@ -234,8 +226,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -247,8 +237,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
             StoredChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -260,8 +248,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
         ];
 
@@ -317,8 +303,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -330,8 +314,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
             StoredChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -343,8 +325,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
         ];
 
@@ -383,8 +363,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -396,8 +374,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
             StoredChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -409,8 +385,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
         ];
 
@@ -449,8 +423,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -462,8 +434,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
         ];
 
@@ -493,7 +463,6 @@ mod tests {
             built_at: "2026-01-01T00:00:00Z".to_string(),
             doc_count: 2,
             chunk_count: 3,
-            last_indexed_commit: None,
         };
         let vectors_bytes: Vec<u8> = (0..48).map(|i| i as u8).collect();
         let metadata = vec![
@@ -507,8 +476,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -520,8 +487,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
             StoredChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -533,8 +498,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
             StoredChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -546,8 +509,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
         ];
 
@@ -607,8 +568,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
             StoredChunkMetadata {
                 source_path: "doc1.md".to_string(),
@@ -620,8 +579,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
             StoredChunkMetadata {
                 source_path: "doc2.md".to_string(),
@@ -633,8 +590,6 @@ mod tests {
                 line_start: 0,
                 line_end: 0,
                 modified_at: None,
-                kind: IndexKind::File,
-                is_fresh: None,
             },
         ];
 
@@ -666,7 +621,6 @@ mod tests {
             built_at: "2026-01-01T00:00:00Z".to_string(),
             doc_count: 0,
             chunk_count: 0,
-            last_indexed_commit: None,
         };
         let vector_store = Vector::from_vec_vec(vec![]).unwrap();
         let metadata: Vec<StoredChunkMetadata> = vec![];
@@ -713,7 +667,6 @@ mod tests {
             built_at: "2026-01-01T00:00:00Z".to_string(),
             doc_count: 1,
             chunk_count: 1,
-            last_indexed_commit: None,
         };
         let raw = vec![vec![1.0, 2.0, 3.0, 4.0]];
         let vector_store = Vector::from_vec_vec(raw).unwrap();
@@ -727,8 +680,6 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: IndexKind::File,
-            is_fresh: None,
         }];
 
         write_semantic_index(&nested_path, &header, &vector_store, &metadata).unwrap();
@@ -772,7 +723,6 @@ mod tests {
             built_at: "2026-01-01T00:00:00Z".to_string(),
             doc_count: 1,
             chunk_count: 1,
-            last_indexed_commit: None,
         };
         let raw = vec![vec![1.0, 2.0, 3.0, 4.0]];
         let vector_store = Vector::from_vec_vec(raw).unwrap();
@@ -786,8 +736,6 @@ mod tests {
             line_start: 0,
             line_end: 0,
             modified_at: None,
-            kind: IndexKind::File,
-            is_fresh: None,
         }];
 
         write_index_to(&temp_dir, "file", &header, &vector_store, &metadata).unwrap();

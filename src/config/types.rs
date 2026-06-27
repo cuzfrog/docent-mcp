@@ -12,7 +12,6 @@ pub struct Config {
     pub search: SearchConfig,
     #[serde(default)]
     pub file: Option<FileConfig>,
-    pub git: Option<GitConfig>,
     #[serde(default)]
     pub verbose: bool,
 }
@@ -87,16 +86,6 @@ pub struct FileConfig {
     pub file_size_limit_mb: u64,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
-pub struct GitConfig {
-    pub depth_limit: i64,
-    #[serde(default = "super::defaults::default_git_branch")]
-    pub branch: String,
-    #[serde(default = "super::defaults::default_git_enabled")]
-    pub enabled: bool,
-    pub glob_patterns: Vec<String>,
-}
-
 impl Default for IndexConfig {
     fn default() -> Self {
         Self {
@@ -151,27 +140,21 @@ impl Config {
     pub(crate) fn persist_path_buf(&self) -> PathBuf {
         PathBuf::from(&self.index.persist_path)
     }
+}
 
-    pub fn enabled_kinds(&self) -> Vec<crate::domain::IndexKind> {
-        let mut kinds = Vec::new();
-        if self.file.as_ref().is_some_and(|f| f.enabled) {
-            kinds.push(crate::domain::IndexKind::File);
-        }
-        if self.git.as_ref().is_some_and(|g| g.enabled) {
-            kinds.push(crate::domain::IndexKind::Git);
-        }
-        kinds
+impl Config {
+    pub fn file_enabled(&self) -> bool {
+        self.file.as_ref().is_some_and(|f| f.enabled)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{FileConfig, GitConfig};
-    use crate::domain::IndexKind;
+    use crate::config::FileConfig;
 
     #[test]
-    fn enabled_kinds_returns_file_when_enabled() {
+    fn file_enabled_returns_true_when_enabled() {
         let config = Config {
             file: Some(FileConfig {
                 enabled: true,
@@ -180,53 +163,25 @@ mod tests {
             }),
             ..Config::default()
         };
-        assert_eq!(config.enabled_kinds(), vec![IndexKind::File]);
+        assert!(config.file_enabled());
     }
 
     #[test]
-    fn enabled_kinds_returns_git_when_enabled() {
-        let config = Config {
-            git: Some(GitConfig {
-                depth_limit: 100,
-                branch: "main".to_string(),
-                enabled: true,
-                glob_patterns: vec![],
-            }),
-            ..Config::default()
-        };
-        assert_eq!(config.enabled_kinds(), vec![IndexKind::Git]);
+    fn file_enabled_returns_false_when_missing() {
+        let config = Config::default();
+        assert!(!config.file_enabled());
     }
 
     #[test]
-    fn enabled_kinds_returns_both_when_both_enabled() {
-        let config = Config {
-            file: Some(FileConfig {
-                enabled: true,
-                glob_patterns: vec![],
-                file_size_limit_mb: 0,
-            }),
-            git: Some(GitConfig {
-                depth_limit: 100,
-                branch: "main".to_string(),
-                enabled: true,
-                glob_patterns: vec![],
-            }),
-            ..Config::default()
-        };
-        assert_eq!(config.enabled_kinds(), vec![IndexKind::File, IndexKind::Git]);
-    }
-
-    #[test]
-    fn enabled_kinds_returns_empty_when_all_disabled() {
+    fn file_enabled_returns_false_when_disabled() {
         let config = Config {
             file: Some(FileConfig {
                 enabled: false,
                 glob_patterns: vec![],
                 file_size_limit_mb: 0,
             }),
-            git: None,
             ..Config::default()
         };
-        assert!(config.enabled_kinds().is_empty());
+        assert!(!config.file_enabled());
     }
 }
