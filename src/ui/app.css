@@ -280,32 +280,6 @@ header .subtitle {
   background: #f3e8ff;
 }
 
-.badge-git {
-  color: #166534;
-  background: #dcfce7;
-}
-
-.result-freshness {
-  display: inline-block;
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0.1rem 0.45rem;
-  border-radius: var(--radius-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  line-height: 1.4;
-}
-
-.badge-fresh {
-  color: #166534;
-  background: #dcfce7;
-}
-
-.badge-stale {
-  color: #92400e;
-  background: #fef3c7;
-}
-
 .result-card .result-score {
   display: inline-block;
   font-size: 0.75rem;

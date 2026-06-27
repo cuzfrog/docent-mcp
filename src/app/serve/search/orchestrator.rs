@@ -13,7 +13,6 @@ pub(super) struct HybridSearchService {
     pub(crate) fusion: Arc<dyn ScoreFusion>,
     pub(crate) ranker: Arc<dyn Ranker>,
     pub(crate) metadata: Arc<Vec<ChunkMetadata>>,
-    pub(crate) index_time: String,
 }
 
 #[async_trait::async_trait]
@@ -30,7 +29,6 @@ impl SearchService for HybridSearchService {
         let ranker = Arc::clone(&self.ranker);
         let metadata = Arc::clone(&self.metadata);
         let query = query.to_string();
-        let index_time = self.index_time.clone();
         let file_hint = file_hint.to_string();
 
         tokio::task::spawn_blocking(move || {
@@ -54,7 +52,7 @@ impl SearchService for HybridSearchService {
             let fused = fusion.fuse(&semantic_scores, &bm25_scores);
 
             let file_hint: Option<&str> = if file_hint.is_empty() { None } else { Some(&file_hint) };
-            let results = ranker.rank(&fused, &metadata, limit, &index_time, file_hint);
+            let results = ranker.rank(&fused, &metadata, limit, file_hint);
 
             let results: Vec<SearchResult> = results
                 .into_iter()
@@ -162,7 +160,6 @@ mod tests {
             fusion,
             ranker,
             metadata: Arc::new(metadata),
-            index_time: "2026-01-01T00:00:00Z".into(),
         }
     }
 
@@ -328,7 +325,6 @@ mod tests {
             fusion,
             ranker,
             metadata: Arc::new(metadata),
-            index_time: "now".into(),
         };
 
         let rt = tokio::runtime::Runtime::new().unwrap();

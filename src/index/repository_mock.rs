@@ -8,14 +8,12 @@ pub fn mock_repository_returning_merged(
     vectors: Vector,
     metadata: Vec<ChunkMetadata>,
     bm25_embeddings: Vec<bm25::Embedding<u32>>,
-    built_at: String,
 ) -> MockIndexRepository {
     let merged = MergedIndex {
         vectors,
         metadata,
         bm25_embeddings,
         bm25_avgdl: 0.0,
-        built_at,
     };
     let mut mock = MockIndexRepository::new();
     mock.expect_load_merged()

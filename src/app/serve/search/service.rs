@@ -45,7 +45,6 @@ pub fn create_search_service(
         fusion,
         ranker,
         metadata: Arc::new(merged.metadata),
-        index_time: merged.built_at,
     };
 
     Ok(Arc::new(svc) as Arc<dyn SearchService>)
@@ -117,7 +116,6 @@ mod tests {
             .unwrap(),
             metadata,
             vec![],
-            "now".to_string(),
         );
         let embedder: Arc<Mutex<dyn Embedder>> =
             Arc::new(Mutex::new(mock_embedder()));

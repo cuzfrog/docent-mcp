@@ -12,10 +12,7 @@
  * @property {number} lineEnd
  * @property {string|null} sectionHeading
  * @property {string|null} modifiedAt
- * @property {string} kind - 'file' or 'git'
- * @property {string} sourceRevision - SHA-256 (file) or commit hash (git)
- * @property {boolean} isFresh - true for latest git commit per file
- * @property {string} indexTime - ISO 8601 index build timestamp
+ * @property {string} sourceRevision - SHA-256 of file content
  */
 
 export const PROTOCOL = {
@@ -82,10 +79,7 @@ export function parseSearchResponse(raw) {
       lineEnd: typeof item.line_end === 'number' ? item.line_end : 0,
       sectionHeading: item.section_heading ?? null,
       modifiedAt: item.modified_at ?? null,
-      kind: item.kind || 'file',
       sourceRevision: item.source_revision || '',
-      isFresh: !!item.is_fresh,
-      indexTime: item.index_time ?? null,
     });
   }
 

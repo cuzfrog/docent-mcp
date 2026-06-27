@@ -53,10 +53,7 @@ describe('parseSearchResponse', () => {
             line_end: 20,
             section_heading: 'Introduction',
             modified_at: '2024-01-15T10:00:00Z',
-            kind: 'file',
             source_revision: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
-            is_fresh: false,
-            index_time: '2026-05-06T12:00:00Z',
           }]),
         }],
       },
@@ -75,10 +72,7 @@ describe('parseSearchResponse', () => {
     assert.equal(res.lineEnd, 20);
     assert.equal(res.sectionHeading, 'Introduction');
     assert.equal(res.modifiedAt, '2024-01-15T10:00:00Z');
-    assert.equal(res.kind, 'file');
     assert.equal(res.sourceRevision, 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2');
-    assert.equal(res.isFresh, false);
-    assert.equal(res.indexTime, '2026-05-06T12:00:00Z');
   });
 
   it('normalizes results with null fields', () => {
@@ -105,11 +99,7 @@ describe('parseSearchResponse', () => {
     assert.equal(r.results.length, 1);
     assert.equal(r.results[0].sectionHeading, null);
     assert.equal(r.results[0].modifiedAt, null);
-    // Defaults for missing new fields
-    assert.equal(r.results[0].kind, 'file');
     assert.equal(r.results[0].sourceRevision, '');
-    assert.equal(r.results[0].isFresh, false);
-    assert.equal(r.results[0].indexTime, null);
   });
 
   it('skips items missing required title', () => {
@@ -118,8 +108,8 @@ describe('parseSearchResponse', () => {
         content: [{
           type: 'text',
           text: JSON.stringify([
-            { title: '', source_path: '/a.md', matched_content: 'c', total_score: 0.5, semantic_score: 0.7, bm25_score: 0.3, line_start: 1, line_end: 1, section_heading: null, modified_at: null, kind: 'git', source_revision: 'abc123', is_fresh: true, index_time: '2026-01-01T00:00:00Z' },
-            { title: 'Valid', source_path: '/b.md', matched_content: 'c', total_score: 0.5, semantic_score: 0.7, bm25_score: 0.3, line_start: 1, line_end: 1, section_heading: null, modified_at: null, kind: 'file', source_revision: '', is_fresh: false, index_time: null },
+            { title: '', source_path: '/a.md', matched_content: 'c', total_score: 0.5, semantic_score: 0.7, bm25_score: 0.3, line_start: 1, line_end: 1, section_heading: null, modified_at: null, source_revision: 'abc123' },
+            { title: 'Valid', source_path: '/b.md', matched_content: 'c', total_score: 0.5, semantic_score: 0.7, bm25_score: 0.3, line_start: 1, line_end: 1, section_heading: null, modified_at: null, source_revision: '' },
           ]),
         }],
       },
@@ -127,7 +117,6 @@ describe('parseSearchResponse', () => {
     const r = parseSearchResponse(raw);
     assert.equal(r.results.length, 1);
     assert.equal(r.results[0].title, 'Valid');
-    assert.equal(r.results[0].kind, 'file');
   });
 
   it('handles unexpected errors gracefully', () => {

@@ -13,6 +13,4 @@ pub struct SearchResult {
     pub line_end: usize,
     pub section_heading: Option<String>,
     pub modified_at: Option<String>,
-    pub is_fresh: bool,
-    pub index_time: String,
 }

@@ -181,7 +181,6 @@ mod tests {
             Vector::from_vec_vec(vec![]).unwrap(),
             vec![],
             vec![],
-            "test".to_string(),
         );
         let console = FakeConsole { confirm_answer: false };
         let result = validate_search_environment(

@@ -8,7 +8,6 @@ pub(crate) trait Ranker: Send + Sync {
         scores: &[f32],
         metadata: &[ChunkMetadata],
         limit: usize,
-        index_time: &str,
         file_hint: Option<&str>,
     ) -> Vec<(usize, SearchResult)>;
 }
@@ -30,7 +29,6 @@ impl Ranker for DecayRanker {
         scores: &[f32],
         metadata: &[ChunkMetadata],
         limit: usize,
-        index_time: &str,
         file_hint: Option<&str>,
     ) -> Vec<(usize, SearchResult)> {
         rank_results(
@@ -39,7 +37,6 @@ impl Ranker for DecayRanker {
             limit,
             self.same_src_score_decay,
             self.file_hint_boost,
-            index_time,
             file_hint,
         )
     }
@@ -75,7 +72,6 @@ pub(crate) fn rank_results(
     limit: usize,
     same_src_score_decay: f32,
     file_hint_boost: f32,
-    index_time: &str,
     file_hint: Option<&str>,
 ) -> Vec<(usize, SearchResult)> {
     let limit = if limit == 0 { 3 } else { limit.clamp(1, 10) };
@@ -121,8 +117,6 @@ pub(crate) fn rank_results(
                 line_end: meta.line_end,
                 section_heading: meta.section_heading.clone(),
                 modified_at: meta.doc_ctx.modified_at.as_ref().map(|s| s.to_string()),
-                is_fresh: false,
-                index_time: index_time.to_string(),
             })
         })
         .collect()
@@ -195,14 +189,14 @@ mod tests {
 
     #[test]
     fn test_rank_results_empty_scores() {
-        let results = rank_results(&[], &[], 5, 0.5, 1.5, "now", None);
+        let results = rank_results(&[], &[], 5, 0.5, 1.5, None);
         assert!(results.is_empty());
     }
 
     #[test]
     fn test_rank_results_mismatched_lengths() {
         let meta = make_meta("doc.md", "Doc", "chunk 0", 0);
-        let results = rank_results(&[0.9], &[meta], 5, 0.5, 1.5, "now", None);
+        let results = rank_results(&[0.9], &[meta], 5, 0.5, 1.5, None);
         assert_eq!(results.len(), 1);
     }
 
@@ -212,11 +206,10 @@ mod tests {
         let meta_b = make_meta("doc_b.md", "Doc B", "chunk", 0);
         let scores = vec![0.9, 0.5];
         let metadata = vec![meta_a, meta_b];
-        let results = rank_results(&scores, &metadata, 5, 1.0, 1.0, "t0", None);
+        let results = rank_results(&scores, &metadata, 5, 1.0, 1.0, None);
         assert_eq!(results.len(), 2);
         assert!((results[0].1.total_score - 0.9).abs() < 1e-6);
         assert!((results[1].1.total_score - 0.5).abs() < 1e-6);
-        assert_eq!(results[0].1.index_time, "t0");
     }
 
     #[test]
@@ -226,12 +219,12 @@ mod tests {
         let scores = vec![0.5, 0.8];
         let metadata = vec![meta_a, meta_b];
         let results_no_hint =
-            rank_results(&scores, &metadata, 5, 1.0, 2.0, "t0", None);
+            rank_results(&scores, &metadata, 5, 1.0, 2.0, None);
         assert_eq!(results_no_hint[0].1.source_path, "other.md");
         assert!((results_no_hint[0].1.total_score - 0.8).abs() < 1e-6);
 
         let results_hint =
-            rank_results(&scores, &metadata, 5, 1.0, 2.0, "t0", Some("hinted.md"));
+            rank_results(&scores, &metadata, 5, 1.0, 2.0, Some("hinted.md"));
         assert_eq!(results_hint[0].1.source_path, "hinted.md");
         assert!((results_hint[0].1.total_score - 1.0).abs() < 1e-6);
         assert!((results_hint[1].1.total_score - 0.8).abs() < 1e-6);
