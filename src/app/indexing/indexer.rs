@@ -49,15 +49,15 @@ impl Indexer for FileIndexer {
             let embedder = self.embedder.clone();
             let console = console.clone();
             move || -> anyhow::Result<usize> {
-                let docs = collect_documents(&config, &console)?;
-                if docs.is_empty() {
+                let indexable_documents = collect_documents(&config, &console)?;
+                if indexable_documents.is_empty() {
                     index_repository.store(MergedIndex::empty()?)?;
                     return Ok(0);
                 }
-                let chunks = chunker::chunk_documents(&docs, &config);
+                let chunks = chunker::chunk_documents(&indexable_documents, &config);
                 console.info(&format!("Background indexing: {} chunks", chunks.len()));
                 let chunk_vectors = chunker::embed_chunks(&chunks, &embedder)?;
-                let chunk_metadatas = chunker::build_metadata(&docs, &chunks);
+                let chunk_metadatas = chunker::build_metadata(&indexable_documents, &chunks);
                 if chunk_metadatas.len() != chunk_vectors.len() {
                     anyhow::bail!(
                         "internal indexing mismatch: {} chunks but {} vectors",
@@ -108,7 +108,7 @@ fn collect_documents(
     config: &Config,
     console: &Arc<dyn Console>,
 ) -> anyhow::Result<Vec<IndexableDocument>> {
-    let mut all = Vec::new();
+    let mut indexable_documents = Vec::new();
     for entry in &config.index.doc_dirs {
         let spec = config.index.spec_for(entry);
         let root = PathBuf::from(&spec.root);
@@ -125,11 +125,11 @@ fn collect_documents(
         ));
         for rel in files {
             if let Some(doc) = read_document(&root, &rel) {
-                all.push(doc);
+                indexable_documents.push(doc);
             }
         }
     }
-    Ok(all)
+    Ok(indexable_documents)
 }
 
 fn discover_files(root: &Path, recursive: bool, patterns: &[String]) -> Vec<String> {
