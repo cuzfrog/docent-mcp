@@ -95,13 +95,10 @@ export class View {
         if (el) el.textContent = text;
       };
 
-      const isGit = result.kind === 'git';
-
-      // Kind badge
       const badge = clone.querySelector('.result-kind-badge');
       if (badge) {
-        badge.textContent = isGit ? 'Git' : 'File';
-        badge.classList.add(isGit ? 'badge-git' : 'badge-file');
+        badge.textContent = 'File';
+        badge.classList.add('badge-file');
       }
 
       setText('.result-title', result.title);
@@ -117,15 +114,6 @@ export class View {
         linkBtn.dataset.link = `${result.sourcePath}#L${result.lineStart}${result.lineEnd !== result.lineStart ? '-L' + result.lineEnd : ''}`;
       }
 
-      // Freshness badge (git only)
-      if (isGit) {
-        const freshness = clone.querySelector('.result-freshness');
-        if (freshness) {
-          freshness.textContent = result.isFresh ? 'Fresh' : 'Stale';
-          freshness.classList.add(result.isFresh ? 'badge-fresh' : 'badge-stale');
-        }
-      }
-
       const { display, tooltip } = this.formatScore(result, maxScore);
       const scoreEl = clone.querySelector('.result-score');
       if (scoreEl) {
@@ -137,11 +125,7 @@ export class View {
       }
       setText('.result-content', result.matchedContent);
 
-      // Unified footer: timestamp | revision
-      const tsLabel = isGit ? 'Committed' : 'Modified';
-      const revLabel = 'SHA';
-      const revValue = result.sourceRevision;
-      const footerText = `${tsLabel}: ${this.formatTime(result.modifiedAt)}  |  ${revLabel}: ${revValue}`;
+      const footerText = `Modified: ${this.formatTime(result.modifiedAt)}  |  SHA: ${result.sourceRevision}`;
       setText('.result-footer-text', footerText);
 
       this.elements.results.appendChild(clone);

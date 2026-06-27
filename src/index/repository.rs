@@ -18,7 +18,6 @@ pub(crate) struct MergedIndex {
     pub(crate) metadata: Vec<ChunkMetadata>,
     pub(crate) bm25_embeddings: Vec<bm25::Embedding<u32>>,
     pub(crate) bm25_avgdl: f32,
-    pub(crate) built_at: String,
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -82,7 +81,6 @@ impl IndexRepository for FileSystemIndexRepository {
             .collect();
 
         let semantic = SemanticIndex {
-            header: stored.header,
             vectors: stored.vectors,
             metadata,
         };

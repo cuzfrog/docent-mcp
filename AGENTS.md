@@ -4,7 +4,7 @@
 
 ## Architecture
 ```
-  files/git ──▼── index ──▶  MCP server  ◀──── query
+  files ──▼── index ──▶  MCP server  ◀──── query
                  (cache)        (HTTP)
 ```
 
@@ -26,8 +26,9 @@
 - **Use fixed dependency versions** Avoid `*` or `^` to prevent unintentional updates. `=` should be explicitly used. This applies to all dependencies, including python and javascript.
 - **Clean mod.rs** The file should not contain anything except module definition and re-export.
 
-### Test Mocking
-When writing mocks, refer to @doc/AGENTS_MOCKING.md.
+### Testing
+- When writing mocks, refer to @doc/AGENTS_MOCKING.md.
+- See @doc/Development.md for e2e test.
 
 ### Single file layout (ordered from top to bottom)
 1. imports

@@ -6,7 +6,6 @@
 // - test_vectors_are_deterministic — deterministic mock embedder assertions
 // - test_index_preserves_metadata_fields — metadata round-trip through index
 // - file_only_missing_bm25_rebuilds_on_load — BM25 auto-rebuild for file index
-// - git_only_missing_bm25_rebuilds_on_load — BM25 auto-rebuild for git index
 // - dual_source_one_side_missing_bm25 — mixed source BM25 repair
 // - idempotent_bm25_repair — BM25 rebuild idempotency
 //

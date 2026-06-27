@@ -28,7 +28,6 @@ const HTML = `<!DOCTYPE html>
     <div class="result-source-line">
       <span class="result-source"></span>
       <span class="result-lines"></span>
-      <span class="result-freshness"></span>
       <button class="copy-link-btn">Copy link</button>
     </div>
     <div class="result-meta">
@@ -101,10 +100,7 @@ describe('View', () => {
         lineEnd: 20,
         sectionHeading: 'Intro',
         modifiedAt: '2024-01-15T10:00:00Z',
-        kind: 'file',
         sourceRevision: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
-        isFresh: false,
-        indexTime: '2026-05-06T12:00:00Z',
       },
     ];
     view.renderResults(results);
@@ -117,57 +113,13 @@ describe('View', () => {
     assert.equal(card.querySelector('.result-score').title, 'semantic: 0.95, bm25: 0.75, raw: 0.8500');
     assert.ok(card.querySelector('.result-lines'));
     assert.equal(card.querySelector('.result-section').textContent, 'Intro');
-    // Kind badge
     const badge = card.querySelector('.result-kind-badge');
     assert.equal(badge.textContent, 'File');
     assert.ok(badge.classList.contains('badge-file'));
-    // Freshness badge not rendered for file kind
-    assert.ok(!card.querySelector('.result-freshness').textContent);
-    // Footer
+    assert.ok(!card.querySelector('.result-freshness'));
     const footer = card.querySelector('.result-footer-text');
     assert.match(footer.textContent, /^Modified:/);
     assert.match(footer.textContent, /SHA: a1b2c3d4e5f6/);
-  });
-
-  it('should render valid git results with freshness badge', () => {
-    const view = new View(dom.window.document);
-    const results = [
-      {
-        title: 'feat: add caching',
-        sourcePath: 'src/cache.rs',
-        matchedContent: '+ fn get() {}',
-        total_score: 0.72,
-        semantic_score: 0.85,
-        bm25_score: 0.60,
-        lineStart: 10,
-        lineEnd: 45,
-        sectionHeading: null,
-        modifiedAt: '2024-03-20T10:00:00Z',
-        kind: 'git',
-        sourceRevision: 'a1b2c3d7e8f9a1b2c3d7e8f9a1b2c3d7e8f9a1b2',
-        isFresh: true,
-        indexTime: '2026-05-06T12:00:00Z',
-      },
-    ];
-    view.renderResults(results);
-    const resultsEl = view.elements.results;
-    const card = resultsEl.querySelector('.result-card');
-    assert.ok(card);
-    // Kind badge
-    const badge = card.querySelector('.result-kind-badge');
-    assert.equal(badge.textContent, 'Git');
-    assert.ok(badge.classList.contains('badge-git'));
-    // Score with breakdown tooltip
-    assert.match(card.querySelector('.result-score').textContent, /100%/);
-    assert.equal(card.querySelector('.result-score').title, 'semantic: 0.85, bm25: 0.60, raw: 0.7200');
-    // Freshness badge
-    const freshness = card.querySelector('.result-freshness');
-    assert.equal(freshness.textContent, 'Fresh');
-    assert.ok(freshness.classList.contains('badge-fresh'));
-    // Footer
-    const footer = card.querySelector('.result-footer-text');
-    assert.match(footer.textContent, /^Committed:/);
-    assert.match(footer.textContent, /SHA: a1b2c3d7e8f9/);
   });
 
   it('should render error card with message', () => {
@@ -247,10 +199,7 @@ describe('View', () => {
         lineEnd: 5,
         sectionHeading: null,
         modifiedAt: '2024-01-01T00:00:00Z',
-        kind: 'file',
         sourceRevision: 'aabbcc',
-        isFresh: false,
-        indexTime: '2026-01-01T00:00:00Z',
       },
       {
         title: 'Second',
@@ -263,10 +212,7 @@ describe('View', () => {
         lineEnd: 5,
         sectionHeading: null,
         modifiedAt: '2024-01-01T00:00:00Z',
-        kind: 'file',
         sourceRevision: 'ddeeff',
-        isFresh: false,
-        indexTime: '2026-01-01T00:00:00Z',
       },
     ];
     view.renderResults(results);

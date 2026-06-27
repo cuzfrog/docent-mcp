@@ -6,7 +6,6 @@ use std::path::Path;
 /// In-memory representation of a persisted semantic index.
 #[derive(Debug)]
 pub(super) struct StoredIndex {
-    pub(super) header: IndexHeader,
     pub(super) vectors: Vector,
     pub(super) metadata: Vec<StoredChunkMetadata>,
 }
@@ -120,7 +119,7 @@ pub(super) fn read_semantic_index(path: &Path) -> anyhow::Result<StoredIndex> {
     let vectors = read_vectors(path, &header)?;
     let metadata = read_metadata(path)?;
     validate_consistency(&header, &vectors, &metadata)?;
-    Ok(StoredIndex { header, vectors, metadata })
+    Ok(StoredIndex { vectors, metadata })
 }
 
 #[cfg(test)]
@@ -200,7 +199,6 @@ mod tests {
         assert_eq!(vectors_meta.len(), 3 * 4 * 4);
 
         let stored = read_semantic_index(&temp_dir).unwrap();
-        assert_eq!(stored.header, header);
         assert_eq!(stored.vectors, vector_store);
         assert_eq!(stored.metadata, metadata);
 
@@ -628,7 +626,6 @@ mod tests {
         write_semantic_index(&temp_dir, &header, &vector_store, &metadata).unwrap();
 
         let stored = read_semantic_index(&temp_dir).unwrap();
-        assert_eq!(stored.header, header);
         assert!(stored.vectors.is_empty());
         assert!(stored.metadata.is_empty());
 
