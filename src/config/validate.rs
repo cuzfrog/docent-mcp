@@ -52,11 +52,6 @@ impl Config {
         if self.search.bm25.b < 0.0 || self.search.bm25.b > 1.0 {
             anyhow::bail!("search.bm25.b must be in range 0.0..=1.0, got {}", self.search.bm25.b);
         }
-        if let Some(file) = &self.file {
-            if file.glob_patterns.is_empty() {
-                anyhow::bail!("file glob_patterns must not be empty");
-            }
-        }
         Ok(())
     }
 }

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::app::index::processor::IndexingProcessor;
 use crate::app::index::{IndexOutcome, IndexRequest, Indexer};
-use crate::config::{Config, FileConfig};
+use crate::config::{Config, GLOB_PATTERNS};
 use crate::index::IndexRepository;
 use crate::support::Console;
 
@@ -19,7 +19,6 @@ pub(crate) fn create_file_indexer(
     processor: Box<dyn IndexingProcessor>,
     repo: Arc<dyn IndexRepository>,
 ) -> impl Indexer {
-    config.file.as_ref().expect("FileIndexer requires file config");
     FileIndexer {
         console,
         config: config.clone(),
@@ -39,8 +38,8 @@ impl Indexer for FileIndexer {
 }
 
 impl FileIndexer {
-    pub(super) fn file_config(&self) -> &FileConfig {
-        self.config.file.as_ref().expect("FileIndexer requires file config")
+    pub(super) fn glob_patterns(&self) -> Vec<String> {
+        GLOB_PATTERNS.iter().map(|s| s.to_string()).collect()
     }
 }
 

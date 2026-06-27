@@ -83,11 +83,6 @@ same_src_score_decay = 0.95
         assert_eq!(config.index.chunk_overlap, 64);
         assert_eq!(config.index.max_size_mb, 512);
 
-        let file = config.file.expect("file section should be present");
-        assert!(file.enabled);
-        assert_eq!(file.glob_patterns, vec!["*.md".to_string()]);
-        assert_eq!(file.file_size_limit_mb, 2);
-
         assert!((config.search.ranking.same_src_score_decay - 0.9).abs() < f32::EPSILON);
 
         assert_eq!(config.server.log_level, "debug");

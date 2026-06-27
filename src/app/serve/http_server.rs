@@ -14,10 +14,9 @@ use crate::support::Console;
 // Search service bootstrap
 // ---------------------------------------------------------------------------
 
-/// On-disk size breakdown of the persisted index directories.
+/// On-disk size of the persisted index directory.
 struct IndexSizeInfo {
     total_bytes: u64,
-    file_bytes: u64,
 }
 
 /// Check whether the index exceeds the configured size limit.
@@ -27,12 +26,6 @@ fn check_index_size(persist_path: &Path, max_size_mb: u64) -> anyhow::Result<Opt
     if total_size > max_bytes {
         Ok(Some(IndexSizeInfo {
             total_bytes: total_size,
-            file_bytes: if persist_path.join("file").exists() {
-                crate::support::dir_size(&persist_path.join("file"))
-            } else {
-                0
-            },
-
         }))
     } else {
         Ok(None)
@@ -55,12 +48,6 @@ fn validate_search_environment(
             info.total_bytes as f64 / (1024.0 * 1024.0),
             config.index.max_size_mb
         ));
-        if persist_path.join("file").exists() {
-            console.warn(&format!(
-                "  file/ subdirectory: {:.1} MB",
-                info.file_bytes as f64 / (1024.0 * 1024.0)
-            ));
-        }
         if !console.confirm("Continue?")? {
             anyhow::bail!("Aborted by user.");
         }
@@ -174,7 +161,6 @@ mod tests {
         |_, _| {
             Ok(Some(IndexSizeInfo {
                 total_bytes: 600 * 1024 * 1024,
-                file_bytes: 600 * 1024 * 1024,
             }))
         }
     }

@@ -54,7 +54,7 @@ impl FileIndexer {
             }
             Err(IndexLoadError::Other(e)) => return Err(e),
         };
-        let all_files = super::discover::discover_files(&request.input_path, &self.file_config().glob_patterns)?;
+        let all_files = super::discover::discover_files(&request.input_path, &self.glob_patterns())?;
         let diff = super::diff::diff_files(&all_files, &old_hashes, &request.input_path)?;
         self.console.info(&format!(
             "Processing Files: {} new/changed, {} deleted, {} unchanged",
@@ -63,7 +63,7 @@ impl FileIndexer {
         if diff.to_index.is_empty() && diff.deleted_count == 0 && index_exists {
             return Ok(IndexOutcome::UpToDate);
         }
-        let docs = super::extract::extract_documents(&diff.to_index, &request.input_path, self.file_config().file_size_limit_mb)?;
+        let docs = super::extract::extract_documents(&diff.to_index, &request.input_path)?;
 
         let (batch, dims) = self.processor.run(&docs)?;
         let merged = super::merge::merge_incremental(

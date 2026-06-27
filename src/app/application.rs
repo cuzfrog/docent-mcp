@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -29,29 +28,23 @@ pub fn create_application(config: &Config) -> anyhow::Result<impl Application> {
         std::path::Path::new(&config.index.cache_dir),
     )?);
 
-    let mut indexers: HashMap<String, Box<dyn Indexer>> = HashMap::new();
-    if config.file_enabled() {
-        indexers.insert(
-            "file".to_string(),
-            create_indexer(
-                config,
-                Box::new(create_console()),
-                Arc::clone(&factory),
-            )?,
-        );
-    }
+    let indexer = create_indexer(
+        config,
+        Box::new(create_console()),
+        factory,
+    )?;
 
     Ok(AppImpl {
         console,
         server,
-        indexers,
+        indexer,
     })
 }
 
 struct AppImpl {
     console: Box<dyn Console>,
     server: Box<dyn HttpServer>,
-    indexers: HashMap<String, Box<dyn Indexer>>,
+    indexer: Box<dyn Indexer>,
 }
 
 #[async_trait]
@@ -60,18 +53,12 @@ impl Application for AppImpl {
         let dir = input_path.unwrap_or_else(|| PathBuf::from("."));
         let dir = dir.canonicalize()?;
 
-        if self.indexers.is_empty() {
-            return Ok(());
-        }
-
-        for indexer in self.indexers.values() {
-            let request = IndexRequest {
-                input_path: dir.clone(),
-                rebuild,
-            };
-            let outcome = indexer.run(&request)?;
-            self.emit_outcome(outcome.format_for_ui());
-        }
+        let request = IndexRequest {
+            input_path: dir,
+            rebuild,
+        };
+        let outcome = self.indexer.run(&request)?;
+        self.emit_outcome(outcome.format_for_ui());
 
         Ok(())
     }
@@ -93,28 +80,4 @@ impl AppImpl {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::serve::HttpServer;
-    use async_trait::async_trait;
-
-    struct MockHttpServer;
-
-    #[async_trait]
-    impl HttpServer for MockHttpServer {
-        async fn serve(&self) -> anyhow::Result<()> {
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn run_index_skips_when_no_kinds_enabled() {
-        let app = AppImpl {
-            console: Box::new(create_console()),
-            server: Box::new(MockHttpServer),
-            indexers: HashMap::new(),
-        };
-        let result = app.run_index(None, false);
-        assert!(result.is_ok());
-    }
-}
+mod tests {}

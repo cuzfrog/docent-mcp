@@ -11,7 +11,7 @@ pub use types::{
     RankingConfig,
     FusionConfig,
     Bm25Config,
-    FileConfig,
+    GLOB_PATTERNS,
 };
 
 #[cfg(test)]
