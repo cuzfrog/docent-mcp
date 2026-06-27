@@ -56,11 +56,7 @@ impl SearchService for SearchServiceImpl {
                 search_config.bm25.k1,
                 search_config.bm25.b,
             );
-            let score_fusion = create_fusion(
-                &search_config.fusion.strategy,
-                search_config.fusion.rrf_k,
-                search_config.fusion.semantic_weight,
-            )?;
+            let score_fusion = create_fusion(&search_config.fusion.strategy);
             let ranker = create_decay_ranker(
                 search_config.ranking.same_src_score_decay,
                 search_config.ranking.file_hint_boost,
@@ -106,7 +102,7 @@ impl SearchService for SearchServiceImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Bm25Config, FusionConfig, RankingConfig, SearchConfig};
+    use crate::config::{Bm25Config, FusionConfig, FusionStrategy, RankingConfig, SearchConfig};
     use crate::domain::{ChunkMetadata, DocumentContext, Vector};
     use crate::index::mock_embedder;
     use crate::index::mock_repository_returning_merged;
@@ -118,9 +114,7 @@ mod tests {
                 file_hint_boost: 1.5,
             },
             fusion: FusionConfig {
-                strategy: "rrf".to_string(),
-                rrf_k: 60.0,
-                semantic_weight: 0.7,
+                strategy: FusionStrategy::Rrf { k: 60.0 },
             },
             bm25: Bm25Config {
                 k1: 1.2,

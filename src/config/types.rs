@@ -52,13 +52,18 @@ pub struct RankingConfig {
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
+#[serde(tag = "strategy", rename_all = "snake_case")]
+pub enum FusionStrategy {
+    Rrf { k: f32 },
+    WeightedSum { semantic_weight: f32 },
+    CombSum,
+    CombMnz,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct FusionConfig {
     #[serde(default = "super::defaults::default_fusion_strategy")]
-    pub strategy: String,
-    #[serde(default = "super::defaults::default_rrf_k")]
-    pub rrf_k: f32,
-    #[serde(default = "super::defaults::default_semantic_weight")]
-    pub semantic_weight: f32,
+    pub strategy: FusionStrategy,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -102,8 +107,6 @@ impl Default for FusionConfig {
     fn default() -> Self {
         Self {
             strategy: super::defaults::default_fusion_strategy(),
-            rrf_k: super::defaults::default_rrf_k(),
-            semantic_weight: super::defaults::default_semantic_weight(),
         }
     }
 }

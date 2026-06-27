@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::config::FusionStrategy;
+
 pub(crate) trait ScoreFusion: Send + Sync {
     fn fuse(&self, semantic: &[f32], bm25: &[f32]) -> Vec<f32>;
 }
@@ -111,17 +113,14 @@ impl ScoreFusion for CombMnzFusion {
     }
 }
 
-pub(crate) fn create_fusion(
-    strategy: &str,
-    rrf_k: f32,
-    semantic_weight: f32,
-) -> anyhow::Result<Arc<dyn ScoreFusion>> {
+pub(crate) fn create_fusion(strategy: &FusionStrategy) -> Arc<dyn ScoreFusion> {
     match strategy {
-        "rrf" => Ok(Arc::new(RrfFusion { k: rrf_k })),
-        "weighted_sum" => Ok(Arc::new(WeightedSumFusion { semantic_weight })),
-        "comb_sum" => Ok(Arc::new(CombSumFusion)),
-        "comb_mnz" => Ok(Arc::new(CombMnzFusion)),
-        other => anyhow::bail!("Unknown fusion strategy: {}", other),
+        FusionStrategy::Rrf { k } => Arc::new(RrfFusion { k: *k }),
+        FusionStrategy::WeightedSum { semantic_weight } => {
+            Arc::new(WeightedSumFusion { semantic_weight: *semantic_weight })
+        }
+        FusionStrategy::CombSum => Arc::new(CombSumFusion),
+        FusionStrategy::CombMnz => Arc::new(CombMnzFusion),
     }
 }
 
@@ -176,7 +175,7 @@ mod tests {
 
     #[test]
     fn test_create_fusion_default_rrf() {
-        let f = create_fusion("rrf", 60.0, 0.7).unwrap();
+        let f = create_fusion(&FusionStrategy::Rrf { k: 60.0 });
         let result = f.fuse(&[0.9], &[0.1]);
         assert_eq!(result.len(), 1);
     }

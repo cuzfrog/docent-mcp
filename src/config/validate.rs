@@ -1,4 +1,4 @@
-use crate::config::types::Config;
+use crate::config::types::{Config, FusionStrategy};
 
 impl Config {
     pub fn validate(&self) -> anyhow::Result<()> {
@@ -26,18 +26,21 @@ impl Config {
                 self.search.ranking.same_src_score_decay
             );
         }
-        match self.search.fusion.strategy.as_str() {
-            "rrf" | "weighted_sum" | "comb_sum" | "comb_mnz" => {}
-            other => anyhow::bail!(
-                "search.fusion.strategy must be one of rrf, weighted_sum, comb_sum, comb_mnz, got '{}'",
-                other
-            ),
-        }
-        if self.search.fusion.rrf_k <= 0.0 {
-            anyhow::bail!("rrf_k must be positive, got {}", self.search.fusion.rrf_k);
-        }
-        if self.search.fusion.semantic_weight < 0.0 || self.search.fusion.semantic_weight > 1.0 {
-            anyhow::bail!("semantic_weight must be in range 0.0..=1.0, got {}", self.search.fusion.semantic_weight);
+        match &self.search.fusion.strategy {
+            FusionStrategy::Rrf { k } => {
+                if *k <= 0.0 {
+                    anyhow::bail!("rrf.k must be positive, got {}", k);
+                }
+            }
+            FusionStrategy::WeightedSum { semantic_weight } => {
+                if *semantic_weight < 0.0 || *semantic_weight > 1.0 {
+                    anyhow::bail!(
+                        "weighted_sum.semantic_weight must be in range 0.0..=1.0, got {}",
+                        semantic_weight
+                    );
+                }
+            }
+            FusionStrategy::CombSum | FusionStrategy::CombMnz => {}
         }
         if self.search.bm25.k1 <= 0.0 {
             anyhow::bail!("search.bm25.k1 must be positive, got {}", self.search.bm25.k1);
@@ -146,22 +149,16 @@ mod tests {
 
     #[test]
     fn test_invalid_fusion_strategy_validation_error() {
-        let config = Config {
-            index: IndexConfig {
-                embedding_model: "BGESmallENV15Q".to_string(),
-                ..IndexConfig::default()
-            },
-            search: SearchConfig {
-                fusion: FusionConfig {
-                    strategy: "invalid".to_string(),
-                    ..FusionConfig::default()
-                },
-                ..SearchConfig::default()
-            },
-            ..Config::default()
-        };
-        let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("search.fusion.strategy must be one of"));
+        let toml_str = r#"
+[index]
+embedding_model = "BGESmallENV15Q"
+
+[search.fusion.strategy]
+strategy = "invalid"
+"#;
+        let result: Result<Config, _> = toml::from_str(toml_str);
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("unknown variant"));
     }
 
     #[test]
@@ -173,15 +170,14 @@ mod tests {
             },
             search: SearchConfig {
                 fusion: FusionConfig {
-                    rrf_k: 0.0,
-                    ..FusionConfig::default()
+                    strategy: FusionStrategy::Rrf { k: 0.0 },
                 },
                 ..SearchConfig::default()
             },
             ..Config::default()
         };
         let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("rrf_k must be positive"));
+        assert!(err.to_string().contains("rrf.k must be positive"));
     }
 
     #[test]
@@ -193,15 +189,14 @@ mod tests {
             },
             search: SearchConfig {
                 fusion: FusionConfig {
-                    semantic_weight: 1.5,
-                    ..FusionConfig::default()
+                    strategy: FusionStrategy::WeightedSum { semantic_weight: 1.5 },
                 },
                 ..SearchConfig::default()
             },
             ..Config::default()
         };
         let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("semantic_weight must be in range"));
+        assert!(err.to_string().contains("weighted_sum.semantic_weight must be in range"));
     }
 
     #[test]
