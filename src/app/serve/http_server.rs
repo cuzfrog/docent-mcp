@@ -4,7 +4,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use axum::Router;
 
-use crate::app::index_runner::{create_index_runner, IndexRunner};
+use crate::app::indexing::{create_indexer, Indexer};
 use crate::app::serve::mcp_server::{create_mcp_server, MCPServer};
 use crate::app::serve::search::{create_search_service, SearchService};
 use crate::config::Config;
@@ -36,7 +36,7 @@ pub fn create_http_server(
     let shared_search = create_search_service(repo.as_ref(), embedder.clone(), &config.search);
     let search_service: Arc<dyn SearchService> = shared_search.as_arc_dyn();
 
-    let index_runner = create_index_runner(
+    let indexer = create_indexer(
         config.clone(),
         repo.clone(),
         embedder.clone(),
@@ -49,7 +49,7 @@ pub fn create_http_server(
         router,
         config,
         console,
-        index_runner,
+        indexer,
     }))
 }
 
@@ -57,14 +57,14 @@ struct TokioHttpServer {
     router: Router,
     config: Config,
     console: Arc<dyn Console>,
-    index_runner: Arc<dyn IndexRunner>,
+    indexer: Arc<dyn Indexer>,
 }
 
 #[async_trait]
 impl HttpServer for TokioHttpServer {
     async fn serve(&self) -> anyhow::Result<()> {
         // Kick off background indexing so the HTTP listener is not blocked.
-        let runner = self.index_runner.clone();
+        let runner = self.indexer.clone();
         let console = self.console.clone();
         tokio::spawn(async move {
             runner.run(console).await;

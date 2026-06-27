@@ -10,20 +10,22 @@ use crate::index::{Embedder, IndexRepository, MergedIndex};
 use crate::support::{matches_any_pattern, Console};
 use crate::support::path_to_string;
 
+use super::chunker;
+
 const GLOB_DEFAULT: &[&str] = GLOB_PATTERNS;
 
 #[async_trait]
-pub trait IndexRunner: Send + Sync {
+pub trait Indexer: Send + Sync {
     async fn run(&self, console: Arc<dyn Console>);
 }
 
-pub fn create_index_runner(
+pub fn create_indexer(
     config: Config,
     repo: Arc<dyn IndexRepository>,
     embedder: Arc<Mutex<dyn Embedder>>,
     search: SharedSearchService,
-) -> Arc<dyn IndexRunner> {
-    Arc::new(FileIndexRunner {
+) -> Arc<dyn Indexer> {
+    Arc::new(FileIndexer {
         config,
         repo,
         embedder,
@@ -31,7 +33,7 @@ pub fn create_index_runner(
     })
 }
 
-struct FileIndexRunner {
+struct FileIndexer {
     config: Config,
     repo: Arc<dyn IndexRepository>,
     embedder: Arc<Mutex<dyn Embedder>>,
@@ -39,7 +41,7 @@ struct FileIndexRunner {
 }
 
 #[async_trait]
-impl IndexRunner for FileIndexRunner {
+impl Indexer for FileIndexer {
     async fn run(&self, console: Arc<dyn Console>) {
         let console = console;
         console.info("Background indexing: scanning documents...");
@@ -55,10 +57,10 @@ impl IndexRunner for FileIndexRunner {
                     repo.store(MergedIndex::empty());
                     return Ok(0);
                 }
-                let chunks = chunk_documents(&docs, &config);
+                let chunks = chunker::chunk_documents(&docs, &config);
                 console.info(&format!("Background indexing: {} chunks", chunks.len()));
-                let vectors = embed_chunks(&chunks, &embedder)?;
-                let metadata = build_metadata(&docs, &chunks);
+                let vectors = chunker::embed_chunks(&chunks, &embedder)?;
+                let metadata = chunker::build_metadata(&docs, &chunks);
                 let dims = embedder.lock().expect("embedder poisoned").dims();
                 if metadata.len() != vectors.len() {
                     anyhow::bail!(
@@ -102,7 +104,10 @@ impl IndexRunner for FileIndexRunner {
     }
 }
 
-fn collect_documents(config: &Config, console: &Arc<dyn Console>) -> anyhow::Result<Vec<IndexableDocument>> {
+fn collect_documents(
+    config: &Config,
+    console: &Arc<dyn Console>,
+) -> anyhow::Result<Vec<IndexableDocument>> {
     let mut all = Vec::new();
     for entry in &config.index.doc_dirs {
         let spec = config.index.spec_for(entry);
@@ -208,179 +213,9 @@ fn extract_title(body: &str) -> Option<String> {
     None
 }
 
-struct RawChunk {
-    doc_index: usize,
-    text: String,
-    section_heading: Option<String>,
-    chunk_index: usize,
-    line_start: usize,
-    line_end: usize,
-}
-
-fn chunk_documents(docs: &[IndexableDocument], config: &Config) -> Vec<RawChunk> {
-    let mut out = Vec::new();
-    for (doc_index, doc) in docs.iter().enumerate() {
-        let chunks = simple_chunk(&doc.body, config.index.chunk_size, config.index.chunk_overlap);
-        for (chunk_index, chunk) in chunks.into_iter().enumerate() {
-            out.push(RawChunk {
-                doc_index,
-                text: chunk.text,
-                section_heading: chunk.section_heading,
-                chunk_index,
-                line_start: chunk.line_start,
-                line_end: chunk.line_end,
-            });
-        }
-    }
-    out
-}
-
-struct SimpleChunk {
-    text: String,
-    section_heading: Option<String>,
-    line_start: usize,
-    line_end: usize,
-}
-
-/// Paragraph-aware chunker: splits on blank lines (and within long paragraphs by char
-/// budget). Approximates the legacy `Chunker` for the in-memory rebuild path.
-fn simple_chunk(body: &str, chunk_size: usize, chunk_overlap: usize) -> Vec<SimpleChunk> {
-    let mut sections: Vec<(Option<String>, String, usize, usize)> = Vec::new();
-    let mut current_heading: Option<String> = None;
-    let mut current_lines: Vec<String> = Vec::new();
-    let mut current_start: usize = 0;
-
-    for (idx, raw_line) in body.lines().enumerate() {
-        let line = raw_line.to_string();
-        if let Some(h) = line.trim_start().strip_prefix("# ") {
-            if !current_lines.is_empty() {
-                sections.push((
-                    current_heading.clone(),
-                    current_lines.join("\n"),
-                    current_start,
-                    idx,
-                ));
-                current_lines.clear();
-            }
-            current_heading = Some(h.to_string());
-            current_start = idx + 1;
-            continue;
-        }
-        if line.trim().is_empty() && !current_lines.is_empty() {
-            sections.push((
-                current_heading.clone(),
-                current_lines.join("\n"),
-                current_start,
-                idx,
-            ));
-            current_lines.clear();
-            current_start = idx + 1;
-            continue;
-        }
-        if current_lines.is_empty() {
-            current_start = idx + 1;
-        }
-        current_lines.push(line);
-    }
-    if !current_lines.is_empty() {
-        let last_idx = body.lines().count();
-        sections.push((
-            current_heading.clone(),
-            current_lines.join("\n"),
-            current_start,
-            last_idx,
-        ));
-    }
-
-    let mut out: Vec<SimpleChunk> = Vec::new();
-    for (heading, text, start, end) in sections {
-        let approx_chars = chunk_size.saturating_mul(4);
-        let overlap_chars = chunk_overlap.saturating_mul(4);
-        if text.chars().count() <= approx_chars.max(1) {
-            out.push(SimpleChunk {
-                text,
-                section_heading: heading,
-                line_start: start + 1,
-                line_end: end,
-            });
-            continue;
-        }
-        let chars: Vec<char> = text.chars().collect();
-        let mut i = 0;
-        let mut local_idx = 0;
-        while i < chars.len() {
-            let end_i = (i + approx_chars).min(chars.len());
-            let slice: String = chars[i..end_i].iter().collect();
-            out.push(SimpleChunk {
-                text: slice,
-                section_heading: heading.clone(),
-                line_start: start + 1,
-                line_end: end,
-            });
-            local_idx += 1;
-            if end_i >= chars.len() {
-                break;
-            }
-            i = end_i.saturating_sub(overlap_chars);
-        }
-        let _ = local_idx;
-    }
-    out
-}
-
-fn embed_chunks(
-    chunks: &[RawChunk],
-    embedder: &Arc<Mutex<dyn Embedder>>,
-) -> anyhow::Result<Vec<Vec<f32>>> {
-    const BATCH: usize = 64;
-    let mut all = Vec::with_capacity(chunks.len());
-    for batch in chunks.chunks(BATCH) {
-        let batch_texts: Vec<String> = batch.iter().map(|c| c.text.clone()).collect();
-        let mut emb = embedder.lock().expect("embedder poisoned");
-        let vectors = emb.embed(&batch_texts)?;
-        all.extend(vectors);
-    }
-    Ok(all)
-}
-
-fn build_metadata(docs: &[IndexableDocument], chunks: &[RawChunk]) -> Vec<crate::domain::ChunkMetadata> {
-    chunks
-        .iter()
-        .map(|c| crate::domain::ChunkMetadata {
-            doc_ctx: docs[c.doc_index].doc_context(),
-            chunk_text: c.text.clone(),
-            section_heading: c.section_heading.clone(),
-            chunk_index: c.chunk_index,
-            line_start: c.line_start,
-            line_end: c.line_end,
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn simple_chunk_short_body_single_chunk() {
-        let chunks = simple_chunk("hello world", 8, 1);
-        assert_eq!(chunks.len(), 1);
-        assert_eq!(chunks[0].text, "hello world");
-    }
-
-    #[test]
-    fn simple_chunk_splits_long_body() {
-        let body = "a".repeat(4000);
-        let chunks = simple_chunk(&body, 64, 4);
-        assert!(chunks.len() > 1);
-    }
-
-    #[test]
-    fn simple_chunk_respects_headings() {
-        let body = "# Title\n\nbody\n\n## Sub\n\nmore";
-        let chunks = simple_chunk(body, 64, 4);
-        assert!(chunks.iter().any(|c| c.section_heading.as_deref() == Some("Title")));
-    }
 
     #[test]
     fn extract_title_prefers_h1() {
