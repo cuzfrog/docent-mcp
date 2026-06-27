@@ -117,7 +117,7 @@ fn collect_documents(
             continue;
         }
         let patterns: Vec<String> = GLOB_PATTERNS.iter().map(|s| s.to_string()).collect();
-        let files = discover_files(&root, spec.recursive, &patterns);
+        let files = discover_files(&root, spec.recursive, &patterns, console);
         console.info(&format!(
             "Scanning '{}': {} files",
             spec.root,
@@ -132,19 +132,31 @@ fn collect_documents(
     Ok(indexable_documents)
 }
 
-fn discover_files(root: &Path, recursive: bool, patterns: &[String]) -> Vec<String> {
+fn discover_files(
+    root: &Path,
+    recursive: bool,
+    patterns: &[String],
+    console: &Arc<dyn Console>,
+) -> Vec<String> {
     let mut out = Vec::new();
     let walker = if recursive {
         walkdir::WalkDir::new(root)
     } else {
         walkdir::WalkDir::new(root).max_depth(1)
     };
-    for entry in walker.into_iter().filter_map(|e| e.ok()) {
+    for entry in walker {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => {
+                console.warn(&format!("Skipping path due to walk error: {}", e));
+                continue;
+            }
+        };
         if !entry.file_type().is_file() {
             continue;
         }
-        let path = entry.path();
-        let rel = match path.strip_prefix(root) {
+        let entry_path = entry.path();
+        let rel = match entry_path.strip_prefix(root) {
             Ok(r) => path_to_string(r),
             Err(_) => continue,
         };
@@ -241,7 +253,8 @@ mod tests {
         std::fs::write(tmp.join("a.md"), "a").unwrap();
         std::fs::write(tmp.join("nested").join("b.md"), "b").unwrap();
         let patterns = vec!["*.md".to_string()];
-        let files = discover_files(&tmp, false, &patterns);
+        let console: Arc<dyn Console> = Arc::new(crate::support::create_console());
+        let files = discover_files(&tmp, false, &patterns, &console);
         assert_eq!(files, vec!["a.md".to_string()]);
         let _ = std::fs::remove_dir_all(&tmp);
     }
@@ -254,7 +267,8 @@ mod tests {
         std::fs::write(tmp.join("a.md"), "a").unwrap();
         std::fs::write(tmp.join("nested").join("b.md"), "b").unwrap();
         let patterns = vec!["*.md".to_string()];
-        let mut files = discover_files(&tmp, true, &patterns);
+        let console: Arc<dyn Console> = Arc::new(crate::support::create_console());
+        let mut files = discover_files(&tmp, true, &patterns, &console);
         files.sort();
         assert_eq!(files, vec!["a.md".to_string(), "nested/b.md".to_string()]);
         let _ = std::fs::remove_dir_all(&tmp);
