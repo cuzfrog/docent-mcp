@@ -1,11 +1,11 @@
 use std::sync::{Arc, RwLock};
 
 use crate::config::SearchConfig;
-use crate::index::{Embedder, IndexRepository};
+use crate::index::{Embedder, IndexRepository, MergedIndex};
 use crate::app::serve::search::backend::{build_backends, ScoreBackend};
 use super::fusion::create_fusion;
-use crate::app::serve::search::orchestrator::HybridSearchService;
-use super::ranking::DecayRanker;
+use super::orchestrator::HybridSearchService;
+use super::ranking::create_decay_ranker;
 use super::types::SearchResult;
 
 #[async_trait::async_trait]
@@ -47,7 +47,7 @@ pub(crate) fn rebuild_search_service(
 }
 
 fn build_hybrid(
-    merged: &crate::index::MergedIndex,
+    merged: &MergedIndex,
     semantic_backend: Arc<dyn ScoreBackend>,
     bm25_backend: Arc<dyn ScoreBackend>,
     search_config: &SearchConfig,
@@ -58,10 +58,10 @@ fn build_hybrid(
         search_config.fusion.semantic_weight,
     )
     .expect("fusion strategy validated at config load");
-    let ranker = Arc::new(DecayRanker::new(
+    let ranker = create_decay_ranker(
         search_config.ranking.same_src_score_decay,
         search_config.ranking.file_hint_boost,
-    ));
+    );
     HybridSearchService {
         semantic_backend,
         bm25_backend,

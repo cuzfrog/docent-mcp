@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use anyhow::Context;
@@ -8,7 +9,8 @@ use crate::app::indexing::{create_indexer, Indexer};
 use crate::app::serve::mcp_server::{create_mcp_server, MCPServer};
 use crate::app::serve::search::{create_search_service, SearchService};
 use crate::config::Config;
-use crate::index::{create_index_repository, Embedder, IndexRepository};
+use crate::index::{create_embedder, create_index_repository, Embedder, IndexRepository};
+use crate::models::create_model_factory;
 use crate::support::Console;
 
 #[async_trait]
@@ -22,16 +24,16 @@ pub fn create_http_server(
 ) -> anyhow::Result<Box<dyn HttpServer>> {
     let repo: Arc<dyn IndexRepository> = Arc::new(create_index_repository());
 
-    let factory = crate::models::create_model_factory(
+    let factory = create_model_factory(
         &config.index.embedding_model,
-        std::path::Path::new(&config.index.cache_dir),
+        Path::new(&config.index.cache_dir),
     )
     .map_err(|e| anyhow::anyhow!("Failed to create model factory: {}", e))?;
     let model = factory
         .build_model()
         .map_err(|e| anyhow::anyhow!("Failed to initialize embedding model — cannot start server: {}", e))?;
     let embedder: Arc<Mutex<dyn Embedder>> =
-        Arc::new(Mutex::new(crate::index::create_embedder(model)));
+        Arc::new(Mutex::new(create_embedder(model)));
 
     let shared_search = create_search_service(repo.as_ref(), embedder.clone(), &config.search);
     let search_service: Arc<dyn SearchService> = shared_search.as_arc_dyn();

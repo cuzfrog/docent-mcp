@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::domain::ChunkMetadata;
 
 use super::types::SearchResult;
@@ -12,15 +14,19 @@ pub(crate) trait Ranker: Send + Sync {
     ) -> Vec<(usize, SearchResult)>;
 }
 
-pub(crate) struct DecayRanker {
+struct DecayRanker {
     same_src_score_decay: f32,
     file_hint_boost: f32,
 }
 
-impl DecayRanker {
-    pub(crate) fn new(same_src_score_decay: f32, file_hint_boost: f32) -> Self {
-        Self { same_src_score_decay, file_hint_boost }
-    }
+pub(crate) fn create_decay_ranker(
+    same_src_score_decay: f32,
+    file_hint_boost: f32,
+) -> Arc<dyn Ranker> {
+    Arc::new(DecayRanker {
+        same_src_score_decay,
+        file_hint_boost,
+    })
 }
 
 impl Ranker for DecayRanker {

@@ -87,7 +87,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::super::fusion::create_fusion;
-    use super::super::ranking::DecayRanker;
+    use super::super::ranking::create_decay_ranker;
     use crate::app::serve::search::SearchService;
     use super::super::backend::ScoreBackend;
     use crate::domain::{ChunkMetadata, DocumentContext};
@@ -164,7 +164,7 @@ mod tests {
             scores: bm25_scores,
         });
         let fusion = create_fusion("rrf", 60.0, 0.7).unwrap();
-        let ranker = Arc::new(DecayRanker::new(0.9, file_hint_boost));
+        let ranker = create_decay_ranker(0.9, file_hint_boost);
 
         HybridSearchService {
             semantic_backend,
@@ -330,7 +330,7 @@ mod tests {
         let semantic_backend = Arc::new(FakeScoreBackend { scores: semantic_scores });
         let bm25_backend = Arc::new(FakeScoreBackend { scores: bm25_scores });
         let fusion = create_fusion("rrf", 60.0, 0.7).unwrap();
-        let ranker = Arc::new(DecayRanker::new(0.5, 1.5));
+        let ranker = create_decay_ranker(0.5, 1.5);
         let svc = HybridSearchService {
             semantic_backend,
             bm25_backend,

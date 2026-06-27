@@ -13,6 +13,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::app::serve::search::SearchService;
+use crate::ui::router;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub(super) struct SearchDdrParams {
@@ -53,7 +54,7 @@ impl MCPServer for RmcpServer {
                 LocalSessionManager::default().into(),
                 StreamableHttpServerConfig::default(),
             );
-        let router = crate::ui::router(service);
+        let router = router(service);
         Ok(router)
     }
 }

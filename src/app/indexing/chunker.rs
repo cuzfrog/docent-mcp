@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::domain::IndexableDocument;
+use crate::domain::{ChunkMetadata, IndexableDocument};
 use crate::index::Embedder;
 use std::sync::{Arc, Mutex};
 
@@ -138,10 +138,10 @@ pub(crate) fn embed_chunks(
 pub(crate) fn build_metadata(
     docs: &[IndexableDocument],
     chunks: &[RawChunk],
-) -> Vec<crate::domain::ChunkMetadata> {
+) -> Vec<ChunkMetadata> {
     chunks
         .iter()
-        .map(|c| crate::domain::ChunkMetadata {
+        .map(|c| ChunkMetadata {
             doc_ctx: docs[c.doc_index].doc_context(),
             chunk_text: c.text.clone(),
             section_heading: c.section_heading.clone(),

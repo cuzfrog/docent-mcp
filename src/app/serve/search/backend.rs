@@ -8,18 +8,16 @@ pub trait ScoreBackend: Send + Sync {
     fn score(&self, query: &str) -> anyhow::Result<Vec<f32>>;
 }
 
-pub(crate) struct VectorScoreBackend {
+struct VectorScoreBackend {
     embedder: Arc<Mutex<dyn Embedder>>,
     vectors: Arc<Vector>,
 }
 
-impl VectorScoreBackend {
-    pub(crate) fn new(
-        embedder: Arc<Mutex<dyn Embedder>>,
-        vectors: Arc<Vector>,
-    ) -> Self {
-        Self { embedder, vectors }
-    }
+pub(crate) fn create_vector_score_backend(
+    embedder: Arc<Mutex<dyn Embedder>>,
+    vectors: Arc<Vector>,
+) -> Arc<dyn ScoreBackend> {
+    Arc::new(VectorScoreBackend { embedder, vectors })
 }
 
 impl ScoreBackend for VectorScoreBackend {
@@ -105,10 +103,7 @@ pub(super) fn build_backends(
     b: f32,
 ) -> (Arc<dyn ScoreBackend>, Arc<dyn ScoreBackend>) {
     let vector_store = Arc::new(merged.vectors.clone());
-    let semantic = Arc::new(VectorScoreBackend::new(
-        embedder,
-        vector_store,
-    )) as Arc<dyn ScoreBackend>;
+    let semantic = create_vector_score_backend(embedder, vector_store);
 
     let bm25: Arc<dyn ScoreBackend> = if !merged.bm25_embeddings.is_empty() {
         let backend = build_bm25_backend(
@@ -154,7 +149,7 @@ mod tests {
             ])
             .unwrap(),
         );
-        let backend = VectorScoreBackend::new(embedder, vectors);
+        let backend = create_vector_score_backend(embedder, vectors);
         let scores = backend.score("some text").unwrap();
         assert_eq!(scores.len(), 3);
         for i in 1..scores.len() {
@@ -167,7 +162,7 @@ mod tests {
         let embedder: Arc<Mutex<dyn Embedder>> =
             Arc::new(Mutex::new(mock_embedder()));
         let vectors = Arc::new(Vector::from_vec_vec(vec![]).unwrap());
-        let backend = VectorScoreBackend::new(embedder, vectors);
+        let backend = create_vector_score_backend(embedder, vectors);
         let scores = backend.score("anything").unwrap();
         assert!(scores.is_empty());
     }

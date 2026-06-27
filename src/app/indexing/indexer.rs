@@ -5,9 +5,9 @@ use async_trait::async_trait;
 
 use crate::app::serve::{rebuild_search_service, SharedSearchService};
 use crate::config::{Config, GLOB_PATTERNS};
-use crate::domain::IndexableDocument;
+use crate::domain::{IndexableDocument, IndexedBatch};
 use crate::index::{Embedder, IndexRepository, MergedIndex};
-use crate::support::{matches_any_pattern, Console};
+use crate::support::{matches_any_pattern, sha256_hex, Console};
 use crate::support::path_to_string;
 
 use super::chunker;
@@ -66,7 +66,7 @@ impl Indexer for FileIndexer {
                     );
                 }
                 let merged = MergedIndex::from_batch(
-                    &crate::domain::IndexedBatch { vectors, metadata },
+                    &IndexedBatch { vectors, metadata },
                     config.search.bm25.k1,
                     config.search.bm25.b,
                 );
@@ -159,7 +159,7 @@ fn read_document(root: &Path, rel: &str) -> Option<IndexableDocument> {
         return None;
     }
     let title = extract_title(&content).unwrap_or_else(|| title_from_path(rel));
-    let source_revision = crate::support::sha256_hex(content.as_bytes());
+    let source_revision = sha256_hex(content.as_bytes());
     Some(IndexableDocument {
         source_path: rel.to_string(),
         source_revision,
