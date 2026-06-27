@@ -3,7 +3,6 @@ use std::path::Path;
 use crate::config::Config;
 use crate::domain::ChunkMetadata;
 use crate::domain::IndexedBatch;
-use crate::domain::IndexKind;
 use crate::domain::Vector;
 use super::bm25_builder::build_bm25;
 use super::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
@@ -13,7 +12,6 @@ use super::semantic_io::{read_semantic_index, write_semantic_index};
 use super::source_index::{Bm25Index, Index, SemanticIndex};
 use super::stored_metadata::StoredChunkMetadata;
 
-/// Result of merging file/ + git/ sub-indices into a single in-memory index.
 #[derive(Clone)]
 pub(crate) struct MergedIndex {
     pub(crate) vectors: Vector,
@@ -27,14 +25,12 @@ pub(crate) struct MergedIndex {
 pub(crate) trait IndexRepository: Send + Sync {
     fn store(
         &self,
-        kind: IndexKind,
         batch: &IndexedBatch,
         embedding_dims: usize,
         doc_count: usize,
-        last_indexed_commit: Option<String>,
     ) -> anyhow::Result<()>;
 
-    fn load(&self, kind: IndexKind) -> anyhow::Result<Option<Index>>;
+    fn load(&self) -> anyhow::Result<Option<Index>>;
 
     fn load_merged(&self) -> anyhow::Result<MergedIndex>;
 }
@@ -54,78 +50,76 @@ struct FileSystemIndexRepository {
 impl IndexRepository for FileSystemIndexRepository {
     fn store(
         &self,
-        kind: IndexKind,
         batch: &IndexedBatch,
         embedding_dims: usize,
         doc_count: usize,
-        last_indexed_commit: Option<String>,
     ) -> anyhow::Result<()> {
         let header = super::semantic_header::IndexHeader::from_config(
             &self.config.index,
             embedding_dims,
             &batch.metadata,
-            last_indexed_commit.clone(),
             doc_count,
         );
         let vector_store = crate::domain::Vector::from_vec_vec(batch.vectors.clone())?;
-        let source_dir = self.config.persist_path_buf().join(kind.subdir());
+        let persist_path = self.config.persist_path_buf();
 
-        self.store_semantic(&source_dir, &header, &vector_store, &batch.metadata)?;
-        self.write_bm25_index(&source_dir, &batch.metadata)?;
+        self.store_semantic(&persist_path, &header, &vector_store, &batch.metadata)?;
+        self.write_bm25_index(&persist_path, &batch.metadata)?;
 
         Ok(())
     }
 
-    fn load(&self, kind: IndexKind) -> anyhow::Result<Option<Index>> {
-        if !self.sub_exists(kind) {
+    fn load(&self) -> anyhow::Result<Option<Index>> {
+        let persist_path = self.config.persist_path_buf();
+        if !persist_path.join("header.json").exists() {
             return Ok(None);
         }
-        let idx = self.load_sub_index(kind)?;
-        idx.semantic.header.validate_against(&self.config.index)?;
-        Ok(Some(idx))
+        let stored = read_semantic_index(&persist_path)?;
+        let metadata: Vec<ChunkMetadata> = stored
+            .metadata
+            .into_iter()
+            .map(ChunkMetadata::from)
+            .collect();
+
+        let semantic = SemanticIndex {
+            header: stored.header,
+            vectors: stored.vectors,
+            metadata,
+        };
+
+        let bm25_dir = persist_path.join("bm25");
+        let bm25 = if bm25_dir.join("header.json").exists() {
+            let (header, embeddings) = bm25_io::read_bm25_index(&bm25_dir)?;
+            Bm25Index { header, embeddings }
+        } else if !semantic.metadata.is_empty() {
+            self.write_bm25_index(&persist_path, &semantic.metadata)?
+        } else {
+            Bm25Index {
+                header: Bm25IndexHeader { schema_version: BM25_SCHEMA_VERSION, avgdl: 0.0 },
+                embeddings: vec![],
+            }
+        };
+
+        Ok(Some(Index { semantic, bm25 }))
     }
 
     fn load_merged(&self) -> anyhow::Result<MergedIndex> {
-        let file = self.load(IndexKind::File)?;
-        let git = self.load(IndexKind::Git)?;
+        let index = self.load()?
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "No index found at '{}'. Run 'docent index-file' first.",
+                    self.config.persist_path_buf().display()
+                )
+            })?;
 
-        if file.is_none() && git.is_none() {
-            anyhow::bail!(
-                "No index found at '{}'. Run 'docent index-file' or 'docent index-git' first.",
-                self.config.persist_path_buf().display()
-            );
-        }
-
-        if let (Some(ref f), Some(ref g)) = (&file, &git) {
-            if f.semantic.header.embedding_model != g.semantic.header.embedding_model {
-                anyhow::bail!(
-                    "embedding_model mismatch between file/ and git/ subdirs: '{}' vs '{}'",
-                    f.semantic.header.embedding_model,
-                    g.semantic.header.embedding_model
-                );
-            }
-            if f.semantic.header.embedding_dims != g.semantic.header.embedding_dims {
-                anyhow::bail!(
-                    "embedding_dims mismatch between file/ and git/ subdirs: {} vs {}",
-                    f.semantic.header.embedding_dims,
-                    g.semantic.header.embedding_dims
-                );
-            }
-        }
-
-        IndexMerger::merge(file, git)
+        IndexMerger::merge(index)
     }
 }
 
 impl FileSystemIndexRepository {
-    fn sub_exists(&self, kind: IndexKind) -> bool {
-        let header_path = self.config.persist_path_buf().join(kind.subdir()).join("header.json");
-        header_path.exists()
-    }
-
     fn store_semantic(
         &self,
-        source_dir: &Path,
+        path: &Path,
         header: &super::semantic_header::IndexHeader,
         vectors: &crate::domain::Vector,
         metadata: &[ChunkMetadata],
@@ -135,7 +129,7 @@ impl FileSystemIndexRepository {
             .cloned()
             .map(Into::into)
             .collect();
-        write_semantic_index(source_dir, header, vectors, &stored_metadata)
+        write_semantic_index(path, header, vectors, &stored_metadata)
     }
 
     fn write_bm25_index(
@@ -157,39 +151,6 @@ impl FileSystemIndexRepository {
             header: bm25_header,
             embeddings: bm25_embeddings,
         })
-    }
-
-    fn load_sub_index(&self, kind: IndexKind) -> anyhow::Result<Index> {
-        let source_dir = self.config.persist_path_buf().join(kind.subdir());
-
-        let stored = read_semantic_index(&source_dir)?;
-        let metadata: Vec<ChunkMetadata> = stored
-            .metadata
-            .into_iter()
-            .map(ChunkMetadata::from)
-            .collect();
-
-        let semantic = SemanticIndex {
-            header: stored.header,
-            vectors: stored.vectors,
-            metadata,
-        };
-
-        let bm25_dir = source_dir.join("bm25");
-        let bm25 = if bm25_dir.join("header.json").exists() {
-            let (header, embeddings) = bm25_io::read_bm25_index(&bm25_dir)?;
-            Bm25Index { header, embeddings }
-        } else if !semantic.metadata.is_empty() {
-            // Lazy build: old index without bm25/ subdirectory on disk
-            self.write_bm25_index(&source_dir, &semantic.metadata)?
-        } else {
-            Bm25Index {
-                header: Bm25IndexHeader { schema_version: BM25_SCHEMA_VERSION, avgdl: 0.0 },
-                embeddings: vec![],
-            }
-        };
-
-        Ok(Index { semantic, bm25 })
     }
 }
 

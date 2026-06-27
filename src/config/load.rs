@@ -83,14 +83,6 @@ same_src_score_decay = 0.95
         assert_eq!(config.index.chunk_overlap, 64);
         assert_eq!(config.index.max_size_mb, 512);
 
-        let git = config.git.expect("git section should be present");
-        assert_eq!(git.depth_limit, 1000);
-        assert_eq!(git.branch, "main");
-        assert_eq!(
-            git.glob_patterns,
-            vec!["*.rs".to_string(), "*.java".to_string(), "*.py".to_string(), "*.js".to_string(), "*.ts".to_string(), "*.go".to_string()]
-        );
-
         let file = config.file.expect("file section should be present");
         assert!(file.enabled);
         assert_eq!(file.glob_patterns, vec!["*.md".to_string()]);

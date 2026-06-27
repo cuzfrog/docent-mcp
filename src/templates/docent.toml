@@ -11,12 +11,6 @@ enabled          = true               # enable file indexing
 glob_patterns    = ["*.md"]           # later elements take precedence
 file_size_limit_mb = 2                # skip files larger than this limit
 
-[git]
-enabled          = true               # enable git history indexing
-depth_limit      = 1000               # -1 = no limit (all history)
-branch           = "main"
-glob_patterns    = ["*.rs", "*.java", "*.py", "*.js", "*.ts", "*.go"]
-
 [search.ranking]
 same_src_score_decay = 0.9            # score multiplier for subsequent chunks from same source
 file_hint_boost      = 1.5            # score multiplier for chunks matching the MCP file_hint parameter

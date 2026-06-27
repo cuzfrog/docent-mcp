@@ -66,7 +66,6 @@ impl IndexingProcessor for ParallelBatchIndexingProcessor {
                 chunk_index: chunk.chunk_index,
                 line_start: chunk.line_start,
                 line_end: chunk.line_end,
-                is_fresh: doc.is_fresh,
             });
         }
 
@@ -112,7 +111,6 @@ impl ParallelBatchIndexingProcessor {
 mod tests {
     use super::*;
     use crate::app::index::chunking::MockChunker;
-    use crate::domain::IndexKind;
     use crate::index::mock_embedder;
 
     fn make_processor(chunker: Box<dyn Chunker>) -> Box<dyn IndexingProcessor> {
@@ -130,8 +128,6 @@ mod tests {
             title: "Test".to_string(),
             body: body.to_string(),
             modified_at: None,
-            kind: IndexKind::File,
-            is_fresh: None,
         }
     }
 
@@ -227,8 +223,6 @@ mod tests {
             title: "Main".to_string(),
             body: "fn main() {}".to_string(),
             modified_at: None,
-            kind: IndexKind::File,
-            is_fresh: Some(true),
         };
         let (batch, _) = processor.run(&[doc]).unwrap();
         assert!(!batch.metadata.is_empty());
@@ -236,7 +230,6 @@ mod tests {
         assert_eq!(meta.doc_ctx.source_path, "src/main.rs".into());
         assert_eq!(meta.doc_ctx.source_revision, "rev123".into());
         assert_eq!(meta.chunk_text, "fn main() {}");
-        assert_eq!(meta.is_fresh, Some(true));
     }
 
     #[test]

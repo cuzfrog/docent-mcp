@@ -7,7 +7,6 @@ use async_trait::async_trait;
 use super::index::{create_indexer, IndexRequest, Indexer};
 use super::serve::HttpServer;
 use crate::config::Config;
-use crate::domain::IndexKind;
 
 use crate::models::{create_model_factory, ModelFactory};
 use crate::support::{create_console, Console};
@@ -30,12 +29,11 @@ pub fn create_application(config: &Config) -> anyhow::Result<impl Application> {
         std::path::Path::new(&config.index.cache_dir),
     )?);
 
-    let mut indexers: HashMap<IndexKind, Box<dyn Indexer>> = HashMap::new();
-    for kind in config.enabled_kinds() {
+    let mut indexers: HashMap<String, Box<dyn Indexer>> = HashMap::new();
+    if config.file_enabled() {
         indexers.insert(
-            kind,
+            "file".to_string(),
             create_indexer(
-                kind,
                 config,
                 Box::new(create_console()),
                 Arc::clone(&factory),
@@ -44,7 +42,6 @@ pub fn create_application(config: &Config) -> anyhow::Result<impl Application> {
     }
 
     Ok(AppImpl {
-        config: config.clone(),
         console,
         server,
         indexers,
@@ -52,10 +49,9 @@ pub fn create_application(config: &Config) -> anyhow::Result<impl Application> {
 }
 
 struct AppImpl {
-    config: Config,
     console: Box<dyn Console>,
     server: Box<dyn HttpServer>,
-    indexers: HashMap<IndexKind, Box<dyn Indexer>>,
+    indexers: HashMap<String, Box<dyn Indexer>>,
 }
 
 #[async_trait]
@@ -64,20 +60,14 @@ impl Application for AppImpl {
         let dir = input_path.unwrap_or_else(|| PathBuf::from("."));
         let dir = dir.canonicalize()?;
 
-        let enabled_kinds = self.config.enabled_kinds();
-        if enabled_kinds.is_empty() {
+        if self.indexers.is_empty() {
             return Ok(());
         }
 
-        for kind in &enabled_kinds {
-            let indexer = self
-                .indexers
-                .get(kind)
-                .ok_or_else(|| anyhow::anyhow!("No indexer registered for {:?}", kind))?;
+        for indexer in self.indexers.values() {
             let request = IndexRequest {
                 input_path: dir.clone(),
                 rebuild,
-                verbose: self.config.verbose,
             };
             let outcome = indexer.run(&request)?;
             self.emit_outcome(outcome.format_for_ui());
@@ -119,17 +109,7 @@ mod tests {
 
     #[test]
     fn run_index_skips_when_no_kinds_enabled() {
-        let config = Config {
-            file: Some(crate::config::FileConfig {
-                enabled: false,
-                glob_patterns: vec![],
-                file_size_limit_mb: 0,
-            }),
-            git: None,
-            ..Config::default()
-        };
         let app = AppImpl {
-            config: config.clone(),
             console: Box::new(create_console()),
             server: Box::new(MockHttpServer),
             indexers: HashMap::new(),

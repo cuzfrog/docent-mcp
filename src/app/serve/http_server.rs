@@ -18,7 +18,6 @@ use crate::support::Console;
 struct IndexSizeInfo {
     total_bytes: u64,
     file_bytes: u64,
-    git_bytes: u64,
 }
 
 /// Check whether the index exceeds the configured size limit.
@@ -33,11 +32,7 @@ fn check_index_size(persist_path: &Path, max_size_mb: u64) -> anyhow::Result<Opt
             } else {
                 0
             },
-            git_bytes: if persist_path.join("git").exists() {
-                crate::support::dir_size(&persist_path.join("git"))
-            } else {
-                0
-            },
+
         }))
     } else {
         Ok(None)
@@ -64,12 +59,6 @@ fn validate_search_environment(
             console.warn(&format!(
                 "  file/ subdirectory: {:.1} MB",
                 info.file_bytes as f64 / (1024.0 * 1024.0)
-            ));
-        }
-        if persist_path.join("git").exists() {
-            console.warn(&format!(
-                "  git/ subdirectory:  {:.1} MB",
-                info.git_bytes as f64 / (1024.0 * 1024.0)
             ));
         }
         if !console.confirm("Continue?")? {
@@ -186,7 +175,6 @@ mod tests {
             Ok(Some(IndexSizeInfo {
                 total_bytes: 600 * 1024 * 1024,
                 file_bytes: 600 * 1024 * 1024,
-                git_bytes: 0,
             }))
         }
     }

@@ -1,4 +1,3 @@
-use crate::domain::IndexKind;
 use crate::domain::IndexableDocument;
 use std::path::{Path, PathBuf};
 
@@ -85,13 +84,11 @@ fn prepare_single_file(
     let mtime = get_file_mtime(&full_path);
 
     Some(IndexableDocument {
-        kind: IndexKind::File,
         source_path: relative_path,
         source_revision,
         title,
         body: content,
         modified_at: mtime,
-        is_fresh: None,
     })
 }
 

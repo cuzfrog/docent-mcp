@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::domain::{IndexKind, ChunkMetadata, DocumentContext};
+use crate::domain::{ChunkMetadata, DocumentContext};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -18,9 +18,6 @@ pub(super) struct StoredChunkMetadata {
     pub(super) line_end: usize,
     #[serde(default)]
     pub(super) modified_at: Option<String>,
-    pub(super) kind: IndexKind,
-    #[serde(default)]
-    pub(super) is_fresh: Option<bool>,
 }
 
 impl From<StoredChunkMetadata> for ChunkMetadata {
@@ -31,14 +28,12 @@ impl From<StoredChunkMetadata> for ChunkMetadata {
                 source_revision: Arc::from(m.source_revision.as_str()),
                 title: Arc::from(m.title.as_str()),
                 modified_at: m.modified_at.as_ref().map(|s| Arc::from(s.as_str())),
-                kind: m.kind,
             },
             chunk_text: m.chunk_text,
             section_heading: m.section_heading,
             chunk_index: m.chunk_index,
             line_start: m.line_start,
             line_end: m.line_end,
-            is_fresh: m.is_fresh,
         }
     }
 }
@@ -55,8 +50,6 @@ impl From<ChunkMetadata> for StoredChunkMetadata {
             line_start: m.line_start,
             line_end: m.line_end,
             modified_at: m.doc_ctx.modified_at.as_ref().map(|s| s.to_string()),
-            kind: m.doc_ctx.kind,
-            is_fresh: m.is_fresh,
         }
     }
 }
@@ -77,43 +70,16 @@ mod tests {
             line_start: 1,
             line_end: 5,
             modified_at: None,
-            kind: IndexKind::File,
-            is_fresh: None,
         };
 
         let json = serde_json::to_string(&meta).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(parsed["kind"], "file");
-        assert_eq!(parsed["is_fresh"], serde_json::Value::Null);
         assert_eq!(parsed["modified_at"], serde_json::Value::Null);
     }
 
     #[test]
-    fn test_stored_chunkmetadata_git_serialization() {
-        let meta = StoredChunkMetadata {
-            source_path: "doc.md".to_string(),
-            source_revision: "abc".to_string(),
-            title: "Doc".to_string(),
-            chunk_text: "content".to_string(),
-            section_heading: None,
-            chunk_index: 0,
-            line_start: 1,
-            line_end: 5,
-            modified_at: None,
-            kind: IndexKind::Git,
-            is_fresh: Some(true),
-        };
-
-        let json = serde_json::to_string(&meta).unwrap();
-        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(parsed["kind"], "git");
-        assert_eq!(parsed["is_fresh"], true);
-    }
-
-    #[test]
-    fn test_stored_chunkmetadata_deserialize_is_fresh_defaults_to_none() {
+    fn test_stored_chunkmetadata_deserialize_modified_at_defaults_to_none() {
         let json = r#"{
             "source_path": "doc.md",
             "source_revision": "abc",
@@ -122,13 +88,11 @@ mod tests {
             "section_heading": null,
             "chunk_index": 0,
             "line_start": 0,
-            "line_end": 0,
-            "kind": "file"
+            "line_end": 0
         }"#;
 
         let meta: StoredChunkMetadata = serde_json::from_str(json).unwrap();
-        assert_eq!(meta.kind, IndexKind::File);
-        assert_eq!(meta.is_fresh, None);
+        assert_eq!(meta.modified_at, None);
     }
 
     #[test]
@@ -143,12 +107,9 @@ mod tests {
             line_start: 1,
             line_end: 5,
             modified_at: None,
-            kind: IndexKind::File,
-            is_fresh: None,
         };
 
         let rt: ChunkMetadata = stored.into();
-        assert_eq!(rt.doc_ctx.kind, IndexKind::File);
         assert_eq!(&*rt.doc_ctx.source_path, "doc.md");
     }
 
@@ -160,18 +121,15 @@ mod tests {
                 source_revision: Arc::from("abc"),
                 title: Arc::from("Doc"),
                 modified_at: None,
-                kind: IndexKind::Git,
             },
             chunk_text: "content".to_string(),
             section_heading: None,
             chunk_index: 0,
             line_start: 1,
             line_end: 5,
-            is_fresh: Some(true),
         };
 
         let stored: StoredChunkMetadata = rt.into();
-        assert_eq!(stored.kind, IndexKind::Git);
-        assert_eq!(stored.is_fresh, Some(true));
+        assert_eq!(stored.source_path, "doc.md");
     }
 }

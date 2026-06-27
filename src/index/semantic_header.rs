@@ -2,7 +2,7 @@ use crate::config::IndexConfig;
 use crate::domain::ChunkMetadata;
 use serde::{Deserialize, Serialize};
 
-pub(crate) const SEMANTIC_SCHEMA_VERSION: u32 = 7;
+pub(crate) const SEMANTIC_SCHEMA_VERSION: u32 = 8;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IndexHeader {
@@ -14,8 +14,6 @@ pub struct IndexHeader {
     pub(crate) built_at: String,
     pub(crate) doc_count: usize,
     pub(crate) chunk_count: usize,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) last_indexed_commit: Option<String>,
 }
 
 impl IndexHeader {
@@ -23,7 +21,6 @@ impl IndexHeader {
         config: &IndexConfig,
         embedding_dims: usize,
         metadata: &[ChunkMetadata],
-        last_indexed_commit: Option<String>,
         doc_count: usize,
     ) -> Self {
         IndexHeader {
@@ -32,13 +29,14 @@ impl IndexHeader {
             embedding_dims,
             chunk_size: config.chunk_size,
             chunk_overlap: config.chunk_overlap,
-            built_at: chrono::Utc::now().to_rfc3339(),
+
             doc_count,
             chunk_count: metadata.len(),
-            last_indexed_commit,
+            built_at: chrono::Utc::now().to_rfc3339(),
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn validate_against(&self, config: &IndexConfig) -> anyhow::Result<()> {
         if self.schema_version != SEMANTIC_SCHEMA_VERSION {
             anyhow::bail!(
@@ -97,7 +95,6 @@ mod tests {
             built_at: "2026-01-01T00:00:00Z".to_string(),
             doc_count: 2,
             chunk_count: 3,
-            last_indexed_commit: None,
         }
     }
 

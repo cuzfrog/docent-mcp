@@ -98,7 +98,6 @@ pub fn merge_incremental(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::IndexKind;
     use crate::domain::DocumentContext;
     use std::sync::Arc;
 
@@ -115,14 +114,12 @@ mod tests {
                 source_revision: Arc::from(source_revision),
                 title: Arc::from(title),
                 modified_at: None,
-                kind: IndexKind::File,
             },
             chunk_text: chunk_text.to_string(),
             section_heading: None,
             chunk_index,
             line_start: 0,
             line_end: 0,
-            is_fresh: None,
         }
     }
 
@@ -150,14 +147,12 @@ mod tests {
                 source_revision: Arc::from("hash_b_new"),
                 title: Arc::from("B"),
                 modified_at: None,
-                kind: IndexKind::File,
             },
             chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
             line_start: 0,
             line_end: 0,
-            is_fresh: None,
         };
         let meta_b2 = ChunkMetadata {
             doc_ctx: DocumentContext {
@@ -165,14 +160,12 @@ mod tests {
                 source_revision: Arc::from("hash_b_new"),
                 title: Arc::from("B"),
                 modified_at: None,
-                kind: IndexKind::File,
             },
             chunk_text: "chunk text".to_string(),
             section_heading: Some("Section".to_string()),
             chunk_index: 1,
             line_start: 0,
             line_end: 0,
-            is_fresh: None,
         };
         let fresh_metadata = vec![meta_b1.clone(), meta_b2.clone()];
         let fresh_vectors = vec![vec![2.1f32], vec![2.2f32]];
@@ -236,14 +229,12 @@ mod tests {
                 source_revision: Arc::from("hash_b"),
                 title: Arc::from("B"),
                 modified_at: None,
-                kind: IndexKind::File,
             },
             chunk_text: "chunk text".to_string(),
             section_heading: None,
             chunk_index: 0,
             line_start: 0,
             line_end: 0,
-            is_fresh: None,
         };
         let meta_b2 = ChunkMetadata {
             doc_ctx: DocumentContext {
@@ -251,14 +242,12 @@ mod tests {
                 source_revision: Arc::from("hash_b"),
                 title: Arc::from("B"),
                 modified_at: None,
-                kind: IndexKind::File,
             },
             chunk_text: "chunk text".to_string(),
             section_heading: Some("Section".to_string()),
             chunk_index: 1,
             line_start: 0,
             line_end: 0,
-            is_fresh: None,
         };
 
         let fresh_metadata = vec![meta_a.clone(), meta_b1.clone(), meta_b2.clone()];
