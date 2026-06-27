@@ -35,14 +35,16 @@ pub fn create_http_server(
     let embedder: Arc<Mutex<dyn Embedder>> =
         Arc::new(Mutex::new(create_embedder(model)));
 
-    let shared_search = create_search_service(index_repository.as_ref(), embedder.clone(), &config.search)?;
-    let search_service: Arc<dyn SearchService> = shared_search.as_arc_dyn();
+    let search_service: Arc<dyn SearchService> = create_search_service(
+        index_repository.clone(),
+        embedder.clone(),
+        &config.search,
+    );
 
     let indexer = create_indexer(
         config.clone(),
         index_repository.clone(),
         embedder.clone(),
-        shared_search,
         console.clone(),
     );
 

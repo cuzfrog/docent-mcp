@@ -1,10 +1,10 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+
+use arc_swap::ArcSwap;
 
 use crate::domain::IndexedBatch;
 use crate::domain::Vector;
 use super::bm25_builder::build_bm25;
-use super::merger::IndexMerger;
-use super::source_index::Index;
 
 #[derive(Clone)]
 pub(crate) struct MergedIndex {
@@ -39,17 +39,19 @@ impl MergedIndex {
 
 pub(crate) trait IndexRepository: Send + Sync {
     fn store(&self, merged: MergedIndex) -> anyhow::Result<()>;
-    fn snapshot(&self) -> anyhow::Result<MergedIndex>;
+    fn snapshot(&self) -> anyhow::Result<Arc<MergedIndex>>;
 }
 
 pub(crate) struct InMemoryIndexRepository {
-    inner: Arc<RwLock<Index>>,
+    inner: Arc<ArcSwap<MergedIndex>>,
 }
 
 impl InMemoryIndexRepository {
     pub(crate) fn new() -> Self {
         Self {
-            inner: Arc::new(RwLock::new(Index::empty())),
+            inner: Arc::new(ArcSwap::from_pointee(
+                MergedIndex::empty().expect("empty MergedIndex must construct"),
+            )),
         }
     }
 }
@@ -62,14 +64,12 @@ impl Default for InMemoryIndexRepository {
 
 impl IndexRepository for InMemoryIndexRepository {
     fn store(&self, merged: MergedIndex) -> anyhow::Result<()> {
-        let mut guard = self.inner.write().map_err(|e| anyhow::anyhow!("index repository poisoned: {}", e))?;
-        *guard = Index::from_merged(merged);
+        self.inner.store(Arc::new(merged));
         Ok(())
     }
 
-    fn snapshot(&self) -> anyhow::Result<MergedIndex> {
-        let guard = self.inner.read().map_err(|e| anyhow::anyhow!("index repository poisoned: {}", e))?;
-        Ok(IndexMerger::merge((*guard).clone()))
+    fn snapshot(&self) -> anyhow::Result<Arc<MergedIndex>> {
+        Ok(Arc::clone(&self.inner.load()))
     }
 }
 

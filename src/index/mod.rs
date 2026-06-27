@@ -1,7 +1,5 @@
 mod bm25_builder;
-mod merger;
 mod repository;
-mod source_index;
 
 pub(crate) use repository::{create_index_repository, IndexRepository, MergedIndex};
 

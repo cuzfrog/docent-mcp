@@ -3,7 +3,6 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 
-use crate::app::serve::{rebuild_search_service, SharedSearchService};
 use crate::config::{Config, GLOB_PATTERNS};
 use crate::domain::{IndexableDocument, IndexedBatch};
 use crate::index::{Embedder, IndexRepository, MergedIndex};
@@ -21,14 +20,12 @@ pub fn create_indexer(
     config: Config,
     index_repository: Arc<dyn IndexRepository>,
     embedder: Arc<Mutex<dyn Embedder>>,
-    search: SharedSearchService,
     console: Arc<dyn Console>,
 ) -> Arc<dyn Indexer> {
     Arc::new(FileIndexer {
         config,
         index_repository,
         embedder,
-        search,
         console,
     })
 }
@@ -37,7 +34,6 @@ struct FileIndexer {
     config: Config,
     index_repository: Arc<dyn IndexRepository>,
     embedder: Arc<Mutex<dyn Embedder>>,
-    search: SharedSearchService,
     console: Arc<dyn Console>,
 }
 
@@ -83,13 +79,6 @@ impl Indexer for FileIndexer {
             "Background indexing complete: {} chunks; search is ready.",
             count
         ));
-        rebuild_search_service(
-            self.index_repository.as_ref(),
-            self.embedder.clone(),
-            &self.config.search,
-            &self.search,
-        )
-        .map_err(|e| anyhow::anyhow!("Failed to rebuild search service after indexing: {}", e))?;
         Ok(())
     }
 }
