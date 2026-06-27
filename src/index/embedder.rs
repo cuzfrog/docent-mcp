@@ -24,3 +24,19 @@ impl Embedder for Box<dyn Embedder> {
         self.as_mut().embed(texts)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::index::embedder_mock::mock_embedder;
+
+    #[test]
+    fn box_dyn_embedder_delegates_to_inner() {
+        let mock = mock_embedder();
+        let mut boxed: Box<dyn Embedder> = Box::new(mock);
+        let result = boxed.embed(&["alpha".to_string(), "beta".to_string()]).unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].len(), 4);
+        assert_eq!(result[1].len(), 4);
+    }
+}
