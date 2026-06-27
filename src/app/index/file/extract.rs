@@ -49,22 +49,9 @@ fn extract_title_from_body(body: &str) -> Option<String> {
 fn prepare_single_file(
     file: &PathBuf,
     input_root: &Path,
-    file_size_limit_mb: u64,
 ) -> Option<IndexableDocument> {
     let full_path = input_root.join(file);
     let relative_path = crate::support::path_to_string(file);
-
-    if file_size_limit_mb > 0 {
-        let meta = std::fs::metadata(&full_path).ok()?;
-        let limit_bytes = file_size_limit_mb * 1024 * 1024;
-        if meta.len() > limit_bytes {
-            eprintln!(
-                "WARNING: skipping file '{}' ({} bytes exceeds {} MB limit)",
-                relative_path, meta.len(), file_size_limit_mb
-            );
-            return None;
-        }
-    }
 
     let content = match std::fs::read_to_string(&full_path) {
         Ok(c) => c,
@@ -95,11 +82,10 @@ fn prepare_single_file(
 pub fn extract_documents(
     files: &[PathBuf],
     input_root: &Path,
-    file_size_limit_mb: u64,
 ) -> anyhow::Result<Vec<IndexableDocument>> {
     let docs: Vec<IndexableDocument> = files
         .iter()
-        .filter_map(|f| prepare_single_file(f, input_root, file_size_limit_mb))
+        .filter_map(|f| prepare_single_file(f, input_root))
         .collect();
     Ok(docs)
 }

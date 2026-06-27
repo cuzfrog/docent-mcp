@@ -12,9 +12,8 @@ impl FileIndexer {
         if !self.console.confirm("Are you sure?")? {
             return Ok(false);
         }
-        let idx_path = persist_path.join("file");
-        if idx_path.exists() {
-            std::fs::remove_dir_all(&idx_path)?;
+        if persist_path.exists() {
+            std::fs::remove_dir_all(&persist_path)?;
         }
         Ok(true)
     }
@@ -23,10 +22,10 @@ impl FileIndexer {
         &self,
         request: &IndexRequest,
     ) -> anyhow::Result<(crate::domain::IndexedBatch, usize)> {
-        let all_files = super::discover::discover_files(&request.input_path, &self.file_config().glob_patterns)?;
+        let all_files = super::discover::discover_files(&request.input_path, &self.glob_patterns())?;
         self.console
             .info(&format!("Scanning: {} files found", all_files.len()));
-        let docs = super::extract::extract_documents(&all_files, &request.input_path, self.file_config().file_size_limit_mb)?;
+        let docs = super::extract::extract_documents(&all_files, &request.input_path)?;
 
         let (batch, dims) = self.processor.run(&docs)?;
 

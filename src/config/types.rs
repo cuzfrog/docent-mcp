@@ -2,6 +2,9 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
+/// The file types that docent indexes. Currently only Markdown files.
+pub const GLOB_PATTERNS: &[&str] = &["*.md"];
+
 #[derive(Debug, Deserialize, PartialEq, Default, Clone)]
 pub struct Config {
     #[serde(default)]
@@ -10,8 +13,6 @@ pub struct Config {
     pub server: ServerConfig,
     #[serde(default)]
     pub search: SearchConfig,
-    #[serde(default)]
-    pub file: Option<FileConfig>,
     #[serde(default)]
     pub verbose: bool,
 }
@@ -76,16 +77,6 @@ pub struct Bm25Config {
     pub b: f32,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
-pub struct FileConfig {
-    #[serde(default = "super::defaults::default_file_enabled")]
-    pub enabled: bool,
-    #[serde(default = "super::defaults::default_file_glob_patterns")]
-    pub glob_patterns: Vec<String>,
-    #[serde(default = "super::defaults::default_file_size_limit_mb")]
-    pub file_size_limit_mb: u64,
-}
-
 impl Default for IndexConfig {
     fn default() -> Self {
         Self {
@@ -139,49 +130,5 @@ impl Default for Bm25Config {
 impl Config {
     pub(crate) fn persist_path_buf(&self) -> PathBuf {
         PathBuf::from(&self.index.persist_path)
-    }
-}
-
-impl Config {
-    pub fn file_enabled(&self) -> bool {
-        self.file.as_ref().is_some_and(|f| f.enabled)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::FileConfig;
-
-    #[test]
-    fn file_enabled_returns_true_when_enabled() {
-        let config = Config {
-            file: Some(FileConfig {
-                enabled: true,
-                glob_patterns: vec![],
-                file_size_limit_mb: 0,
-            }),
-            ..Config::default()
-        };
-        assert!(config.file_enabled());
-    }
-
-    #[test]
-    fn file_enabled_returns_false_when_missing() {
-        let config = Config::default();
-        assert!(!config.file_enabled());
-    }
-
-    #[test]
-    fn file_enabled_returns_false_when_disabled() {
-        let config = Config {
-            file: Some(FileConfig {
-                enabled: false,
-                glob_patterns: vec![],
-                file_size_limit_mb: 0,
-            }),
-            ..Config::default()
-        };
-        assert!(!config.file_enabled());
     }
 }

@@ -52,18 +52,6 @@ pub(crate) const fn default_semantic_weight() -> f32 {
     0.7
 }
 
-pub(crate) fn default_file_enabled() -> bool {
-    true
-}
-
-pub(crate) fn default_file_glob_patterns() -> Vec<String> {
-    vec!["*.md".to_string(), "*.txt".to_string()]
-}
-
-pub(crate) const fn default_file_size_limit_mb() -> u64 {
-    0 // 0 means no limit
-}
-
 pub(crate) const fn default_file_hint_boost() -> f32 {
     1.5
 }
