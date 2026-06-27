@@ -15,8 +15,8 @@ pub(crate) struct RawChunk {
 pub(crate) fn chunk_documents(docs: &[IndexableDocument], config: &Config) -> Vec<RawChunk> {
     let mut out = Vec::new();
     for (doc_index, doc) in docs.iter().enumerate() {
-        let chunks = simple_chunk(&doc.body, config.index.chunk_size, config.index.chunk_overlap);
-        for (chunk_index, chunk) in chunks.into_iter().enumerate() {
+        let raw_chunks = simple_chunk(&doc.body, config.index.chunk_size, config.index.chunk_overlap);
+        for (chunk_index, chunk) in raw_chunks.into_iter().enumerate() {
             out.push(RawChunk {
                 doc_index,
                 text: chunk.text,
@@ -160,22 +160,22 @@ mod tests {
 
     #[test]
     fn simple_chunk_short_body_single_chunk() {
-        let chunks = simple_chunk("hello world", 8, 1);
-        assert_eq!(chunks.len(), 1);
-        assert_eq!(chunks[0].text, "hello world");
+        let raw_chunks = simple_chunk("hello world", 8, 1);
+        assert_eq!(raw_chunks.len(), 1);
+        assert_eq!(raw_chunks[0].text, "hello world");
     }
 
     #[test]
     fn simple_chunk_splits_long_body() {
         let body = "a".repeat(4000);
-        let chunks = simple_chunk(&body, 64, 4);
-        assert!(chunks.len() > 1);
+        let raw_chunks = simple_chunk(&body, 64, 4);
+        assert!(raw_chunks.len() > 1);
     }
 
     #[test]
     fn simple_chunk_respects_headings() {
         let body = "# Title\n\nbody\n\n## Sub\n\nmore";
-        let chunks = simple_chunk(body, 64, 4);
-        assert!(chunks.iter().any(|c| c.section_heading.as_deref() == Some("Title")));
+        let raw_chunks = simple_chunk(body, 64, 4);
+        assert!(raw_chunks.iter().any(|c| c.section_heading.as_deref() == Some("Title")));
     }
 }

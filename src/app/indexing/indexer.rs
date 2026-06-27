@@ -54,14 +54,14 @@ impl Indexer for FileIndexer {
                     index_repository.store(MergedIndex::empty()?)?;
                     return Ok(0);
                 }
-                let chunks = chunker::chunk_documents(&indexable_documents, &config);
-                console.info(&format!("Background indexing: {} chunks", chunks.len()));
-                let chunk_vectors = chunker::embed_chunks(&chunks, &embedder)?;
-                let chunk_metadatas = chunker::build_metadata(&indexable_documents, &chunks);
+                let raw_chunks = chunker::chunk_documents(&indexable_documents, &config);
+                console.info(&format!("Background indexing: {} chunks", raw_chunks.len()));
+                let chunk_vectors = chunker::embed_chunks(&raw_chunks, &embedder)?;
+                let chunk_metadatas = chunker::build_metadata(&indexable_documents, &raw_chunks);
                 if chunk_metadatas.len() != chunk_vectors.len() {
                     anyhow::bail!(
                         "internal indexing mismatch: {} chunks but {} vectors",
-                        chunks.len(),
+                        raw_chunks.len(),
                         chunk_vectors.len()
                     );
                 }
@@ -71,7 +71,7 @@ impl Indexer for FileIndexer {
                     config.search.bm25.b,
                 )?;
                 index_repository.store(merged_index)?;
-                Ok(chunks.len())
+                Ok(raw_chunks.len())
             }
         })
         .await;
