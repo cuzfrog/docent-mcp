@@ -1,5 +1,5 @@
-pub(crate) fn default_persist_path() -> String {
-    "./.docent-index".to_string()
+pub(crate) fn default_doc_dirs() -> Vec<String> {
+    vec!["./".to_string()]
 }
 
 pub(crate) fn default_cache_dir() -> String {
@@ -24,11 +24,7 @@ pub(crate) const fn default_port() -> u16 {
     0
 }
 
-pub(crate) const fn default_max_size_mb() -> u64 {
-    512
-}
-
-pub(crate) fn default_same_src_score_decay() -> f32 {
+pub(crate) const fn default_same_src_score_decay() -> f32 {
     0.9
 }
 

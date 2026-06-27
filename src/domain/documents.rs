@@ -35,16 +35,6 @@ pub struct ChunkMetadata {
     pub line_end: usize,
 }
 
-impl ChunkMetadata {
-    pub(crate) fn unique_count(metadata: &[Self]) -> usize {
-        metadata
-            .iter()
-            .map(|m| &*m.doc_ctx.source_path)
-            .collect::<std::collections::HashSet<_>>()
-            .len()
-    }
-}
-
 #[derive(Clone)]
 pub struct IndexableDocument {
     pub source_path: String,

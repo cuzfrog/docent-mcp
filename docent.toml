@@ -1,10 +1,9 @@
 # For E2E tests
 [index]
 embedding_model = "BGESmallENV15Q"    # embedding model to use for vector generation
-persist_path    = "./e2e-tests/.ddr-index"   # directory to persist the index
+doc_dirs        = ["./"]              # directories to scan for markdown files (suffix "/*" disables recursion)
 chunk_size      = 512                 # max tokens per chunk
 chunk_overlap   = 64                  # overlap between consecutive chunks
-max_size_mb     = 4                 # issue warning if total index size exceeds this limit
 
 [search.ranking]
 same_src_score_decay = 0.9            # score multiplier for subsequent chunks from same source

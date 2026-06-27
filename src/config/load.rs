@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::config::types::Config;
 
 impl Config {
-    pub fn load(path: &Path, verbose: bool) -> anyhow::Result<Self> {
+    pub fn load(path: &Path, _verbose: bool) -> anyhow::Result<Self> {
         let content = match std::fs::read_to_string(path) {
             Ok(c) => c,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -13,10 +13,9 @@ impl Config {
                 anyhow::bail!("Failed to read config file at '{}': {}", path.display(), e);
             }
         };
-        let mut config: Config = toml::from_str(&content)
+        let config: Config = toml::from_str(&content)
             .map_err(|e| anyhow::anyhow!("Failed to parse config file: {}", e))?;
         config.validate()?;
-        config.verbose = verbose;
         Ok(config)
     }
 }
@@ -31,7 +30,7 @@ mod tests {
         let toml_str = r#"
 [index]
 embedding_model = "BGESmallENV15Q"
-persist_path = "/tmp/test-index"
+doc_dirs = ["./ddrs"]
 chunk_size = 256
 chunk_overlap = 32
 
@@ -46,11 +45,11 @@ same_src_score_decay = 0.95
 
         let config = Config::load(&temp_path, false).unwrap();
         assert_eq!(config.index.embedding_model, "BGESmallENV15Q");
-        assert_eq!(config.index.persist_path, "/tmp/test-index");
+        assert_eq!(config.index.doc_dirs, vec!["./ddrs".to_string()]);
         assert_eq!(config.index.chunk_size, 256);
         assert_eq!(config.index.chunk_overlap, 32);
         assert_eq!(config.server.log_level, "error");
-        assert_eq!(config.search.ranking.same_src_score_decay, 0.95);
+        assert!((config.search.ranking.same_src_score_decay - 0.95).abs() < f32::EPSILON);
 
         let _ = std::fs::remove_file(&temp_path);
     }
@@ -78,10 +77,9 @@ same_src_score_decay = 0.95
         let config: Config = toml::from_str(&content).expect("template docent.toml should parse");
 
         assert_eq!(config.index.embedding_model, "BGESmallENV15Q");
-        assert_eq!(config.index.persist_path, "./.docent-index");
+        assert_eq!(config.index.doc_dirs, vec!["./".to_string()]);
         assert_eq!(config.index.chunk_size, 512);
         assert_eq!(config.index.chunk_overlap, 64);
-        assert_eq!(config.index.max_size_mb, 512);
 
         assert!((config.search.ranking.same_src_score_decay - 0.9).abs() < f32::EPSILON);
 

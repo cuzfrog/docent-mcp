@@ -1,12 +1,7 @@
 mod bm25_builder;
-mod bm25_header;
-mod bm25_io;
 mod merger;
 mod repository;
-mod semantic_header;
-mod semantic_io;
 mod source_index;
-mod stored_metadata;
 
 pub(crate) use repository::{create_index_repository, IndexRepository, MergedIndex};
 

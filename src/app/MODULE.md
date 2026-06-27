@@ -6,13 +6,13 @@ sealed: [mod.rs]
 
 This module represents the application's execution hierarchy and workflow.
 
-## index/
-* `pub trait Indexer`
-* `pub(super) fn create_indexer`
+## index_runner.rs
+* `pub trait IndexRunner`
+* `pub(super) fn create_index_runner` — background in-memory indexing on serve startup.
 
 ## serve/
-* `pub trait Server`
-* `pub(super) fn create_server`
+* `pub trait HttpServer`
+* `pub(super) fn create_http_server`
 
 ---
 Below 2 modules are special in terms of they directly called by `main.rs` to avoid unnecessary application building.

@@ -7,12 +7,24 @@ use super::ranking::Ranker;
 use super::types::SearchResult;
 use super::SearchService;
 
-pub(super) struct HybridSearchService {
+pub(crate) struct HybridSearchService {
     pub(crate) semantic_backend: Arc<dyn ScoreBackend>,
     pub(crate) bm25_backend: Arc<dyn ScoreBackend>,
     pub(crate) fusion: Arc<dyn ScoreFusion>,
     pub(crate) ranker: Arc<dyn Ranker>,
     pub(crate) metadata: Arc<Vec<ChunkMetadata>>,
+}
+
+impl Clone for HybridSearchService {
+    fn clone(&self) -> Self {
+        Self {
+            semantic_backend: Arc::clone(&self.semantic_backend),
+            bm25_backend: Arc::clone(&self.bm25_backend),
+            fusion: Arc::clone(&self.fusion),
+            ranker: Arc::clone(&self.ranker),
+            metadata: Arc::clone(&self.metadata),
+        }
+    }
 }
 
 #[async_trait::async_trait]

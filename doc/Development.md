@@ -45,21 +45,14 @@ pytest -v          # e2e tests in the tests/ directory
 
 ## Run
 
-Index a directory of DDRs:
-
-```sh
-cargo run -- index ./path/to/ddrs
-```
-
-Start the MCP server:
+Start the MCP server (it scans `[index] doc_dirs` and builds an in-memory index in the background):
 
 ```sh
 cargo run -- serve
 ```
 
-Use `--help` on any subcommand for full options:
+Use `--help` for full options:
 
 ```sh
-cargo run -- index --help
 cargo run -- serve --help
 ```

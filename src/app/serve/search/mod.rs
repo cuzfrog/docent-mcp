@@ -5,4 +5,5 @@ mod backend;
 mod orchestrator;
 
 mod service;
-pub use service::{SearchService, create_search_service};
+pub(crate) use service::{rebuild_search_service, SharedSearchService};
+pub use service::{create_search_service, SearchService};

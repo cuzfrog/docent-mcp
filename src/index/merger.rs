@@ -1,20 +1,18 @@
+use super::repository::MergedIndex;
 use super::source_index::Index;
-use super::MergedIndex;
 
 pub(crate) struct IndexMerger;
 
 impl IndexMerger {
     pub(crate) fn merge(
         index: Index,
-    ) -> anyhow::Result<MergedIndex> {
-        let bm25_avgdl = index.bm25.header.avgdl;
-
-        Ok(MergedIndex {
+    ) -> MergedIndex {
+        MergedIndex {
             vectors: index.semantic.vectors,
             metadata: index.semantic.metadata,
-            bm25_avgdl,
             bm25_embeddings: index.bm25.embeddings,
-        })
+            bm25_avgdl: index.bm25.avgdl,
+        }
     }
 }
 
@@ -22,32 +20,27 @@ impl IndexMerger {
 mod tests {
     use crate::domain::{ChunkMetadata, DocumentContext};
     use crate::domain::Vector;
-    use crate::index::source_index::{Bm25Index, Index, SemanticIndex};
+    use crate::index::source_index::Index;
     use super::*;
 
-    fn dummy_semantic() -> SemanticIndex {
-        SemanticIndex {
+    fn dummy_semantic() -> crate::index::source_index::SemanticIndex {
+        crate::index::source_index::SemanticIndex {
             vectors: Vector::from_vec_vec(vec![vec![1.0, 0.0, 0.0, 0.0]]).unwrap(),
-            metadata: dummy_metadata(),
+            metadata: vec![ChunkMetadata {
+                doc_ctx: DocumentContext::default(),
+                chunk_text: "chunk text".to_string(),
+                section_heading: None,
+                chunk_index: 0,
+                line_start: 1,
+                line_end: 1,
+            }],
         }
     }
 
-    fn dummy_metadata() -> Vec<ChunkMetadata> {
-        vec![ChunkMetadata {
-            doc_ctx: DocumentContext::default(),
-            chunk_text: "chunk text".to_string(),
-            section_heading: None,
-            chunk_index: 0,
-            line_start: 0,
-            line_end: 0,
-        }]
-    }
-
-    fn dummy_bm25() -> Bm25Index {
-        use crate::index::bm25_header::{Bm25IndexHeader, BM25_SCHEMA_VERSION};
-        Bm25Index {
-            header: Bm25IndexHeader { schema_version: BM25_SCHEMA_VERSION, avgdl: 10.0 },
+    fn dummy_bm25() -> crate::index::source_index::Bm25Index {
+        crate::index::source_index::Bm25Index {
             embeddings: vec![bm25::Embedding(vec![])],
+            avgdl: 10.0,
         }
     }
 
@@ -58,7 +51,7 @@ mod tests {
             bm25: dummy_bm25(),
         };
 
-        let merged = IndexMerger::merge(index).unwrap();
+        let merged = IndexMerger::merge(index);
         assert_eq!(merged.vectors.len(), 1);
         assert_eq!(merged.metadata.len(), 1);
         assert_eq!(merged.bm25_embeddings.len(), 1);
