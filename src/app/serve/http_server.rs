@@ -43,6 +43,7 @@ pub fn create_http_server(
         index_repository.clone(),
         embedder.clone(),
         shared_search,
+        console.clone(),
     );
 
     let mcp = create_mcp_server(search_service);
@@ -66,10 +67,7 @@ struct TokioHttpServer {
 impl HttpServer for TokioHttpServer {
     async fn serve(&self) -> anyhow::Result<()> {
         let indexer_runner = self.indexer.clone();
-        let console = self.console.clone();
-        tokio::spawn(async move {
-            indexer_runner.run(console).await;
-        });
+        let indexer_handle = tokio::spawn(async move { indexer_runner.run().await });
 
         let addr = format!("127.0.0.1:{}", self.config.server.port);
         let listener = tokio::net::TcpListener::bind(&addr)
@@ -91,6 +89,18 @@ impl HttpServer for TokioHttpServer {
             .with_graceful_shutdown(shutdown_signal(console))
             .await
             .context("Server error")?;
+
+        match indexer_handle.await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                self.console
+                    .warn(&format!("Background indexing failed: {}", e));
+            }
+            Err(e) => {
+                self.console
+                    .warn(&format!("Background indexing task panicked: {}", e));
+            }
+        }
 
         Ok(())
     }

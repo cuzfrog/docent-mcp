@@ -14,7 +14,7 @@ use super::chunker;
 
 #[async_trait]
 pub trait Indexer: Send + Sync {
-    async fn run(&self, console: Arc<dyn Console>);
+    async fn run(&self) -> anyhow::Result<()>;
 }
 
 pub fn create_indexer(
@@ -22,12 +22,14 @@ pub fn create_indexer(
     index_repository: Arc<dyn IndexRepository>,
     embedder: Arc<Mutex<dyn Embedder>>,
     search: SharedSearchService,
+    console: Arc<dyn Console>,
 ) -> Arc<dyn Indexer> {
     Arc::new(FileIndexer {
         config,
         index_repository,
         embedder,
         search,
+        console,
     })
 }
 
@@ -36,18 +38,19 @@ struct FileIndexer {
     index_repository: Arc<dyn IndexRepository>,
     embedder: Arc<Mutex<dyn Embedder>>,
     search: SharedSearchService,
+    console: Arc<dyn Console>,
 }
 
 #[async_trait]
 impl Indexer for FileIndexer {
-    async fn run(&self, console: Arc<dyn Console>) {
-        console.info("Background indexing: scanning documents...");
+    async fn run(&self) -> anyhow::Result<()> {
+        self.console.info("Background indexing: scanning documents...");
 
-        let result = tokio::task::spawn_blocking({
+        let count = tokio::task::spawn_blocking({
             let config = self.config.clone();
             let index_repository = self.index_repository.clone();
             let embedder = self.embedder.clone();
-            let console = console.clone();
+            let console = self.console.clone();
             move || -> anyhow::Result<usize> {
                 let indexable_documents = collect_documents(&config, &console)?;
                 if indexable_documents.is_empty() {
@@ -74,33 +77,20 @@ impl Indexer for FileIndexer {
                 Ok(raw_chunks.len())
             }
         })
-        .await;
+        .await??;
 
-        match result {
-            Ok(Ok(count)) => {
-                console.info(&format!(
-                    "Background indexing complete: {} chunks; search is ready.",
-                    count
-                ));
-                if let Err(e) = rebuild_search_service(
-                    self.index_repository.as_ref(),
-                    self.embedder.clone(),
-                    &self.config.search,
-                    &self.search,
-                ) {
-                    console.warn(&format!(
-                        "Failed to rebuild search service after indexing: {}",
-                        e
-                    ));
-                }
-            }
-            Ok(Err(e)) => {
-                console.warn(&format!("Background indexing failed: {}", e));
-            }
-            Err(e) => {
-                console.warn(&format!("Background indexing task panicked: {}", e));
-            }
-        }
+        self.console.info(&format!(
+            "Background indexing complete: {} chunks; search is ready.",
+            count
+        ));
+        rebuild_search_service(
+            self.index_repository.as_ref(),
+            self.embedder.clone(),
+            &self.config.search,
+            &self.search,
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to rebuild search service after indexing: {}", e))?;
+        Ok(())
     }
 }
 
