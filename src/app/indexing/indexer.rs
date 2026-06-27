@@ -51,7 +51,7 @@ impl Indexer for FileIndexer {
             move || -> anyhow::Result<usize> {
                 let docs = collect_documents(&config, &console)?;
                 if docs.is_empty() {
-                    repo.store(MergedIndex::empty());
+                    repo.store(MergedIndex::empty()?)?;
                     return Ok(0);
                 }
                 let chunks = chunker::chunk_documents(&docs, &config);
@@ -69,8 +69,8 @@ impl Indexer for FileIndexer {
                     &IndexedBatch { vectors, metadata },
                     config.search.bm25.k1,
                     config.search.bm25.b,
-                );
-                repo.store(merged);
+                )?;
+                repo.store(merged)?;
                 Ok(chunks.len())
             }
         })
@@ -82,12 +82,17 @@ impl Indexer for FileIndexer {
                     "Background indexing complete: {} chunks; search is ready.",
                     count
                 ));
-                rebuild_search_service(
+                if let Err(e) = rebuild_search_service(
                     self.repo.as_ref(),
                     self.embedder.clone(),
                     &self.config.search,
                     &self.search,
-                );
+                ) {
+                    console.warn(&format!(
+                        "Failed to rebuild search service after indexing: {}",
+                        e
+                    ));
+                }
             }
             Ok(Err(e)) => {
                 console.warn(&format!("Background indexing failed: {}", e));

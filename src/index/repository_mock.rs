@@ -11,12 +11,16 @@ impl FixedMockIndexRepository {
 }
 
 impl IndexRepository for FixedMockIndexRepository {
-    fn store(&self, merged: MergedIndex) {
+    fn store(&self, merged: MergedIndex) -> anyhow::Result<()> {
         *self.merged.lock().unwrap() = Some(merged);
+        Ok(())
     }
 
-    fn snapshot(&self) -> MergedIndex {
-        self.merged.lock().unwrap().clone().unwrap_or_else(MergedIndex::empty)
+    fn snapshot(&self) -> anyhow::Result<MergedIndex> {
+        match self.merged.lock().unwrap().clone() {
+            Some(m) => Ok(m),
+            None => MergedIndex::empty(),
+        }
     }
 }
 

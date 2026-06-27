@@ -51,7 +51,7 @@ impl Index {
     pub(crate) fn empty() -> Self {
         Self {
             semantic: SemanticIndex {
-                vectors: Vector::from_vec_vec(vec![]).expect("empty vector"),
+                vectors: Vector { data: vec![], dims: 0, count: 0 },
                 metadata: Vec::new(),
             },
             bm25: Bm25Index {

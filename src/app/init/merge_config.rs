@@ -133,7 +133,10 @@ fn replace_value_in_text(
             } else if let Some(eq_pos) = trimmed.find('=') {
                 let line_key = trimmed[..eq_pos].trim();
                 if line_key == key {
-                    let line_eq_pos = line.find('=').expect("line contains '=' as verified above");
+                    let line_eq_pos = match line.find('=') {
+                        Some(p) => p,
+                        None => continue,
+                    };
                     let before_eq = &line[..line_eq_pos + 1];
                     let after_eq = &line[line_eq_pos + 1..];
                     let val_body_start = after_eq.find(|c: char| !c.is_whitespace()).unwrap_or(0);

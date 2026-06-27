@@ -128,7 +128,9 @@ pub(crate) fn embed_chunks(
     let mut all = Vec::with_capacity(chunks.len());
     for batch in chunks.chunks(BATCH) {
         let batch_texts: Vec<String> = batch.iter().map(|c| c.text.clone()).collect();
-        let mut emb = embedder.lock().expect("embedder poisoned");
+        let mut emb = embedder
+            .lock()
+            .map_err(|e| anyhow::anyhow!("embedder mutex poisoned: {}", e))?;
         let vectors = emb.embed(&batch_texts)?;
         all.extend(vectors);
     }

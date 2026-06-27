@@ -15,32 +15,31 @@ pub(crate) struct MergedIndex {
 }
 
 impl MergedIndex {
-    pub(crate) fn empty() -> Self {
-        Self {
-            vectors: Vector::from_vec_vec(vec![]).expect("empty vector"),
+    pub(crate) fn empty() -> anyhow::Result<Self> {
+        Ok(Self {
+            vectors: Vector::from_vec_vec(vec![])?,
             metadata: Vec::new(),
             bm25_embeddings: Vec::new(),
             bm25_avgdl: 0.0,
-        }
+        })
     }
 
-    pub(crate) fn from_batch(batch: &IndexedBatch, k1: f32, b: f32) -> Self {
-        let vectors = Vector::from_vec_vec(batch.vectors.clone())
-            .expect("vectors must have consistent dims");
+    pub(crate) fn from_batch(batch: &IndexedBatch, k1: f32, b: f32) -> anyhow::Result<Self> {
+        let vectors = Vector::from_vec_vec(batch.vectors.clone())?;
         let chunk_texts: Vec<&str> = batch.metadata.iter().map(|m| m.chunk_text.as_str()).collect();
         let (bm25_embeddings, bm25_avgdl) = build_bm25(&chunk_texts, k1, b);
-        MergedIndex {
+        Ok(MergedIndex {
             vectors,
             metadata: batch.metadata.clone(),
             bm25_embeddings,
             bm25_avgdl,
-        }
+        })
     }
 }
 
 pub(crate) trait IndexRepository: Send + Sync {
-    fn store(&self, merged: MergedIndex);
-    fn snapshot(&self) -> MergedIndex;
+    fn store(&self, merged: MergedIndex) -> anyhow::Result<()>;
+    fn snapshot(&self) -> anyhow::Result<MergedIndex>;
 }
 
 pub(crate) struct InMemoryIndexRepository {
@@ -62,14 +61,15 @@ impl Default for InMemoryIndexRepository {
 }
 
 impl IndexRepository for InMemoryIndexRepository {
-    fn store(&self, merged: MergedIndex) {
-        let mut guard = self.inner.write().expect("index repository poisoned");
+    fn store(&self, merged: MergedIndex) -> anyhow::Result<()> {
+        let mut guard = self.inner.write().map_err(|e| anyhow::anyhow!("index repository poisoned: {}", e))?;
         *guard = Index::from_merged(merged);
+        Ok(())
     }
 
-    fn snapshot(&self) -> MergedIndex {
-        let guard = self.inner.read().expect("index repository poisoned");
-        IndexMerger::merge((*guard).clone())
+    fn snapshot(&self) -> anyhow::Result<MergedIndex> {
+        let guard = self.inner.read().map_err(|e| anyhow::anyhow!("index repository poisoned: {}", e))?;
+        Ok(IndexMerger::merge((*guard).clone()))
     }
 }
 
@@ -86,7 +86,7 @@ mod tests {
     #[test]
     fn test_in_memory_repository_starts_empty() {
         let repo = InMemoryIndexRepository::new();
-        let snap = repo.snapshot();
+        let snap = repo.snapshot().unwrap();
         assert_eq!(snap.vectors.len(), 0);
         assert!(snap.metadata.is_empty());
     }
@@ -125,9 +125,9 @@ mod tests {
                 },
             ],
         };
-        let merged = MergedIndex::from_batch(&batch, 1.2, 0.75);
-        repo.store(merged);
-        let snap = repo.snapshot();
+        let merged = MergedIndex::from_batch(&batch, 1.2, 0.75).unwrap();
+        repo.store(merged).unwrap();
+        let snap = repo.snapshot().unwrap();
         assert_eq!(snap.vectors.len(), 2);
         assert_eq!(snap.metadata.len(), 2);
         assert_eq!(snap.bm25_embeddings.len(), 2);

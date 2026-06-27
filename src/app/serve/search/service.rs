@@ -22,14 +22,14 @@ pub fn create_search_service(
     repo: &dyn IndexRepository,
     embedder: Arc<std::sync::Mutex<dyn Embedder>>,
     search_config: &SearchConfig,
-) -> SharedSearchService {
-    let merged = repo.snapshot();
+) -> anyhow::Result<SharedSearchService> {
+    let merged = repo.snapshot()?;
     let (semantic_backend, bm25_backend) =
         build_backends(&merged, embedder, search_config.bm25.k1, search_config.bm25.b);
-    let inner = build_hybrid(&merged, semantic_backend, bm25_backend, search_config);
-    SharedSearchService {
+    let inner = build_hybrid(&merged, semantic_backend, bm25_backend, search_config)?;
+    Ok(SharedSearchService {
         inner: Arc::new(RwLock::new(inner)),
-    }
+    })
 }
 
 pub(crate) fn rebuild_search_service(
@@ -37,13 +37,17 @@ pub(crate) fn rebuild_search_service(
     embedder: Arc<std::sync::Mutex<dyn Embedder>>,
     search_config: &SearchConfig,
     shared: &SharedSearchService,
-) {
-    let merged = repo.snapshot();
+) -> anyhow::Result<()> {
+    let merged = repo.snapshot()?;
     let (semantic_backend, bm25_backend) =
         build_backends(&merged, embedder, search_config.bm25.k1, search_config.bm25.b);
-    let svc = build_hybrid(&merged, semantic_backend, bm25_backend, search_config);
-    let mut guard = shared.inner.write().expect("shared search service poisoned");
+    let svc = build_hybrid(&merged, semantic_backend, bm25_backend, search_config)?;
+    let mut guard = shared
+        .inner
+        .write()
+        .map_err(|e| anyhow::anyhow!("shared search service poisoned: {}", e))?;
     *guard = svc;
+    Ok(())
 }
 
 fn build_hybrid(
@@ -51,24 +55,23 @@ fn build_hybrid(
     semantic_backend: Arc<dyn ScoreBackend>,
     bm25_backend: Arc<dyn ScoreBackend>,
     search_config: &SearchConfig,
-) -> HybridSearchService {
+) -> anyhow::Result<HybridSearchService> {
     let fusion = create_fusion(
         &search_config.fusion.strategy,
         search_config.fusion.rrf_k,
         search_config.fusion.semantic_weight,
-    )
-    .expect("fusion strategy validated at config load");
+    )?;
     let ranker = create_decay_ranker(
         search_config.ranking.same_src_score_decay,
         search_config.ranking.file_hint_boost,
     );
-    HybridSearchService {
+    Ok(HybridSearchService {
         semantic_backend,
         bm25_backend,
         fusion,
         ranker,
         metadata: Arc::new(merged.metadata.clone()),
-    }
+    })
 }
 
 #[derive(Clone)]
@@ -90,7 +93,11 @@ impl SearchService for SharedSearchService {
         limit: usize,
         file_hint: &str,
     ) -> anyhow::Result<Vec<SearchResult>> {
-        let svc = self.inner.read().expect("shared search service poisoned").clone();
+        let svc = self
+            .inner
+            .read()
+            .map_err(|e| anyhow::anyhow!("shared search service poisoned: {}", e))?
+            .clone();
         svc.search(query, limit, file_hint).await
     }
 }
@@ -164,7 +171,7 @@ mod tests {
         let embedder: Arc<std::sync::Mutex<dyn Embedder>> =
             Arc::new(std::sync::Mutex::new(mock_embedder()));
         let search_config = default_search_config();
-        let service = create_search_service(&repo, embedder, &search_config);
+        let service = create_search_service(&repo, embedder, &search_config).unwrap();
         let arc: Arc<dyn SearchService> = service.as_arc_dyn();
 
         let rt = tokio::runtime::Runtime::new().unwrap();
