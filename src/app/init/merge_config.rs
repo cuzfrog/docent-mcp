@@ -222,16 +222,16 @@ strategy = "weighted_sum"
 [search.bm25]
 k1 = 2.0
 "#;
-        let merged = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
-        assert!(merged.contains("[search.ranking]"));
-        assert!(merged.contains("same_src_score_decay"));
-        assert!(merged.contains("0.5"));
-        assert!(merged.contains("[search.fusion]"));
-        assert!(merged.contains("strategy"));
-        assert!(merged.contains("\"weighted_sum\""));
-        assert!(merged.contains("[search.bm25]"));
-        assert!(merged.contains("k1"));
-        assert!(merged.contains("2.0"));
+        let merged_text = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
+        assert!(merged_text.contains("[search.ranking]"));
+        assert!(merged_text.contains("same_src_score_decay"));
+        assert!(merged_text.contains("0.5"));
+        assert!(merged_text.contains("[search.fusion]"));
+        assert!(merged_text.contains("strategy"));
+        assert!(merged_text.contains("\"weighted_sum\""));
+        assert!(merged_text.contains("[search.bm25]"));
+        assert!(merged_text.contains("k1"));
+        assert!(merged_text.contains("2.0"));
     }
 
     #[test]
@@ -246,24 +246,24 @@ semantic_weight = 0.8
 bm25_k1 = 2.0
 bm25_b = 0.5
 "#;
-        let merged = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
-        assert!(merged.contains("[search.ranking]"), "Should have [search.ranking] section");
-        assert!(merged.contains("same_src_score_decay"), "Should migrate same_src_score_decay");
-        assert!(merged.contains("0.5"), "same_src_score_decay should have value 0.5");
-        assert!(merged.contains("file_hint_boost"), "Should migrate file_hint_boost");
-        assert!(merged.contains("2.0"), "file_hint_boost should have value 2.0");
-        assert!(merged.contains("[search.fusion]"), "Should have [search.fusion] section");
-        assert!(merged.contains("strategy"), "Should have strategy key");
-        assert!(merged.contains("\"weighted_sum\""), "Should migrate fusion_strategy as strategy");
-        assert!(merged.contains("rrf_k"), "Should migrate rrf_k");
-        assert!(merged.contains("30.0"), "rrf_k should have value 30.0");
-        assert!(merged.contains("semantic_weight"), "Should migrate semantic_weight");
-        assert!(merged.contains("0.8"), "semantic_weight should have value 0.8");
-        assert!(merged.contains("[search.bm25]"), "Should have [search.bm25] section");
-        assert!(merged.contains("k1"), "Should have k1 key");
-        assert!(merged.contains("2.0"), "k1 should have value 2.0");
-        assert!(merged.contains("b"), "Should have b key");
-        assert!(merged.contains("0.5"), "b should have value 0.5");
+        let merged_text = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
+        assert!(merged_text.contains("[search.ranking]"), "Should have [search.ranking] section");
+        assert!(merged_text.contains("same_src_score_decay"), "Should migrate same_src_score_decay");
+        assert!(merged_text.contains("0.5"), "same_src_score_decay should have value 0.5");
+        assert!(merged_text.contains("file_hint_boost"), "Should migrate file_hint_boost");
+        assert!(merged_text.contains("2.0"), "file_hint_boost should have value 2.0");
+        assert!(merged_text.contains("[search.fusion]"), "Should have [search.fusion] section");
+        assert!(merged_text.contains("strategy"), "Should have strategy key");
+        assert!(merged_text.contains("\"weighted_sum\""), "Should migrate fusion_strategy as strategy");
+        assert!(merged_text.contains("rrf_k"), "Should migrate rrf_k");
+        assert!(merged_text.contains("30.0"), "rrf_k should have value 30.0");
+        assert!(merged_text.contains("semantic_weight"), "Should migrate semantic_weight");
+        assert!(merged_text.contains("0.8"), "semantic_weight should have value 0.8");
+        assert!(merged_text.contains("[search.bm25]"), "Should have [search.bm25] section");
+        assert!(merged_text.contains("k1"), "Should have k1 key");
+        assert!(merged_text.contains("2.0"), "k1 should have value 2.0");
+        assert!(merged_text.contains("b"), "Should have b key");
+        assert!(merged_text.contains("0.5"), "b should have value 0.5");
     }
 
     #[test]
@@ -275,25 +275,25 @@ doc_dirs = ["./"]
 chunk_overlap = 64
 "#;
 
-        let merged = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
-        let index_pos = merged.find("[index]").unwrap();
-        let next_section_pos = merged[index_pos + 1..]
+        let merged_text = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
+        let index_pos = merged_text.find("[index]").unwrap();
+        let next_section_pos = merged_text[index_pos + 1..]
             .find("\n[")
             .map(|p| index_pos + 1 + p)
-            .unwrap_or(merged.len());
-        let index_section = &merged[index_pos..next_section_pos];
+            .unwrap_or(merged_text.len());
+        let index_section = &merged_text[index_pos..next_section_pos];
 
         assert!(
             index_section.contains("chunk_size"),
             "chunk_size should appear inside the [index] section, got:\n{}",
-            merged
+            merged_text
         );
 
-        let after_last_section = &merged[next_section_pos..];
+        let after_last_section = &merged_text[next_section_pos..];
         assert!(
             !after_last_section.contains("chunk_size"),
             "chunk_size should not appear after other sections, got:\n{}",
-            merged
+            merged_text
         );
     }
 }

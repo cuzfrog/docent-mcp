@@ -45,7 +45,7 @@ struct RmcpServer {
 
 impl MCPServer for RmcpServer {
     fn into_router(self) -> anyhow::Result<Router> {
-        let service: StreamableHttpService<RmcpServer, LocalSessionManager> =
+        let streamable_http_service: StreamableHttpService<RmcpServer, LocalSessionManager> =
             StreamableHttpService::new(
                 {
                     let server = self.clone();
@@ -54,7 +54,7 @@ impl MCPServer for RmcpServer {
                 LocalSessionManager::default().into(),
                 StreamableHttpServerConfig::default(),
             );
-        let router = router(service);
+        let router = router(streamable_http_service);
         Ok(router)
     }
 }
