@@ -1,31 +1,35 @@
-use crate::domain::ChunkMetadata;
-use crate::domain::Vector;
-use super::repository::{MergedIndex, MockIndexRepository};
+use super::repository::{IndexRepository, MergedIndex};
 
-/// Create a `MockIndexRepository` whose `load_merged` returns a `MergedIndex`
-/// with the given fields.
+pub struct FixedMockIndexRepository {
+    merged: std::sync::Mutex<Option<MergedIndex>>,
+}
+
+impl FixedMockIndexRepository {
+    pub fn new(merged: MergedIndex) -> Self {
+        Self { merged: std::sync::Mutex::new(Some(merged)) }
+    }
+}
+
+impl IndexRepository for FixedMockIndexRepository {
+    fn store(&self, merged: MergedIndex) {
+        *self.merged.lock().unwrap() = Some(merged);
+    }
+
+    fn snapshot(&self) -> MergedIndex {
+        self.merged.lock().unwrap().clone().unwrap_or_else(MergedIndex::empty)
+    }
+}
+
 pub fn mock_repository_returning_merged(
-    vectors: Vector,
-    metadata: Vec<ChunkMetadata>,
+    vectors: crate::domain::Vector,
+    metadata: Vec<crate::domain::ChunkMetadata>,
     bm25_embeddings: Vec<bm25::Embedding<u32>>,
-) -> MockIndexRepository {
+) -> FixedMockIndexRepository {
     let merged = MergedIndex {
         vectors,
         metadata,
         bm25_embeddings,
         bm25_avgdl: 0.0,
     };
-    let mut mock = MockIndexRepository::new();
-    mock.expect_load_merged()
-        .returning(move || Ok(merged.clone()));
-    mock
-}
-
-/// Create a `MockIndexRepository` whose `load_merged` returns the given error.
-pub fn mock_repository_with_error(msg: &str) -> MockIndexRepository {
-    let msg = msg.to_string();
-    let mut mock = MockIndexRepository::new();
-    mock.expect_load_merged()
-        .returning(move || Err(anyhow::anyhow!("{}", msg)));
-    mock
+    FixedMockIndexRepository::new(merged)
 }

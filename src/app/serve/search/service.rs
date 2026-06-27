@@ -1,10 +1,8 @@
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, RwLock};
 
 use crate::config::SearchConfig;
-use crate::index::Embedder;
-use crate::index::IndexRepository;
-use crate::app::serve::search::backend::build_backends;
+use crate::index::{Embedder, IndexRepository};
+use crate::app::serve::search::backend::{build_backends, ScoreBackend};
 use super::fusion::create_fusion;
 use crate::app::serve::search::orchestrator::HybridSearchService;
 use super::ranking::DecayRanker;
@@ -22,40 +20,86 @@ pub trait SearchService: Send + Sync {
 
 pub fn create_search_service(
     repo: &dyn IndexRepository,
-    embedder: Arc<Mutex<dyn Embedder>>,
+    embedder: Arc<std::sync::Mutex<dyn Embedder>>,
     search_config: &SearchConfig,
-) -> anyhow::Result<Arc<dyn SearchService>> {
-    let merged = repo.load_merged()?;
-    let (semantic_backend, bm25_backend) = build_backends(&merged, embedder, search_config.bm25.k1, search_config.bm25.b);
+) -> SharedSearchService {
+    let merged = repo.snapshot();
+    let (semantic_backend, bm25_backend) =
+        build_backends(&merged, embedder, search_config.bm25.k1, search_config.bm25.b);
+    let inner = build_hybrid(&merged, semantic_backend, bm25_backend, search_config);
+    SharedSearchService {
+        inner: Arc::new(RwLock::new(inner)),
+    }
+}
 
+pub(crate) fn rebuild_search_service(
+    repo: &dyn IndexRepository,
+    embedder: Arc<std::sync::Mutex<dyn Embedder>>,
+    search_config: &SearchConfig,
+    shared: &SharedSearchService,
+) {
+    let merged = repo.snapshot();
+    let (semantic_backend, bm25_backend) =
+        build_backends(&merged, embedder, search_config.bm25.k1, search_config.bm25.b);
+    let svc = build_hybrid(&merged, semantic_backend, bm25_backend, search_config);
+    let mut guard = shared.inner.write().expect("shared search service poisoned");
+    *guard = svc;
+}
+
+fn build_hybrid(
+    merged: &crate::index::MergedIndex,
+    semantic_backend: Arc<dyn ScoreBackend>,
+    bm25_backend: Arc<dyn ScoreBackend>,
+    search_config: &SearchConfig,
+) -> HybridSearchService {
     let fusion = create_fusion(
         &search_config.fusion.strategy,
         search_config.fusion.rrf_k,
         search_config.fusion.semantic_weight,
-    )?;
-
+    )
+    .expect("fusion strategy validated at config load");
     let ranker = Arc::new(DecayRanker::new(
         search_config.ranking.same_src_score_decay,
         search_config.ranking.file_hint_boost,
     ));
-
-    let svc = HybridSearchService {
+    HybridSearchService {
         semantic_backend,
         bm25_backend,
         fusion,
         ranker,
-        metadata: Arc::new(merged.metadata),
-    };
+        metadata: Arc::new(merged.metadata.clone()),
+    }
+}
 
-    Ok(Arc::new(svc) as Arc<dyn SearchService>)
+#[derive(Clone)]
+pub(crate) struct SharedSearchService {
+    pub(crate) inner: Arc<RwLock<HybridSearchService>>,
+}
+
+impl SharedSearchService {
+    pub(crate) fn as_arc_dyn(&self) -> Arc<dyn SearchService> {
+        Arc::new(self.clone())
+    }
+}
+
+#[async_trait::async_trait]
+impl SearchService for SharedSearchService {
+    async fn search(
+        &self,
+        query: &str,
+        limit: usize,
+        file_hint: &str,
+    ) -> anyhow::Result<Vec<SearchResult>> {
+        let svc = self.inner.read().expect("shared search service poisoned").clone();
+        svc.search(query, limit, file_hint).await
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{SearchConfig, FusionConfig, RankingConfig, Bm25Config};
-    use crate::domain::Vector;
-    use crate::domain::{ChunkMetadata, DocumentContext};
+    use crate::config::{Bm25Config, FusionConfig, RankingConfig, SearchConfig};
+    use crate::domain::{ChunkMetadata, DocumentContext, Vector};
     use crate::index::mock_embedder;
     use crate::index::mock_repository_returning_merged;
 
@@ -90,8 +134,8 @@ mod tests {
                 chunk_text: "The quick brown fox jumps over the lazy dog.".to_string(),
                 section_heading: None,
                 chunk_index: 0,
-                line_start: 0,
-                line_end: 0,
+                line_start: 1,
+                line_end: 1,
             },
             ChunkMetadata {
                 doc_ctx: DocumentContext {
@@ -103,8 +147,8 @@ mod tests {
                 chunk_text: "Apples are delicious fruits.".to_string(),
                 section_heading: None,
                 chunk_index: 0,
-                line_start: 0,
-                line_end: 0,
+                line_start: 1,
+                line_end: 1,
             },
         ];
 
@@ -117,13 +161,14 @@ mod tests {
             metadata,
             vec![],
         );
-        let embedder: Arc<Mutex<dyn Embedder>> =
-            Arc::new(Mutex::new(mock_embedder()));
+        let embedder: Arc<std::sync::Mutex<dyn Embedder>> =
+            Arc::new(std::sync::Mutex::new(mock_embedder()));
         let search_config = default_search_config();
-        let service = create_search_service(&repo, embedder, &search_config).unwrap();
+        let service = create_search_service(&repo, embedder, &search_config);
+        let arc: Arc<dyn SearchService> = service.as_arc_dyn();
 
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let results = rt.block_on(service.search("apples", 5, "")).unwrap();
+        let results = rt.block_on(arc.search("apples", 5, "")).unwrap();
 
         assert!(!results.is_empty(), "Should return results");
         assert!(

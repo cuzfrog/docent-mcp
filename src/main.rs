@@ -13,24 +13,8 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Init,
-    Index(CommonIndexArgs),
-    IndexFile(CommonIndexArgs),
     Serve(ServeArgs),
     ListModels,
-}
-
-#[derive(clap::Args)]
-struct CommonIndexArgs {
-    path: Option<PathBuf>,
-
-    #[arg(long, default_value = "./docent.toml")]
-    config: PathBuf,
-
-    #[arg(long)]
-    rebuild: bool,
-
-    #[arg(long)]
-    verbose: bool,
 }
 
 #[derive(clap::Args)]
@@ -43,13 +27,9 @@ struct ServeArgs {
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::IndexFile(args) => {
-            let config = Config::load(&args.config, args.verbose)?;
-            create_application(&config)?.run_index(args.path, args.rebuild)?;
-        }
         Commands::Serve(args) => {
             let config = Config::load(&args.config, false)?;
-            create_application(&config)?.run_serve().await?;
+            create_application(config)?.run_serve().await?;
         }
         Commands::ListModels => {
             let console = docent_mcp::support::create_console();
@@ -59,10 +39,6 @@ async fn main() -> anyhow::Result<()> {
             let console = docent_mcp::support::create_console();
             docent_mcp::app::run_init(&console)?;
         }
-        Commands::Index(args) => {
-            let config = Config::load(&args.config, args.verbose)?;
-            create_application(&config)?.run_index(args.path, args.rebuild)?;
-        }
     }
     Ok(())
 }
@@ -71,94 +47,6 @@ async fn main() -> anyhow::Result<()> {
 mod tests {
     use super::*;
     use clap::Parser;
-
-    #[test]
-    fn test_index_file_minimal_positional() {
-        let cli = Cli::try_parse_from(["docent", "index-file", "./ddrs"]);
-        assert!(cli.is_ok());
-        let cli = cli.unwrap();
-        match cli.command {
-            Commands::IndexFile(args) => {
-                assert_eq!(args.path, Some(std::path::PathBuf::from("./ddrs")));
-                assert_eq!(args.config, std::path::PathBuf::from("./docent.toml"));
-                assert!(!args.rebuild);
-            }
-            _ => panic!("expected IndexFile command"),
-        }
-    }
-
-    #[test]
-    fn test_index_file_defaults_to_current_dir() {
-        let cli = Cli::try_parse_from(["docent", "index-file"]);
-        assert!(cli.is_ok());
-        let cli = cli.unwrap();
-        match cli.command {
-            Commands::IndexFile(args) => {
-                assert_eq!(args.path, None);
-                assert_eq!(args.config, std::path::PathBuf::from("./docent.toml"));
-            }
-            _ => panic!("expected IndexFile command"),
-        }
-    }
-
-    #[test]
-    fn test_index_file_with_config_flag() {
-        let cli =
-            Cli::try_parse_from(["docent", "index-file", "./ddrs", "--config", "/etc/docent.toml"]);
-        assert!(cli.is_ok());
-        let cli = cli.unwrap();
-        match cli.command {
-            Commands::IndexFile(args) => {
-                assert_eq!(args.path, Some(std::path::PathBuf::from("./ddrs")));
-                assert_eq!(args.config, std::path::PathBuf::from("/etc/docent.toml"));
-            }
-            _ => panic!("expected IndexFile command"),
-        }
-    }
-
-    #[test]
-    fn test_index_file_with_rebuild_flag() {
-        let cli = Cli::try_parse_from(["docent", "index-file", "./ddrs", "--rebuild"]);
-        assert!(cli.is_ok());
-        let cli = cli.unwrap();
-        match cli.command {
-            Commands::IndexFile(args) => {
-                assert_eq!(args.path, Some(std::path::PathBuf::from("./ddrs")));
-                assert!(args.rebuild);
-            }
-            _ => panic!("expected IndexFile command"),
-        }
-    }
-
-    #[test]
-    fn test_index_file_all_flags() {
-        let cli = Cli::try_parse_from([
-            "docent", "index-file", "./ddrs", "--config", "custom.toml", "--rebuild",
-        ]);
-        assert!(cli.is_ok());
-        let cli = cli.unwrap();
-        match cli.command {
-            Commands::IndexFile(args) => {
-                assert_eq!(args.path, Some(std::path::PathBuf::from("./ddrs")));
-                assert_eq!(args.config, std::path::PathBuf::from("custom.toml"));
-                assert!(args.rebuild);
-            }
-            _ => panic!("expected IndexFile command"),
-        }
-    }
-
-    #[test]
-    fn test_index_file_verbose_flag() {
-        let cli = Cli::try_parse_from(["docent", "index-file", "./ddrs", "--verbose"]);
-        assert!(cli.is_ok());
-        let cli = cli.unwrap();
-        match cli.command {
-            Commands::IndexFile(args) => {
-                assert!(args.verbose);
-            }
-            _ => panic!("expected IndexFile command"),
-        }
-    }
 
     #[test]
     fn test_serve_default_config() {
@@ -211,66 +99,14 @@ mod tests {
     }
 
     #[test]
-    fn test_index_default_dir() {
+    fn test_index_subcommand_removed() {
         let cli = Cli::try_parse_from(["docent", "index"]);
-        assert!(cli.is_ok());
-        match cli.unwrap().command {
-            Commands::Index(args) => {
-                assert_eq!(args.path, None);
-                assert_eq!(args.config, PathBuf::from("./docent.toml"));
-                assert!(!args.rebuild);
-                assert!(!args.verbose);
-            }
-            _ => panic!("expected Index command"),
-        }
+        assert!(cli.is_err());
     }
 
     #[test]
-    fn test_index_with_dir() {
-        let cli = Cli::try_parse_from(["docent", "index", "./my-project"]);
-        assert!(cli.is_ok());
-        match cli.unwrap().command {
-            Commands::Index(args) => {
-                assert_eq!(args.path, Some(PathBuf::from("./my-project")));
-            }
-            _ => panic!("expected Index command"),
-        }
-    }
-
-    #[test]
-    fn test_index_with_rebuild() {
-        let cli = Cli::try_parse_from(["docent", "index", "--rebuild"]);
-        assert!(cli.is_ok());
-        match cli.unwrap().command {
-            Commands::Index(args) => assert!(args.rebuild),
-            _ => panic!("expected Index command"),
-        }
-    }
-
-    #[test]
-    fn test_index_with_verbose() {
-        let cli = Cli::try_parse_from(["docent", "index", "--verbose"]);
-        assert!(cli.is_ok());
-        match cli.unwrap().command {
-            Commands::Index(args) => assert!(args.verbose),
-            _ => panic!("expected Index command"),
-        }
-    }
-
-    #[test]
-    fn test_index_with_all_flags() {
-        let cli = Cli::try_parse_from([
-            "docent", "index", "./my-dir", "--config", "custom.toml", "--rebuild", "--verbose",
-        ]);
-        assert!(cli.is_ok());
-        match cli.unwrap().command {
-            Commands::Index(args) => {
-                assert_eq!(args.path, Some(PathBuf::from("./my-dir")));
-                assert_eq!(args.config, PathBuf::from("custom.toml"));
-                assert!(args.rebuild);
-                assert!(args.verbose);
-            }
-            _ => panic!("expected Index command"),
-        }
+    fn test_index_file_subcommand_removed() {
+        let cli = Cli::try_parse_from(["docent", "index-file"]);
+        assert!(cli.is_err());
     }
 }

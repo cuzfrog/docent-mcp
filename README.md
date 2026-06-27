@@ -5,16 +5,15 @@
 **Semantic + BM25 Document search for Design Decision Records** — an experimental MCP server written in Rust that indexes markdown documents, letting agents query *why* code looks the way it does.
 
 ```
-  files ──▼── index ──▶  MCP server  ◀──── query
-                 (cache)        (HTTP)
+  files ──▼── index (in-memory) ──▶  MCP server  ◀──── query
+                              (HTTP)
 ```
 
 ## Quick Start
 
 ```sh
 docent init              # generate docent.toml config
-docent index [path]      # index .md files
-docent serve             # start MCP server on port 7878
+docent serve             # start MCP server on port 7878 (indexes doc_dirs in the background)
 ```
 
 Open [http://localhost:7878](http://localhost:7878) for the built-in Web UI.
@@ -24,21 +23,19 @@ Open [http://localhost:7878](http://localhost:7878) for the built-in Web UI.
 | Command | Description |
 |---|---|
 | `docent init` | Generate a `docent.toml` config file |
-| `docent index [dir]` | Index markdown files (default: current dir) |
-| `docent index-file <path>` | Index specific files/directories |
-| `docent serve` | Start the MCP server (streamable HTTP) |
+| `docent serve` | Start the MCP server (streamable HTTP); indexes in the background |
 | `docent list-models` | List supported embedding models |
 
-Flags: `--config <path>` (default `./docent.toml`), `--rebuild` (full re-index), `--verbose`.
+Flags: `--config <path>` (default `./docent.toml`).
 
 ## How It Works
 
-1. **Sources** — Reads markdown files
-2. **Section-aware chunking** — Splits documents into chunks, preserving heading structure
-3. **Embedding** — Converts chunks to vectors via `fastembed` (configurable model)
-4. **Index cache** — Persists vectors and metadata to disk
-5. **Semantic + BM25 search** — Hybrid scoring with configurable algorithm
-6. **MCP server** — Exposes `search_ddr` tool over streamable HTTP
+1. **Sources** — Reads markdown files from `[index] doc_dirs` (default: `./`).
+2. **Section-aware chunking** — Splits documents into chunks, preserving heading structure.
+3. **Embedding** — Converts chunks to vectors via `fastembed` (configurable model).
+4. **In-memory index** — Builds an in-memory semantic + BM25 index on `serve` startup; nothing is persisted to disk.
+5. **Semantic + BM25 search** — Hybrid scoring with configurable algorithm.
+6. **MCP server** — Exposes `search_ddr` tool over streamable HTTP.
 
 ## Install
 
@@ -47,4 +44,3 @@ TBC
 ## Documentation
 
 - [Development Guide](doc/Development.md)
-

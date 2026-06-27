@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use serde::Deserialize;
 
 /// The file types that docent indexes. Currently only Markdown files.
@@ -13,24 +11,20 @@ pub struct Config {
     pub server: ServerConfig,
     #[serde(default)]
     pub search: SearchConfig,
-    #[serde(default)]
-    pub verbose: bool,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct IndexConfig {
     #[serde(default)]
     pub embedding_model: String,
-    #[serde(default = "super::defaults::default_persist_path")]
-    pub persist_path: String,
+    #[serde(default = "super::defaults::default_doc_dirs")]
+    pub doc_dirs: Vec<String>,
     #[serde(default = "super::defaults::default_cache_dir")]
     pub cache_dir: String,
     #[serde(default = "super::defaults::default_chunk_size")]
     pub chunk_size: usize,
     #[serde(default = "super::defaults::default_chunk_overlap")]
     pub chunk_overlap: usize,
-    #[serde(default = "super::defaults::default_max_size_mb")]
-    pub max_size_mb: u64,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -81,11 +75,10 @@ impl Default for IndexConfig {
     fn default() -> Self {
         Self {
             embedding_model: String::new(),
-            persist_path: super::defaults::default_persist_path(),
+            doc_dirs: super::defaults::default_doc_dirs(),
             cache_dir: super::defaults::default_cache_dir(),
             chunk_size: super::defaults::default_chunk_size(),
             chunk_overlap: super::defaults::default_chunk_overlap(),
-            max_size_mb: super::defaults::default_max_size_mb(),
         }
     }
 }
@@ -127,8 +120,23 @@ impl Default for Bm25Config {
     }
 }
 
-impl Config {
-    pub(crate) fn persist_path_buf(&self) -> PathBuf {
-        PathBuf::from(&self.index.persist_path)
+impl IndexConfig {
+    pub(crate) fn spec_for(&self, entry: &str) -> DocDirSpec {
+        if let Some(stripped) = entry.strip_suffix("/*") {
+            DocDirSpec {
+                root: stripped.to_string(),
+                recursive: false,
+            }
+        } else {
+            DocDirSpec {
+                root: entry.trim_end_matches('/').to_string(),
+                recursive: true,
+            }
+        }
     }
+}
+
+pub(crate) struct DocDirSpec {
+    pub(crate) root: String,
+    pub(crate) recursive: bool,
 }

@@ -8,8 +8,8 @@ impl Config {
                 Run `docent list-models` to see available models."
             );
         }
-        if self.index.persist_path.is_empty() {
-            anyhow::bail!("persist_path must not be empty");
+        if self.index.doc_dirs.is_empty() {
+            anyhow::bail!("doc_dirs must not be empty");
         }
         if self.index.chunk_size == 0 {
             anyhow::bail!("chunk_size must be greater than 0");
@@ -118,17 +118,17 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_persist_path_validation_error() {
+    fn test_empty_doc_dirs_validation_error() {
         let config = Config {
             index: IndexConfig {
                 embedding_model: "BGESmallENV15Q".to_string(),
-                persist_path: "".to_string(),
+                doc_dirs: vec![],
                 ..IndexConfig::default()
             },
             ..Config::default()
         };
         let err = config.validate().unwrap_err();
-        assert_eq!(err.to_string(), "persist_path must not be empty");
+        assert_eq!(err.to_string(), "doc_dirs must not be empty");
     }
 
     #[test]

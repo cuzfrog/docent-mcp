@@ -273,9 +273,8 @@ bm25_b = 0.5
         let existing = r#"
 [index]
 embedding_model = "BGESmallENV15Q"
-persist_path = "./.docent-index"
+doc_dirs = ["./"]
 chunk_overlap = 64
-max_size_mb = 512
 "#;
 
         let merged = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();

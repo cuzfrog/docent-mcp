@@ -5,7 +5,7 @@ fn test_valid_config_parse() {
     let toml_str = r#"
 [index]
 embedding_model = "BAAI/bge-large-en"
-persist_path = "/tmp/my-index"
+doc_dirs = ["./ddrs", "./notes/*"]
 chunk_size = 1024
 chunk_overlap = 128
 
@@ -17,7 +17,7 @@ same_src_score_decay = 0.85
 "#;
     let config: Config = toml::from_str(toml_str).unwrap();
     assert_eq!(config.index.embedding_model, "BAAI/bge-large-en");
-    assert_eq!(config.index.persist_path, "/tmp/my-index");
+    assert_eq!(config.index.doc_dirs, vec!["./ddrs".to_string(), "./notes/*".to_string()]);
     assert_eq!(config.index.chunk_size, 1024);
     assert_eq!(config.index.chunk_overlap, 128);
     assert_eq!(config.server.log_level, "debug");
@@ -34,10 +34,9 @@ fn test_missing_fields_get_defaults() {
 "#;
     let config: Config = toml::from_str(toml_str).unwrap();
     assert_eq!(config.index.embedding_model, String::new());
-    assert_eq!(config.index.persist_path, super::defaults::default_persist_path());
+    assert_eq!(config.index.doc_dirs, super::defaults::default_doc_dirs());
     assert_eq!(config.index.chunk_size, super::defaults::default_chunk_size());
     assert_eq!(config.index.chunk_overlap, super::defaults::default_chunk_overlap());
-    assert_eq!(config.index.max_size_mb, super::defaults::default_max_size_mb());
     assert_eq!(config.server.log_level, super::defaults::default_log_level());
     assert!((config.search.ranking.same_src_score_decay - super::defaults::default_same_src_score_decay()).abs() < f32::EPSILON);
 }
@@ -84,16 +83,6 @@ embedding_model = "BGESmallENV15Q"
 }
 
 #[test]
-fn test_max_size_mb_defaults_to_512() {
-    let toml_str = r#"
-[index]
-embedding_model = "BGESmallENV15Q"
-"#;
-    let config: Config = toml::from_str(toml_str).unwrap();
-    assert_eq!(config.index.max_size_mb, 512);
-}
-
-#[test]
 fn test_search_config_new_fields() {
     let toml_str = r#"
 [index]
@@ -126,4 +115,34 @@ fn test_rrf_k_default() {
 fn test_semantic_weight_default() {
     let config: Config = Config::default();
     assert!((config.search.fusion.semantic_weight - 0.7).abs() < f32::EPSILON);
+}
+
+#[test]
+fn test_doc_dirs_default_is_current_dir() {
+    let config: Config = Config::default();
+    assert_eq!(config.index.doc_dirs, vec!["./".to_string()]);
+}
+
+#[test]
+fn test_spec_for_recursive_default() {
+    let cfg = IndexConfig::default();
+    let spec = cfg.spec_for("./");
+    assert_eq!(spec.root, ".");
+    assert!(spec.recursive);
+}
+
+#[test]
+fn test_spec_for_non_recursive_suffix() {
+    let cfg = IndexConfig::default();
+    let spec = cfg.spec_for("./notes/*");
+    assert_eq!(spec.root, "./notes");
+    assert!(!spec.recursive);
+}
+
+#[test]
+fn test_spec_for_explicit_recursive_no_suffix() {
+    let cfg = IndexConfig::default();
+    let spec = cfg.spec_for("./notes");
+    assert_eq!(spec.root, "./notes");
+    assert!(spec.recursive);
 }
