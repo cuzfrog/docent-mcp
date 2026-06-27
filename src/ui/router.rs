@@ -21,7 +21,6 @@ where
             "/",
             axum::routing::get(handlers::handle_index).post_service(mcp_service.clone()),
         )
-        // UI assets under /ui/ namespace
         .route("/ui/app.css", axum::routing::get(handlers::handle_css))
         .route("/ui/app.js", axum::routing::get(handlers::handle_js_app))
         .route("/ui/mcp_client.js", axum::routing::get(handlers::handle_js_mcp_client))
@@ -144,7 +143,6 @@ mod tests {
             .oneshot(Request::get("/unknown").body(Body::empty()).unwrap())
             .await
             .unwrap();
-        // The fallback_service handles it
         assert_eq!(response.status(), StatusCode::OK);
     }
 }

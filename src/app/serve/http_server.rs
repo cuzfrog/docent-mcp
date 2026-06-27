@@ -65,7 +65,6 @@ struct TokioHttpServer {
 #[async_trait]
 impl HttpServer for TokioHttpServer {
     async fn serve(&self) -> anyhow::Result<()> {
-        // Kick off background indexing so the HTTP listener is not blocked.
         let runner = self.indexer.clone();
         let console = self.console.clone();
         tokio::spawn(async move {

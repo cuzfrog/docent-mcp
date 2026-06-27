@@ -72,7 +72,6 @@ impl RmcpServer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
 
-        // Validate query
         if params.query.trim().is_empty() {
             return Err(ErrorData::invalid_params(
                 "query is required",
@@ -86,7 +85,6 @@ impl RmcpServer {
             ));
         }
 
-        // Execute search
         let results = self
             .search_service
             .search(&params.query, params.limit as usize, &params.file_hint)

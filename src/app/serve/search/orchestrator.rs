@@ -94,10 +94,6 @@ mod tests {
 
     use super::HybridSearchService;
 
-    // ---------------------------------------------------------------------------
-    // FakeScoreBackend — returns controllable scores for tests
-    // ---------------------------------------------------------------------------
-
     struct FakeScoreBackend {
         scores: Vec<f32>,
     }
@@ -107,10 +103,6 @@ mod tests {
             Ok(self.scores.clone())
         }
     }
-
-    // ---------------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------------
 
     fn make_meta(
         source_path: &str,
@@ -174,10 +166,6 @@ mod tests {
             metadata: Arc::new(metadata),
         }
     }
-
-    // ---------------------------------------------------------------------------
-    // Tests
-    // ---------------------------------------------------------------------------
 
     #[test]
     fn test_search_returns_results_sorted_by_total_score() {

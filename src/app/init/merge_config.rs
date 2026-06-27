@@ -16,7 +16,6 @@ pub(super) fn merge_toml(template: &str, existing: &str) -> anyhow::Result<Strin
 
     let mut result = template.to_string();
 
-    // Migration: restructure old flat [search] section into nested sections.
     let mut existing_root = existing_root;
     if let Some(toml::Value::Table(ref search_table)) = existing_root.get("search") {
         let has_flat_keys = [
@@ -70,20 +69,16 @@ pub(super) fn merge_toml(template: &str, existing: &str) -> anyhow::Result<Strin
                 }
             }
 
-            // Keep non-migrated keys directly in [search]
             for (key, val) in keep_keys {
                 nested_search.insert(key, val);
             }
 
-            // Replace the old [search] value with the nested version
             if let toml::Value::Table(ref mut root_table) = existing_root {
                 root_table.insert("search".to_string(), toml::Value::Table(nested_search));
             }
         }
     }
 
-    // Recursively walk nested tables to find leaf key-value pairs and replace
-    // them in the template using the dotted section path (e.g. "search.ranking").
     fn process_section(
         result: &mut String,
         table: &toml::value::Table,
