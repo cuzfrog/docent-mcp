@@ -156,13 +156,24 @@ fn read_document(root: &Path, rel: &str) -> Option<IndexableDocument> {
     }
     let title = extract_title(&content).unwrap_or_else(|| title_from_path(rel));
     let source_revision = sha256_hex(content.as_bytes());
+    let modified_at = file_modified_iso8601(&full);
     Some(IndexableDocument {
         source_path: rel.to_string(),
         source_revision,
         title,
         body: content,
-        modified_at: None,
+        modified_at,
     })
+}
+
+fn file_modified_iso8601(path: &Path) -> Option<String> {
+    let metadata = std::fs::metadata(path).ok()?;
+    let modified = metadata.modified().ok()?;
+    let duration = modified.duration_since(std::time::UNIX_EPOCH).ok()?;
+    let secs = duration.as_secs() as i64;
+    let nanos = duration.subsec_nanos();
+    chrono::DateTime::<chrono::Utc>::from_timestamp(secs, nanos)
+        .map(|dt| dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
 }
 
 fn title_from_path(rel: &str) -> String {
@@ -250,6 +261,40 @@ mod tests {
         let mut files = discover_files(&tmp, true, &patterns, &console);
         files.sort();
         assert_eq!(files, vec!["a.md".to_string(), "nested/b.md".to_string()]);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn file_modified_iso8601_returns_iso_for_real_file() {
+        let tmp = std::env::temp_dir().join("docent_iso8601");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let file = tmp.join("a.md");
+        std::fs::write(&file, "content").unwrap();
+        let iso = file_modified_iso8601(&file).expect("file should have mtime");
+        assert!(iso.ends_with('Z'), "expected UTC Z suffix, got {}", iso);
+        let parsed = chrono::DateTime::parse_from_rfc3339(&iso).expect("must parse as RFC 3339");
+        let now = chrono::Utc::now();
+        let diff = (now - parsed.with_timezone(&chrono::Utc)).num_seconds().abs();
+        assert!(diff < 60, "mtime should be within 60s of now, got diff {}s", diff);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn file_modified_iso8601_returns_none_for_missing_file() {
+        let path = Path::new("/nonexistent/path/that/does/not/exist.md");
+        assert_eq!(file_modified_iso8601(path), None);
+    }
+
+    #[test]
+    fn read_document_populates_modified_at_from_mtime() {
+        let tmp = std::env::temp_dir().join("docent_read_doc");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let file = tmp.join("doc.md");
+        std::fs::write(&file, "# Title\n\nbody").unwrap();
+        let doc = read_document(&tmp, "doc.md").expect("doc should be read");
+        assert!(doc.modified_at.is_some(), "modified_at should be populated");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 }
