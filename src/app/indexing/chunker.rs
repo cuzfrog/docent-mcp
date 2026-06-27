@@ -102,7 +102,6 @@ fn simple_chunk(body: &str, chunk_size: usize, chunk_overlap: usize) -> Vec<Simp
         }
         let chars: Vec<char> = text.chars().collect();
         let mut i = 0;
-        let mut local_idx = 0;
         while i < chars.len() {
             let end_i = (i + approx_chars).min(chars.len());
             let slice: String = chars[i..end_i].iter().collect();
@@ -112,13 +111,11 @@ fn simple_chunk(body: &str, chunk_size: usize, chunk_overlap: usize) -> Vec<Simp
                 line_start: start + 1,
                 line_end: end,
             });
-            local_idx += 1;
             if end_i >= chars.len() {
                 break;
             }
             i = end_i.saturating_sub(overlap_chars);
         }
-        let _ = local_idx;
     }
     out
 }

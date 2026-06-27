@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Commands::Serve(args) => {
-            let config = Config::load(&args.config, false)?;
+            let config = Config::load(&args.config)?;
             create_application(config)?.run_serve().await?;
         }
         Commands::ListModels => {

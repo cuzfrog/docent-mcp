@@ -20,13 +20,6 @@ impl Config {
         if self.index.chunk_overlap >= self.index.chunk_size {
             anyhow::bail!("chunk_overlap must be less than chunk_size");
         }
-        match self.server.log_level.as_str() {
-            "debug" | "info" | "warn" | "error" => {}
-            other => anyhow::bail!(
-                "invalid log_level '{}': must be one of debug, info, warn, error",
-                other
-            ),
-        }
         if self.search.ranking.same_src_score_decay < 0.0 || self.search.ranking.same_src_score_decay > 1.0 {
             anyhow::bail!(
                 "same_src_score_decay must be in range 0.0..=1.0, got {}",
@@ -129,41 +122,6 @@ mod tests {
         };
         let err = config.validate().unwrap_err();
         assert_eq!(err.to_string(), "doc_dirs must not be empty");
-    }
-
-    #[test]
-    fn test_invalid_log_level_validation_error() {
-        let config = Config {
-            index: IndexConfig {
-                embedding_model: "BGESmallENV15Q".to_string(),
-                ..IndexConfig::default()
-            },
-            server: ServerConfig {
-                log_level: "verbose".to_string(),
-                ..ServerConfig::default()
-            },
-            ..Config::default()
-        };
-        let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("invalid log_level 'verbose'"));
-    }
-
-    #[test]
-    fn test_valid_log_levels() {
-        for level in &["debug", "info", "warn", "error"] {
-            let config = Config {
-                index: IndexConfig {
-                    embedding_model: "BGESmallENV15Q".to_string(),
-                    ..IndexConfig::default()
-                },
-                server: ServerConfig {
-                    log_level: level.to_string(),
-                    ..ServerConfig::default()
-                },
-                ..Config::default()
-            };
-            assert!(config.validate().is_ok(), "log_level '{}' should be valid", level);
-        }
     }
 
     #[test]

@@ -19,5 +19,4 @@ k1                  = 1.2            # BM25 k1 parameter
 b                   = 0.75           # BM25 b parameter
 
 [server]
-log_level = "debug"                   # debug | info | warn | error
 port      = 7878                      # default 0 = random available port

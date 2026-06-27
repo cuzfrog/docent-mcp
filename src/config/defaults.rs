@@ -16,10 +16,6 @@ pub(crate) const fn default_chunk_overlap() -> usize {
     64
 }
 
-pub(crate) fn default_log_level() -> String {
-    "warn".to_string()
-}
-
 pub(crate) const fn default_port() -> u16 {
     0
 }

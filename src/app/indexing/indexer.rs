@@ -12,8 +12,6 @@ use crate::support::path_to_string;
 
 use super::chunker;
 
-const GLOB_DEFAULT: &[&str] = GLOB_PATTERNS;
-
 #[async_trait]
 pub trait Indexer: Send + Sync {
     async fn run(&self, console: Arc<dyn Console>);
@@ -43,7 +41,6 @@ struct FileIndexer {
 #[async_trait]
 impl Indexer for FileIndexer {
     async fn run(&self, console: Arc<dyn Console>) {
-        let console = console;
         console.info("Background indexing: scanning documents...");
 
         let result = tokio::task::spawn_blocking({
@@ -61,7 +58,6 @@ impl Indexer for FileIndexer {
                 console.info(&format!("Background indexing: {} chunks", chunks.len()));
                 let vectors = chunker::embed_chunks(&chunks, &embedder)?;
                 let metadata = chunker::build_metadata(&docs, &chunks);
-                let dims = embedder.lock().expect("embedder poisoned").dims();
                 if metadata.len() != vectors.len() {
                     anyhow::bail!(
                         "internal indexing mismatch: {} chunks but {} vectors",
@@ -69,7 +65,6 @@ impl Indexer for FileIndexer {
                         vectors.len()
                     );
                 }
-                let _ = dims;
                 let merged = MergedIndex::from_batch(
                     &crate::domain::IndexedBatch { vectors, metadata },
                     config.search.bm25.k1,
@@ -116,7 +111,7 @@ fn collect_documents(
             console.warn(&format!("doc_dir '{}' does not exist; skipping.", spec.root));
             continue;
         }
-        let patterns: Vec<String> = GLOB_DEFAULT.iter().map(|s| s.to_string()).collect();
+        let patterns: Vec<String> = GLOB_PATTERNS.iter().map(|s| s.to_string()).collect();
         let files = discover_files(&root, spec.recursive, &patterns);
         console.info(&format!(
             "Scanning '{}': {} files",

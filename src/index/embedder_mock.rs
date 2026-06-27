@@ -11,8 +11,6 @@ use super::embedder::MockEmbedder;
 /// Every call with the same input produces the same vector.
 pub fn mock_embedder() -> MockEmbedder {
     let mut mock = MockEmbedder::new();
-    mock.expect_dims()
-        .return_const(4usize);
     mock.expect_embed()
         .returning(|texts: &[String]| {
             Ok(texts

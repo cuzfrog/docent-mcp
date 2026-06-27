@@ -29,8 +29,6 @@ pub struct IndexConfig {
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct ServerConfig {
-    #[serde(default = "super::defaults::default_log_level")]
-    pub log_level: String,
     #[serde(default = "super::defaults::default_port")]
     pub port: u16,
 }
@@ -86,7 +84,6 @@ impl Default for IndexConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            log_level: super::defaults::default_log_level(),
             port: super::defaults::default_port(),
         }
     }

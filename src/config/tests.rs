@@ -10,7 +10,6 @@ chunk_size = 1024
 chunk_overlap = 128
 
 [server]
-log_level = "debug"
 
 [search.ranking]
 same_src_score_decay = 0.85
@@ -20,7 +19,6 @@ same_src_score_decay = 0.85
     assert_eq!(config.index.doc_dirs, vec!["./ddrs".to_string(), "./notes/*".to_string()]);
     assert_eq!(config.index.chunk_size, 1024);
     assert_eq!(config.index.chunk_overlap, 128);
-    assert_eq!(config.server.log_level, "debug");
     assert_eq!(config.server.port, 0);
     assert!((config.search.ranking.same_src_score_decay - 0.85).abs() < f32::EPSILON);
 }
@@ -37,7 +35,6 @@ fn test_missing_fields_get_defaults() {
     assert_eq!(config.index.doc_dirs, super::defaults::default_doc_dirs());
     assert_eq!(config.index.chunk_size, super::defaults::default_chunk_size());
     assert_eq!(config.index.chunk_overlap, super::defaults::default_chunk_overlap());
-    assert_eq!(config.server.log_level, super::defaults::default_log_level());
     assert!((config.search.ranking.same_src_score_decay - super::defaults::default_same_src_score_decay()).abs() < f32::EPSILON);
 }
 
@@ -45,11 +42,9 @@ fn test_missing_fields_get_defaults() {
 fn test_missing_index_section() {
     let toml_str = r#"
 [server]
-log_level = "info"
 "#;
     let config: Config = toml::from_str(toml_str).unwrap();
     assert_eq!(config.index, IndexConfig::default());
-    assert_eq!(config.server.log_level, "info");
 }
 
 #[test]
@@ -60,7 +55,6 @@ embedding_model = "BGESmallENV15Q"
 "#;
     let config: Config = toml::from_str(toml_str).unwrap();
     assert_eq!(config.index.embedding_model, "BGESmallENV15Q");
-    assert_eq!(config.server.log_level, super::defaults::default_log_level());
 }
 
 #[test]
