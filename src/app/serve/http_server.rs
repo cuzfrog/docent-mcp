@@ -65,10 +65,10 @@ struct TokioHttpServer {
 #[async_trait]
 impl HttpServer for TokioHttpServer {
     async fn serve(&self) -> anyhow::Result<()> {
-        let runner = self.indexer.clone();
+        let indexer_runner = self.indexer.clone();
         let console = self.console.clone();
         tokio::spawn(async move {
-            runner.run(console).await;
+            indexer_runner.run(console).await;
         });
 
         let addr = format!("127.0.0.1:{}", self.config.server.port);

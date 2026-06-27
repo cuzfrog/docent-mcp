@@ -143,9 +143,9 @@ mod tests {
             .iter()
             .enumerate()
             .map(|(i, t)| {
-                let path = format!("doc{}.md", i);
+                let source_path = format!("doc{}.md", i);
                 let title = format!("Doc {}", i);
-                make_meta(&path, &title, t, 0)
+                make_meta(&source_path, &title, t, 0)
             })
             .collect();
 
