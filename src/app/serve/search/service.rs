@@ -19,44 +19,44 @@ pub trait SearchService: Send + Sync {
 }
 
 pub fn create_search_service(
-    repo: &dyn IndexRepository,
+    index_repository: &dyn IndexRepository,
     embedder: Arc<std::sync::Mutex<dyn Embedder>>,
     search_config: &SearchConfig,
 ) -> anyhow::Result<SharedSearchService> {
-    let merged = repo.snapshot()?;
+    let merged_index = index_repository.snapshot()?;
     let (semantic_backend, bm25_backend) =
-        build_backends(&merged, embedder, search_config.bm25.k1, search_config.bm25.b);
-    let inner = build_hybrid(&merged, semantic_backend, bm25_backend, search_config)?;
+        build_backends(&merged_index, embedder, search_config.bm25.k1, search_config.bm25.b);
+    let inner = build_hybrid(&merged_index, semantic_backend, bm25_backend, search_config)?;
     Ok(SharedSearchService {
         inner: Arc::new(RwLock::new(inner)),
     })
 }
 
 pub(crate) fn rebuild_search_service(
-    repo: &dyn IndexRepository,
+    index_repository: &dyn IndexRepository,
     embedder: Arc<std::sync::Mutex<dyn Embedder>>,
     search_config: &SearchConfig,
     shared: &SharedSearchService,
 ) -> anyhow::Result<()> {
-    let merged = repo.snapshot()?;
+    let merged_index = index_repository.snapshot()?;
     let (semantic_backend, bm25_backend) =
-        build_backends(&merged, embedder, search_config.bm25.k1, search_config.bm25.b);
-    let svc = build_hybrid(&merged, semantic_backend, bm25_backend, search_config)?;
+        build_backends(&merged_index, embedder, search_config.bm25.k1, search_config.bm25.b);
+    let search_service = build_hybrid(&merged_index, semantic_backend, bm25_backend, search_config)?;
     let mut guard = shared
         .inner
         .write()
         .map_err(|e| anyhow::anyhow!("shared search service poisoned: {}", e))?;
-    *guard = svc;
+    *guard = search_service;
     Ok(())
 }
 
 fn build_hybrid(
-    merged: &MergedIndex,
+    merged_index: &MergedIndex,
     semantic_backend: Arc<dyn ScoreBackend>,
     bm25_backend: Arc<dyn ScoreBackend>,
     search_config: &SearchConfig,
 ) -> anyhow::Result<HybridSearchService> {
-    let fusion = create_fusion(
+    let score_fusion = create_fusion(
         &search_config.fusion.strategy,
         search_config.fusion.rrf_k,
         search_config.fusion.semantic_weight,
@@ -68,9 +68,9 @@ fn build_hybrid(
     Ok(HybridSearchService {
         semantic_backend,
         bm25_backend,
-        fusion,
+        score_fusion,
         ranker,
-        metadata: Arc::new(merged.metadata.clone()),
+        chunk_metadatas: Arc::new(merged_index.metadata.clone()),
     })
 }
 
@@ -93,12 +93,12 @@ impl SearchService for SharedSearchService {
         limit: usize,
         file_hint: &str,
     ) -> anyhow::Result<Vec<SearchResult>> {
-        let svc = self
+        let search_service = self
             .inner
             .read()
             .map_err(|e| anyhow::anyhow!("shared search service poisoned: {}", e))?
             .clone();
-        svc.search(query, limit, file_hint).await
+        search_service.search(query, limit, file_hint).await
     }
 }
 
@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn test_build_hybrid_search_service_without_bm25() {
-        let metadata = vec![
+        let chunk_metadatas = vec![
             ChunkMetadata {
                 doc_ctx: DocumentContext {
                     source_path: Arc::from("doc1.md"),
@@ -159,20 +159,20 @@ mod tests {
             },
         ];
 
-        let repo = mock_repository_returning_merged(
+        let index_repository = mock_repository_returning_merged(
             Vector::from_vec_vec(vec![
                 vec![1.0, 0.0, 0.0, 0.0],
                 vec![0.0, 1.0, 0.0, 0.0],
             ])
             .unwrap(),
-            metadata,
+            chunk_metadatas,
             vec![],
         );
         let embedder: Arc<std::sync::Mutex<dyn Embedder>> =
             Arc::new(std::sync::Mutex::new(mock_embedder()));
         let search_config = default_search_config();
-        let service = create_search_service(&repo, embedder, &search_config).unwrap();
-        let arc: Arc<dyn SearchService> = service.as_arc_dyn();
+        let search_service = create_search_service(&index_repository, embedder, &search_config).unwrap();
+        let arc: Arc<dyn SearchService> = search_service.as_arc_dyn();
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let results = rt.block_on(arc.search("apples", 5, "")).unwrap();

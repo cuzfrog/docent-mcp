@@ -29,11 +29,11 @@ pub fn mock_repository_returning_merged(
     metadata: Vec<crate::domain::ChunkMetadata>,
     bm25_embeddings: Vec<bm25::Embedding<u32>>,
 ) -> FixedMockIndexRepository {
-    let merged = MergedIndex {
+    let merged_index = MergedIndex {
         vectors,
         metadata,
         bm25_embeddings,
         bm25_avgdl: 0.0,
     };
-    FixedMockIndexRepository::new(merged)
+    FixedMockIndexRepository::new(merged_index)
 }

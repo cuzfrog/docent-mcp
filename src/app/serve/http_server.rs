@@ -22,7 +22,7 @@ pub fn create_http_server(
     config: Config,
     console: Arc<dyn Console>,
 ) -> anyhow::Result<Box<dyn HttpServer>> {
-    let repo: Arc<dyn IndexRepository> = Arc::new(create_index_repository());
+    let index_repository: Arc<dyn IndexRepository> = Arc::new(create_index_repository());
 
     let factory = create_model_factory(
         &config.index.embedding_model,
@@ -35,12 +35,12 @@ pub fn create_http_server(
     let embedder: Arc<Mutex<dyn Embedder>> =
         Arc::new(Mutex::new(create_embedder(model)));
 
-    let shared_search = create_search_service(repo.as_ref(), embedder.clone(), &config.search)?;
+    let shared_search = create_search_service(index_repository.as_ref(), embedder.clone(), &config.search)?;
     let search_service: Arc<dyn SearchService> = shared_search.as_arc_dyn();
 
     let indexer = create_indexer(
         config.clone(),
-        repo.clone(),
+        index_repository.clone(),
         embedder.clone(),
         shared_search,
     );

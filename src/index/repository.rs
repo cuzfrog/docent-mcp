@@ -25,11 +25,11 @@ impl MergedIndex {
     }
 
     pub(crate) fn from_batch(batch: &IndexedBatch, k1: f32, b: f32) -> anyhow::Result<Self> {
-        let vectors = Vector::from_vec_vec(batch.vectors.clone())?;
+        let chunk_vectors = Vector::from_vec_vec(batch.vectors.clone())?;
         let chunk_texts: Vec<&str> = batch.metadata.iter().map(|m| m.chunk_text.as_str()).collect();
         let (bm25_embeddings, bm25_avgdl) = build_bm25(&chunk_texts, k1, b);
         Ok(MergedIndex {
-            vectors,
+            vectors: chunk_vectors,
             metadata: batch.metadata.clone(),
             bm25_embeddings,
             bm25_avgdl,
@@ -85,15 +85,15 @@ mod tests {
 
     #[test]
     fn test_in_memory_repository_starts_empty() {
-        let repo = InMemoryIndexRepository::new();
-        let snap = repo.snapshot().unwrap();
+        let index_repository = InMemoryIndexRepository::new();
+        let snap = index_repository.snapshot().unwrap();
         assert_eq!(snap.vectors.len(), 0);
         assert!(snap.metadata.is_empty());
     }
 
     #[test]
     fn test_in_memory_repository_store_then_snapshot() {
-        let repo = InMemoryIndexRepository::new();
+        let index_repository = InMemoryIndexRepository::new();
         let batch = IndexedBatch {
             vectors: vec![vec![1.0, 0.0, 0.0, 0.0], vec![0.0, 1.0, 0.0, 0.0]],
             metadata: vec![
@@ -125,9 +125,9 @@ mod tests {
                 },
             ],
         };
-        let merged = MergedIndex::from_batch(&batch, 1.2, 0.75).unwrap();
-        repo.store(merged).unwrap();
-        let snap = repo.snapshot().unwrap();
+        let merged_index = MergedIndex::from_batch(&batch, 1.2, 0.75).unwrap();
+        index_repository.store(merged_index).unwrap();
+        let snap = index_repository.snapshot().unwrap();
         assert_eq!(snap.vectors.len(), 2);
         assert_eq!(snap.metadata.len(), 2);
         assert_eq!(snap.bm25_embeddings.len(), 2);

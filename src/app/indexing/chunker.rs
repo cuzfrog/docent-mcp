@@ -131,8 +131,8 @@ pub(crate) fn embed_chunks(
         let mut emb = embedder
             .lock()
             .map_err(|e| anyhow::anyhow!("embedder mutex poisoned: {}", e))?;
-        let vectors = emb.embed(&batch_texts)?;
-        all.extend(vectors);
+        let chunk_vectors = emb.embed(&batch_texts)?;
+        all.extend(chunk_vectors);
     }
     Ok(all)
 }

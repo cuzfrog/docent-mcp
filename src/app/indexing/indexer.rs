@@ -19,13 +19,13 @@ pub trait Indexer: Send + Sync {
 
 pub fn create_indexer(
     config: Config,
-    repo: Arc<dyn IndexRepository>,
+    index_repository: Arc<dyn IndexRepository>,
     embedder: Arc<Mutex<dyn Embedder>>,
     search: SharedSearchService,
 ) -> Arc<dyn Indexer> {
     Arc::new(FileIndexer {
         config,
-        repo,
+        index_repository,
         embedder,
         search,
     })
@@ -33,7 +33,7 @@ pub fn create_indexer(
 
 struct FileIndexer {
     config: Config,
-    repo: Arc<dyn IndexRepository>,
+    index_repository: Arc<dyn IndexRepository>,
     embedder: Arc<Mutex<dyn Embedder>>,
     search: SharedSearchService,
 }
@@ -45,32 +45,32 @@ impl Indexer for FileIndexer {
 
         let result = tokio::task::spawn_blocking({
             let config = self.config.clone();
-            let repo = self.repo.clone();
+            let index_repository = self.index_repository.clone();
             let embedder = self.embedder.clone();
             let console = console.clone();
             move || -> anyhow::Result<usize> {
                 let docs = collect_documents(&config, &console)?;
                 if docs.is_empty() {
-                    repo.store(MergedIndex::empty()?)?;
+                    index_repository.store(MergedIndex::empty()?)?;
                     return Ok(0);
                 }
                 let chunks = chunker::chunk_documents(&docs, &config);
                 console.info(&format!("Background indexing: {} chunks", chunks.len()));
-                let vectors = chunker::embed_chunks(&chunks, &embedder)?;
-                let metadata = chunker::build_metadata(&docs, &chunks);
-                if metadata.len() != vectors.len() {
+                let chunk_vectors = chunker::embed_chunks(&chunks, &embedder)?;
+                let chunk_metadatas = chunker::build_metadata(&docs, &chunks);
+                if chunk_metadatas.len() != chunk_vectors.len() {
                     anyhow::bail!(
                         "internal indexing mismatch: {} chunks but {} vectors",
                         chunks.len(),
-                        vectors.len()
+                        chunk_vectors.len()
                     );
                 }
-                let merged = MergedIndex::from_batch(
-                    &IndexedBatch { vectors, metadata },
+                let merged_index = MergedIndex::from_batch(
+                    &IndexedBatch { vectors: chunk_vectors, metadata: chunk_metadatas },
                     config.search.bm25.k1,
                     config.search.bm25.b,
                 )?;
-                repo.store(merged)?;
+                index_repository.store(merged_index)?;
                 Ok(chunks.len())
             }
         })
@@ -83,7 +83,7 @@ impl Indexer for FileIndexer {
                     count
                 ));
                 if let Err(e) = rebuild_search_service(
-                    self.repo.as_ref(),
+                    self.index_repository.as_ref(),
                     self.embedder.clone(),
                     &self.config.search,
                     &self.search,

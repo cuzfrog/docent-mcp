@@ -10,9 +10,9 @@ use super::SearchService;
 pub(crate) struct HybridSearchService {
     pub(crate) semantic_backend: Arc<dyn ScoreBackend>,
     pub(crate) bm25_backend: Arc<dyn ScoreBackend>,
-    pub(crate) fusion: Arc<dyn ScoreFusion>,
+    pub(crate) score_fusion: Arc<dyn ScoreFusion>,
     pub(crate) ranker: Arc<dyn Ranker>,
-    pub(crate) metadata: Arc<Vec<ChunkMetadata>>,
+    pub(crate) chunk_metadatas: Arc<Vec<ChunkMetadata>>,
 }
 
 impl Clone for HybridSearchService {
@@ -20,9 +20,9 @@ impl Clone for HybridSearchService {
         Self {
             semantic_backend: Arc::clone(&self.semantic_backend),
             bm25_backend: Arc::clone(&self.bm25_backend),
-            fusion: Arc::clone(&self.fusion),
+            score_fusion: Arc::clone(&self.score_fusion),
             ranker: Arc::clone(&self.ranker),
-            metadata: Arc::clone(&self.metadata),
+            chunk_metadatas: Arc::clone(&self.chunk_metadatas),
         }
     }
 }
@@ -37,9 +37,9 @@ impl SearchService for HybridSearchService {
     ) -> anyhow::Result<Vec<SearchResult>> {
         let semantic_backend = Arc::clone(&self.semantic_backend);
         let bm25_backend = Arc::clone(&self.bm25_backend);
-        let fusion = Arc::clone(&self.fusion);
+        let score_fusion = Arc::clone(&self.score_fusion);
         let ranker = Arc::clone(&self.ranker);
-        let metadata = Arc::clone(&self.metadata);
+        let chunk_metadatas = Arc::clone(&self.chunk_metadatas);
         let query = query.to_string();
         let file_hint = file_hint.to_string();
 
@@ -47,7 +47,7 @@ impl SearchService for HybridSearchService {
             let semantic_scores = semantic_backend.score(&query)?;
             let bm25_scores = bm25_backend.score(&query)?;
 
-            let chunk_count = metadata.len();
+            let chunk_count = chunk_metadatas.len();
             anyhow::ensure!(
                 semantic_scores.len() == chunk_count,
                 "semantic scores length {} != metadata length {}",
@@ -61,10 +61,10 @@ impl SearchService for HybridSearchService {
                 chunk_count
             );
 
-            let fused = fusion.fuse(&semantic_scores, &bm25_scores);
+            let fused = score_fusion.fuse(&semantic_scores, &bm25_scores);
 
             let file_hint: Option<&str> = if file_hint.is_empty() { None } else { Some(&file_hint) };
-            let results = ranker.rank(&fused, &metadata, limit, file_hint);
+            let results = ranker.rank(&fused, &chunk_metadatas, limit, file_hint);
 
             let results: Vec<SearchResult> = results
                 .into_iter()
@@ -139,7 +139,7 @@ mod tests {
         texts: &[&str],
         file_hint_boost: f32,
     ) -> HybridSearchService {
-        let metadata: Vec<ChunkMetadata> = texts
+        let chunk_metadatas: Vec<ChunkMetadata> = texts
             .iter()
             .enumerate()
             .map(|(i, t)| {
@@ -155,15 +155,15 @@ mod tests {
         let bm25_backend = Arc::new(FakeScoreBackend {
             scores: bm25_scores,
         });
-        let fusion = create_fusion("rrf", 60.0, 0.7).unwrap();
+        let score_fusion = create_fusion("rrf", 60.0, 0.7).unwrap();
         let ranker = create_decay_ranker(0.9, file_hint_boost);
 
         HybridSearchService {
             semantic_backend,
             bm25_backend,
-            fusion,
+            score_fusion,
             ranker,
-            metadata: Arc::new(metadata),
+            chunk_metadatas: Arc::new(chunk_metadatas),
         }
     }
 
@@ -306,7 +306,7 @@ mod tests {
 
     #[test]
     fn test_file_hint_boost_with_decay_interaction() {
-        let metadata = vec![
+        let chunk_metadatas = vec![
             make_meta("same.md", "Doc", "content 0", 0),
             make_meta("same.md", "Doc", "content 1", 1),
             make_meta("same.md", "Doc", "content 2", 2),
@@ -317,14 +317,14 @@ mod tests {
 
         let semantic_backend = Arc::new(FakeScoreBackend { scores: semantic_scores });
         let bm25_backend = Arc::new(FakeScoreBackend { scores: bm25_scores });
-        let fusion = create_fusion("rrf", 60.0, 0.7).unwrap();
+        let score_fusion = create_fusion("rrf", 60.0, 0.7).unwrap();
         let ranker = create_decay_ranker(0.5, 1.5);
         let svc = HybridSearchService {
             semantic_backend,
             bm25_backend,
-            fusion,
+            score_fusion,
             ranker,
-            metadata: Arc::new(metadata),
+            chunk_metadatas: Arc::new(chunk_metadatas),
         };
 
         let rt = tokio::runtime::Runtime::new().unwrap();
