@@ -1,5 +1,5 @@
 ---
-readonly: [mod.rs]
+sealed: [mod.rs]
 ---
 
 # Module - index

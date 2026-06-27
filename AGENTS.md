@@ -65,7 +65,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 `MODULE.md` frontmatter format:
 ```md
 ---
-readonly: [mod.rs]
+sealed: [mod.rs]
 ---
 ```
 or
