@@ -10,10 +10,6 @@ Provide abstractions to hide the code base from 3rd party implementation so that
 * pub trait `EmbeddingModel`
 * struct `FastEmbedEmbeddingModel` to wrap `fastembed::TextEmbedding`
 
-## tokenizer.rs
-* pub trait `Tokenizer`
-* struct `TokenizerImpl` to wrap `tokenizers::Tokenizer`
-
 ## model_factory.rs
-* pub trait ModelFactory - create model and tokenizer.
+* pub trait ModelFactory - create the embedding model and its tokenizer cache.
 * struct `ModelFactoryImpl` to implement ModelFactory.

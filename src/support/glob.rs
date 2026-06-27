@@ -17,8 +17,6 @@ static GLOB_CACHE: Mutex<Option<(Vec<String>, GlobSet)>> = Mutex::new(None);
 /// `*` will not match `/`, so `./*.md` matches `CLAUDE.md` but not `dir/file.md`.
 pub(crate) fn matches_any_pattern(path: &str, patterns: &[String]) -> bool {
     let set = get_glob_set(patterns);
-    // `matches` returns indices in ascending order.
-    // The last (rightmost) matching pattern decides include/exclude.
     if let Some(idx) = set.matches(path).into_iter().last() {
         return !patterns[idx].starts_with('!');
     }
@@ -52,7 +50,6 @@ fn build_glob_set(patterns: &[String]) -> Result<GlobSet, globset::Error> {
     for p in patterns {
         let raw = p.strip_prefix('!').unwrap_or(p);
         let (pat, literal_sep) = if let Some(rest) = raw.strip_prefix("./") {
-            // `./` prefix means "current dir only": `*` should not match `/`
             (rest, true)
         } else {
             (raw, false)
@@ -143,9 +140,7 @@ mod tests {
     fn test_dot_slash_prefix_stripped() {
         assert!(matches_any_pattern("CLAUDE.md", &["./*.md".to_string()]));
         assert!(matches_any_pattern("CLAUDE.md", &["./CLAUDE.md".to_string()]));
-        // `./` implies root only; `*` should not match `/`
         assert!(!matches_any_pattern("abc/bbc.md", &["./*.md".to_string()]));
-        // Without `./`, `*.md` still matches across directories (backward compat)
         assert!(matches_any_pattern("abc/bbc.md", &["*.md".to_string()]));
     }
 

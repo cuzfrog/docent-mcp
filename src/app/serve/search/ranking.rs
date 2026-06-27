@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::domain::ChunkMetadata;
 
 use super::types::SearchResult;
@@ -12,15 +14,19 @@ pub(crate) trait Ranker: Send + Sync {
     ) -> Vec<(usize, SearchResult)>;
 }
 
-pub(crate) struct DecayRanker {
+struct DecayRanker {
     same_src_score_decay: f32,
     file_hint_boost: f32,
 }
 
-impl DecayRanker {
-    pub(crate) fn new(same_src_score_decay: f32, file_hint_boost: f32) -> Self {
-        Self { same_src_score_decay, file_hint_boost }
-    }
+pub(crate) fn create_decay_ranker(
+    same_src_score_decay: f32,
+    file_hint_boost: f32,
+) -> Arc<dyn Ranker> {
+    Arc::new(DecayRanker {
+        same_src_score_decay,
+        file_hint_boost,
+    })
 }
 
 impl Ranker for DecayRanker {
@@ -205,8 +211,8 @@ mod tests {
         let meta_a = make_meta("doc.md", "Doc", "chunk", 0);
         let meta_b = make_meta("doc_b.md", "Doc B", "chunk", 0);
         let scores = vec![0.9, 0.5];
-        let metadata = vec![meta_a, meta_b];
-        let results = rank_results(&scores, &metadata, 5, 1.0, 1.0, None);
+        let chunk_metadatas = vec![meta_a, meta_b];
+        let results = rank_results(&scores, &chunk_metadatas, 5, 1.0, 1.0, None);
         assert_eq!(results.len(), 2);
         assert!((results[0].1.total_score - 0.9).abs() < 1e-6);
         assert!((results[1].1.total_score - 0.5).abs() < 1e-6);
@@ -217,14 +223,14 @@ mod tests {
         let meta_a = make_meta("hinted.md", "Hinted", "chunk", 0);
         let meta_b = make_meta("other.md", "Other", "chunk", 0);
         let scores = vec![0.5, 0.8];
-        let metadata = vec![meta_a, meta_b];
+        let chunk_metadatas = vec![meta_a, meta_b];
         let results_no_hint =
-            rank_results(&scores, &metadata, 5, 1.0, 2.0, None);
+            rank_results(&scores, &chunk_metadatas, 5, 1.0, 2.0, None);
         assert_eq!(results_no_hint[0].1.source_path, "other.md");
         assert!((results_no_hint[0].1.total_score - 0.8).abs() < 1e-6);
 
         let results_hint =
-            rank_results(&scores, &metadata, 5, 1.0, 2.0, Some("hinted.md"));
+            rank_results(&scores, &chunk_metadatas, 5, 1.0, 2.0, Some("hinted.md"));
         assert_eq!(results_hint[0].1.source_path, "hinted.md");
         assert!((results_hint[0].1.total_score - 1.0).abs() < 1e-6);
         assert!((results_hint[1].1.total_score - 0.8).abs() < 1e-6);

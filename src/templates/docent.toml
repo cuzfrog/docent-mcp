@@ -9,15 +9,13 @@ chunk_overlap   = 64                  # overlap between consecutive chunks
 same_src_score_decay = 0.9            # score multiplier for subsequent chunks from same source
 file_hint_boost      = 1.5            # score multiplier for chunks matching the MCP file_hint parameter
 
-[search.fusion]
+[search.fusion.strategy]
 strategy           = "rrf"           # rrf | weighted_sum | comb_sum | comb_mnz
-rrf_k               = 60.0            # RRF k parameter
-semantic_weight     = 0.7             # only used by weighted_sum strategy
+k                  = 60.0            # RRF k parameter (only used by rrf)
 
 [search.bm25]
 k1                  = 1.2            # BM25 k1 parameter
 b                   = 0.75           # BM25 b parameter
 
 [server]
-log_level = "debug"                   # debug | info | warn | error
 port      = 7878                      # default 0 = random available port

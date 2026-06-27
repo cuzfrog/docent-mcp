@@ -16,7 +16,6 @@ pub(super) fn merge_toml(template: &str, existing: &str) -> anyhow::Result<Strin
 
     let mut result = template.to_string();
 
-    // Migration: restructure old flat [search] section into nested sections.
     let mut existing_root = existing_root;
     if let Some(toml::Value::Table(ref search_table)) = existing_root.get("search") {
         let has_flat_keys = [
@@ -70,20 +69,109 @@ pub(super) fn merge_toml(template: &str, existing: &str) -> anyhow::Result<Strin
                 }
             }
 
-            // Keep non-migrated keys directly in [search]
             for (key, val) in keep_keys {
                 nested_search.insert(key, val);
             }
 
-            // Replace the old [search] value with the nested version
             if let toml::Value::Table(ref mut root_table) = existing_root {
                 root_table.insert("search".to_string(), toml::Value::Table(nested_search));
             }
         }
     }
 
-    // Recursively walk nested tables to find leaf key-value pairs and replace
-    // them in the template using the dotted section path (e.g. "search.ranking").
+    if let Some(toml::Value::Table(ref mut search_table)) = existing_root.get_mut("search") {
+        if let Some(toml::Value::Table(fusion_table)) = search_table.get("fusion") {
+            let is_new_shape = matches!(fusion_table.get("strategy"), Some(toml::Value::Table(_)));
+            if !is_new_shape {
+                let mut k: Option<f32> = None;
+                let mut semantic_weight: Option<f32> = None;
+                let mut strategy: Option<String> = None;
+                for (k_name, v) in fusion_table.iter() {
+                    match k_name.as_str() {
+                        "strategy" => {
+                            if let toml::Value::String(s) = v {
+                                strategy = Some(s.clone());
+                            }
+                        }
+                        "rrf_k" => {
+                            if let toml::Value::Float(f) = v {
+                                k = Some(*f as f32);
+                            }
+                        }
+                        "semantic_weight" => {
+                            if let toml::Value::Float(f) = v {
+                                semantic_weight = Some(*f as f32);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                let strategy_name = strategy.unwrap_or_else(|| "rrf".to_string());
+
+                if let Some(new_result) = migrate_fusion_in_text(
+                    &result,
+                    &strategy_name,
+                    k,
+                    semantic_weight,
+                ) {
+                    result = new_result;
+                }
+
+                let mut strategy_table = toml::value::Table::new();
+                strategy_table.insert("strategy".to_string(), toml::Value::String(strategy_name.clone()));
+                match strategy_name.as_str() {
+                    "rrf" => {
+                        strategy_table.insert("k".to_string(), toml::Value::Float(k.unwrap_or(60.0) as f64));
+                    }
+                    "weighted_sum" => {
+                        strategy_table.insert(
+                            "semantic_weight".to_string(),
+                            toml::Value::Float(semantic_weight.unwrap_or(0.7) as f64),
+                        );
+                    }
+                    _ => {}
+                }
+                let mut new_fusion = toml::value::Table::new();
+                new_fusion.insert("strategy".to_string(), toml::Value::Table(strategy_table));
+                search_table.insert("fusion".to_string(), toml::Value::Table(new_fusion));
+            } else if let Some(toml::Value::Table(strategy_table)) = fusion_table.get("strategy") {
+                let mut k: Option<f32> = None;
+                let mut semantic_weight: Option<f32> = None;
+                let mut strategy: Option<String> = None;
+                for (k_name, v) in strategy_table.iter() {
+                    match k_name.as_str() {
+                        "strategy" => {
+                            if let toml::Value::String(s) = v {
+                                strategy = Some(s.clone());
+                            }
+                        }
+                        "k" => {
+                            if let toml::Value::Float(f) = v {
+                                k = Some(*f as f32);
+                            }
+                        }
+                        "semantic_weight" => {
+                            if let toml::Value::Float(f) = v {
+                                semantic_weight = Some(*f as f32);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                let strategy_name = strategy.unwrap_or_else(|| "rrf".to_string());
+
+                if let Some(new_result) = migrate_fusion_in_text(
+                    &result,
+                    &strategy_name,
+                    k,
+                    semantic_weight,
+                ) {
+                    result = new_result;
+                }
+            }
+        }
+    }
+
     fn process_section(
         result: &mut String,
         table: &toml::value::Table,
@@ -117,6 +205,72 @@ pub(super) fn merge_toml(template: &str, existing: &str) -> anyhow::Result<Strin
     Ok(result)
 }
 
+fn migrate_fusion_in_text(
+    text: &str,
+    strategy: &str,
+    k: Option<f32>,
+    semantic_weight: Option<f32>,
+) -> Option<String> {
+    let header = "[search.fusion.strategy]";
+    let mut in_section = false;
+    let mut result = String::new();
+    let mut emitted = false;
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+
+        if !in_section && trimmed == header {
+            in_section = true;
+            result.push_str(line);
+            result.push('\n');
+            let k_val = k.unwrap_or(60.0);
+            let sw_val = semantic_weight.unwrap_or(0.7);
+            result.push_str(&format!("strategy = \"{}\"\n", strategy));
+            match strategy {
+                "rrf" => {
+                    result.push_str(&format!("k = {}\n", format_float(k_val)));
+                }
+                "weighted_sum" => {
+                    result.push_str(&format!("semantic_weight = {}\n", format_float(sw_val)));
+                }
+                _ => {}
+            }
+            emitted = true;
+            continue;
+        }
+
+        if in_section
+            && trimmed.starts_with('[')
+            && trimmed.ends_with(']')
+            && !trimmed.starts_with("[[")
+        {
+            in_section = false;
+        }
+
+        if in_section && emitted {
+            continue;
+        }
+
+        result.push_str(line);
+        result.push('\n');
+    }
+
+    if emitted {
+        Some(result)
+    } else {
+        None
+    }
+}
+
+fn format_float(v: f32) -> String {
+    let rounded = (v as f64 * 10000.0).round() / 10000.0;
+    if rounded.fract() == 0.0 {
+        format!("{:.1}", rounded)
+    } else {
+        format!("{}", rounded)
+    }
+}
+
 fn replace_value_in_text(
     text: &str,
     section_name: &str,
@@ -135,10 +289,15 @@ fn replace_value_in_text(
         if !replaced && in_section {
             if trimmed.starts_with('[') && trimmed.ends_with(']') && !trimmed.starts_with("[[") {
                 in_section = false;
+            } else if trimmed.starts_with('#') {
+                // Skip comment lines.
             } else if let Some(eq_pos) = trimmed.find('=') {
                 let line_key = trimmed[..eq_pos].trim();
                 if line_key == key {
-                    let line_eq_pos = line.find('=').expect("line contains '=' as verified above");
+                    let line_eq_pos = match line.find('=') {
+                        Some(p) => p,
+                        None => continue,
+                    };
                     let before_eq = &line[..line_eq_pos + 1];
                     let after_eq = &line[line_eq_pos + 1..];
                     let val_body_start = after_eq.find(|c: char| !c.is_whitespace()).unwrap_or(0);
@@ -218,22 +377,25 @@ mod tests {
 [search.ranking]
 same_src_score_decay = 0.5
 
-[search.fusion]
+[search.fusion.strategy]
 strategy = "weighted_sum"
+semantic_weight = 0.42
 
 [search.bm25]
 k1 = 2.0
 "#;
-        let merged = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
-        assert!(merged.contains("[search.ranking]"));
-        assert!(merged.contains("same_src_score_decay"));
-        assert!(merged.contains("0.5"));
-        assert!(merged.contains("[search.fusion]"));
-        assert!(merged.contains("strategy"));
-        assert!(merged.contains("\"weighted_sum\""));
-        assert!(merged.contains("[search.bm25]"));
-        assert!(merged.contains("k1"));
-        assert!(merged.contains("2.0"));
+        let merged_text = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
+        eprintln!("=== merged_text ===\n{}\n=== end ===", merged_text);
+        assert!(merged_text.contains("[search.ranking]"));
+        assert!(merged_text.contains("same_src_score_decay"));
+        assert!(merged_text.contains("0.5"));
+        assert!(merged_text.contains("[search.fusion.strategy]"));
+        assert!(merged_text.contains("strategy"));
+        assert!(merged_text.contains("\"weighted_sum\""));
+        assert!(merged_text.contains("0.42"));
+        assert!(merged_text.contains("[search.bm25]"));
+        assert!(merged_text.contains("k1"));
+        assert!(merged_text.contains("2.0"));
     }
 
     #[test]
@@ -248,24 +410,78 @@ semantic_weight = 0.8
 bm25_k1 = 2.0
 bm25_b = 0.5
 "#;
-        let merged = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
-        assert!(merged.contains("[search.ranking]"), "Should have [search.ranking] section");
-        assert!(merged.contains("same_src_score_decay"), "Should migrate same_src_score_decay");
-        assert!(merged.contains("0.5"), "same_src_score_decay should have value 0.5");
-        assert!(merged.contains("file_hint_boost"), "Should migrate file_hint_boost");
-        assert!(merged.contains("2.0"), "file_hint_boost should have value 2.0");
-        assert!(merged.contains("[search.fusion]"), "Should have [search.fusion] section");
-        assert!(merged.contains("strategy"), "Should have strategy key");
-        assert!(merged.contains("\"weighted_sum\""), "Should migrate fusion_strategy as strategy");
-        assert!(merged.contains("rrf_k"), "Should migrate rrf_k");
-        assert!(merged.contains("30.0"), "rrf_k should have value 30.0");
-        assert!(merged.contains("semantic_weight"), "Should migrate semantic_weight");
-        assert!(merged.contains("0.8"), "semantic_weight should have value 0.8");
-        assert!(merged.contains("[search.bm25]"), "Should have [search.bm25] section");
-        assert!(merged.contains("k1"), "Should have k1 key");
-        assert!(merged.contains("2.0"), "k1 should have value 2.0");
-        assert!(merged.contains("b"), "Should have b key");
-        assert!(merged.contains("0.5"), "b should have value 0.5");
+        let merged_text = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
+        let parsed: toml::Value = toml::from_str(&merged_text).unwrap();
+        let search = parsed.get("search").expect("search section");
+        assert!(search.get("ranking").is_some(), "Should have [search.ranking]");
+        assert_eq!(
+            search.get("ranking").and_then(|r| r.get("same_src_score_decay")).and_then(|v| v.as_float()),
+            Some(0.5)
+        );
+        assert_eq!(
+            search.get("ranking").and_then(|r| r.get("file_hint_boost")).and_then(|v| v.as_float()),
+            Some(2.0)
+        );
+        let fusion = search.get("fusion").expect("Should have [search.fusion]");
+        let strategy_inline = fusion.get("strategy").expect("[search.fusion.strategy]");
+        assert_eq!(
+            strategy_inline.get("strategy").and_then(|v| v.as_str()),
+            Some("weighted_sum")
+        );
+        let sw = strategy_inline.get("semantic_weight").and_then(|v| v.as_float()).unwrap();
+        assert!((sw - 0.8).abs() < 1e-5, "semantic_weight should be 0.8, got {}", sw);
+        let bm25 = search.get("bm25").expect("Should have [search.bm25]");
+        assert_eq!(bm25.get("k1").and_then(|v| v.as_float()), Some(2.0));
+        assert_eq!(bm25.get("b").and_then(|v| v.as_float()), Some(0.5));
+    }
+
+    #[test]
+    fn test_merge_migrates_old_rrf_to_strategy_table() {
+        let existing = r#"
+[search]
+fusion_strategy = "rrf"
+rrf_k = 42.0
+"#;
+        let merged_text = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
+        let parsed: toml::Value = toml::from_str(&merged_text).unwrap();
+        let strategy_inline = parsed
+            .get("search")
+            .and_then(|s| s.get("fusion"))
+            .and_then(|f| f.get("strategy"))
+            .expect("[search.fusion.strategy] should be present");
+        assert_eq!(
+            strategy_inline.get("strategy").and_then(|v| v.as_str()),
+            Some("rrf")
+        );
+        assert_eq!(
+            strategy_inline.get("k").and_then(|v| v.as_float()),
+            Some(42.0)
+        );
+    }
+
+    #[test]
+    fn test_merge_migrates_old_weighted_sum_to_strategy_table() {
+        let existing = r#"
+[search]
+fusion_strategy = "weighted_sum"
+semantic_weight = 0.42
+"#;
+        let merged_text = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
+        let parsed: toml::Value = toml::from_str(&merged_text).unwrap();
+        let strategy_inline = parsed
+            .get("search")
+            .and_then(|s| s.get("fusion"))
+            .and_then(|f| f.get("strategy"))
+            .expect("[search.fusion.strategy] should be present");
+        assert_eq!(
+            strategy_inline.get("strategy").and_then(|v| v.as_str()),
+            Some("weighted_sum")
+        );
+        let sw = strategy_inline
+            .get("semantic_weight")
+            .and_then(|v| v.as_float())
+            .expect("semantic_weight should be present");
+        assert!((sw - 0.42).abs() < 1e-5, "semantic_weight should be 0.42, got {}", sw);
     }
 
     #[test]
@@ -277,25 +493,25 @@ doc_dirs = ["./"]
 chunk_overlap = 64
 "#;
 
-        let merged = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
-        let index_pos = merged.find("[index]").unwrap();
-        let next_section_pos = merged[index_pos + 1..]
+        let merged_text = merge_toml(DEFAULT_TEMPLATE, existing).unwrap();
+        let index_pos = merged_text.find("[index]").unwrap();
+        let next_section_pos = merged_text[index_pos + 1..]
             .find("\n[")
             .map(|p| index_pos + 1 + p)
-            .unwrap_or(merged.len());
-        let index_section = &merged[index_pos..next_section_pos];
+            .unwrap_or(merged_text.len());
+        let index_section = &merged_text[index_pos..next_section_pos];
 
         assert!(
             index_section.contains("chunk_size"),
             "chunk_size should appear inside the [index] section, got:\n{}",
-            merged
+            merged_text
         );
 
-        let after_last_section = &merged[next_section_pos..];
+        let after_last_section = &merged_text[next_section_pos..];
         assert!(
             !after_last_section.contains("chunk_size"),
             "chunk_size should not appear after other sections, got:\n{}",
-            merged
+            merged_text
         );
     }
 }

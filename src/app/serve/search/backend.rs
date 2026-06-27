@@ -8,18 +8,16 @@ pub trait ScoreBackend: Send + Sync {
     fn score(&self, query: &str) -> anyhow::Result<Vec<f32>>;
 }
 
-pub(crate) struct VectorScoreBackend {
+struct VectorScoreBackend {
     embedder: Arc<Mutex<dyn Embedder>>,
     vectors: Arc<Vector>,
 }
 
-impl VectorScoreBackend {
-    pub(crate) fn new(
-        embedder: Arc<Mutex<dyn Embedder>>,
-        vectors: Arc<Vector>,
-    ) -> Self {
-        Self { embedder, vectors }
-    }
+pub(crate) fn create_vector_score_backend(
+    embedder: Arc<Mutex<dyn Embedder>>,
+    vectors: Arc<Vector>,
+) -> Arc<dyn ScoreBackend> {
+    Arc::new(VectorScoreBackend { embedder, vectors })
 }
 
 impl ScoreBackend for VectorScoreBackend {
@@ -71,7 +69,7 @@ pub(crate) fn build_bm25_backend(
     b: f32,
     avgdl: f32,
 ) -> Bm25ScoreBackend {
-    let embedder = bm25::EmbedderBuilder::with_avgdl(avgdl)
+    let bm25_embedder = bm25::EmbedderBuilder::with_avgdl(avgdl)
         .k1(k1)
         .b(b)
         .build();
@@ -82,7 +80,7 @@ pub(crate) fn build_bm25_backend(
     }
 
     Bm25ScoreBackend {
-        embedder,
+        embedder: bm25_embedder,
         scorer,
         chunk_count: embeddings.len(),
     }
@@ -99,32 +97,29 @@ impl ScoreBackend for ZeroScoreBackend {
 }
 
 pub(super) fn build_backends(
-    merged: &MergedIndex,
+    merged_index: &MergedIndex,
     embedder: Arc<Mutex<dyn Embedder>>,
     k1: f32,
     b: f32,
 ) -> (Arc<dyn ScoreBackend>, Arc<dyn ScoreBackend>) {
-    let vector_store = Arc::new(merged.vectors.clone());
-    let semantic = Arc::new(VectorScoreBackend::new(
-        embedder,
-        vector_store,
-    )) as Arc<dyn ScoreBackend>;
+    let vector_store = Arc::new(merged_index.vectors.clone());
+    let semantic_backend = create_vector_score_backend(embedder, vector_store);
 
-    let bm25: Arc<dyn ScoreBackend> = if !merged.bm25_embeddings.is_empty() {
-        let backend = build_bm25_backend(
-            &merged.bm25_embeddings,
+    let bm25_backend: Arc<dyn ScoreBackend> = if !merged_index.bm25_embeddings.is_empty() {
+        let score_backend = build_bm25_backend(
+            &merged_index.bm25_embeddings,
             k1,
             b,
-            merged.bm25_avgdl,
+            merged_index.bm25_avgdl,
         );
-        Arc::new(backend)
+        Arc::new(score_backend)
     } else {
         Arc::new(ZeroScoreBackend {
-            chunk_count: merged.metadata.len(),
+            chunk_count: merged_index.metadata.len(),
         })
     };
 
-    (semantic, bm25)
+    (semantic_backend, bm25_backend)
 }
 
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
@@ -146,7 +141,7 @@ mod tests {
     fn test_vector_backend_scores_descending() {
         let embedder: Arc<Mutex<dyn Embedder>> =
             Arc::new(Mutex::new(mock_embedder()));
-        let vectors = Arc::new(
+        let chunk_vectors = Arc::new(
             Vector::from_vec_vec(vec![
                 vec![9.0, 2.0, 0.0, 1.0],
                 vec![5.0, 2.0, 0.0, 1.0],
@@ -154,8 +149,8 @@ mod tests {
             ])
             .unwrap(),
         );
-        let backend = VectorScoreBackend::new(embedder, vectors);
-        let scores = backend.score("some text").unwrap();
+        let score_backend = create_vector_score_backend(embedder, chunk_vectors);
+        let scores = score_backend.score("some text").unwrap();
         assert_eq!(scores.len(), 3);
         for i in 1..scores.len() {
             assert!(scores[i - 1] >= scores[i], "scores should be descending");
@@ -166,9 +161,9 @@ mod tests {
     fn test_vector_backend_empty_vectors() {
         let embedder: Arc<Mutex<dyn Embedder>> =
             Arc::new(Mutex::new(mock_embedder()));
-        let vectors = Arc::new(Vector::from_vec_vec(vec![]).unwrap());
-        let backend = VectorScoreBackend::new(embedder, vectors);
-        let scores = backend.score("anything").unwrap();
+        let chunk_vectors = Arc::new(Vector::from_vec_vec(vec![]).unwrap());
+        let score_backend = create_vector_score_backend(embedder, chunk_vectors);
+        let scores = score_backend.score("anything").unwrap();
         assert!(scores.is_empty());
     }
 
@@ -180,19 +175,19 @@ mod tests {
             "Python is a programming language",
         ];
 
-        let embedder: bm25::Embedder<u32> =
+        let bm25_embedder: bm25::Embedder<u32> =
             bm25::EmbedderBuilder::with_fit_to_corpus(bm25::Language::English, &corpus).build();
 
-        let avgdl = embedder.avgdl();
+        let avgdl = bm25_embedder.avgdl();
         let k1 = 1.2;
         let b = 0.75;
 
         let embeddings: Vec<bm25::Embedding<u32>> =
-            corpus.iter().map(|doc| embedder.embed(doc)).collect();
+            corpus.iter().map(|doc| bm25_embedder.embed(doc)).collect();
 
-        let backend = build_bm25_backend(&embeddings, k1, b, avgdl);
+        let score_backend = build_bm25_backend(&embeddings, k1, b, avgdl);
 
-        let scores = backend.score("apples").unwrap();
+        let scores = score_backend.score("apples").unwrap();
         assert_eq!(scores.len(), 3);
         assert!(
             scores[1] > scores[0],
@@ -208,8 +203,8 @@ mod tests {
 
     #[test]
     fn test_bm25_backend_empty() {
-        let backend = build_bm25_backend(&[], 1.2, 0.75, 5.0);
-        let scores = backend.score("anything").unwrap();
+        let score_backend = build_bm25_backend(&[], 1.2, 0.75, 5.0);
+        let scores = score_backend.score("anything").unwrap();
         assert!(scores.is_empty());
     }
 

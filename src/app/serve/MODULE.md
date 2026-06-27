@@ -7,9 +7,9 @@ sealed: [mod.rs]
 ## mcp_server.rs
 This module addresses MCP related concerns. It's a higher layer abstraction on top of `SearchService` which encapsulates the actual index querying.
 
-* `pub struct SearchDdrParams` - Input parameters type.
-* `pub trait MCPServer`
-* `pub create_mcp_server`
+* `pub(super) struct SearchDdrParams` - Input parameters type.
+* `pub(super) trait MCPServer`
+* `pub(super) create_mcp_server`
 * `struct RmcpServer`
 
 ## http_server.rs

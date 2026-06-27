@@ -18,10 +18,11 @@
 - **No unsafe code.** No `unsafe` blocks unless absolutely required by FFI (fastembed/ort handle this internally).
 - **No Dead Code** No `allow(dead_code)`. It should only be used during long incremental refactors, and must be removed once possible.
 - **File ordering** Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
-- **No qualified imports** Import at the file top with `use`. Avoid qualified path in the code body, like `crate::app::index::xxxx::bbbb::new`. Import from `super` when possible. To access sibling modules, do not re-export in the `mod.rs`.
+- **No inline imports** Import at the file top with `use`. Avoid qualified path in the code body, like `crate::app::index::xxxx::bbbb::new`. Import from `super` when possible. To access sibling modules, do not re-export in the `mod.rs`.
 - **Config passing** Try to give a function what it needs, but do not split `Config` into multiple parameters.
 - **Forbidden Warning Suppression** No `#[allow(clippy::*)]` or similar workaround. An issue must be addressed.
 - **No comments** Do not add comments except it's a consequential information and the code itself cannot tell.
+- **Full Code identifiers** (variables, parameters, class fields, function names) must be full words, no abbreviations beyond common ones (`id`, `url`, `db`, `ts`, `ctx`).
 - **No "new" constructors** Do not create `new` constructors in a concrete struct. Use a standalone constructor method, i.e. the module constructor that creates an impl of this trait. This avoids exposing the concrete struct. The constructor method should return `impl Trait` when possible, avoid `Box<dyn Trait>`. The naming pattern is `create_X`, e.g., `pub fn create_model_factory() -> impl ModelFactory`. A constructor method should only be called by another constructor method, an implementation should not see the constructor method so that it can be tested with a mock.
 - **Use fixed dependency versions** Avoid `*` or `^` to prevent unintentional updates. `=` should be explicitly used. This applies to all dependencies, including python and javascript.
 - **Clean mod.rs** The file should not contain anything except module definition and re-export.

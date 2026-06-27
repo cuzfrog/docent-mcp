@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::config::types::Config;
 
 impl Config {
-    pub fn load(path: &Path, _verbose: bool) -> anyhow::Result<Self> {
+    pub fn load(path: &Path) -> anyhow::Result<Self> {
         let content = match std::fs::read_to_string(path) {
             Ok(c) => c,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -35,7 +35,6 @@ chunk_size = 256
 chunk_overlap = 32
 
 [server]
-log_level = "error"
 
 [search.ranking]
 same_src_score_decay = 0.95
@@ -43,12 +42,11 @@ same_src_score_decay = 0.95
         let temp_path = std::env::temp_dir().join("docent_test_config.toml");
         std::fs::write(&temp_path, toml_str).unwrap();
 
-        let config = Config::load(&temp_path, false).unwrap();
+        let config = Config::load(&temp_path).unwrap();
         assert_eq!(config.index.embedding_model, "BGESmallENV15Q");
         assert_eq!(config.index.doc_dirs, vec!["./ddrs".to_string()]);
         assert_eq!(config.index.chunk_size, 256);
         assert_eq!(config.index.chunk_overlap, 32);
-        assert_eq!(config.server.log_level, "error");
         assert!((config.search.ranking.same_src_score_decay - 0.95).abs() < f32::EPSILON);
 
         let _ = std::fs::remove_file(&temp_path);
@@ -57,7 +55,7 @@ same_src_score_decay = 0.95
     #[test]
     fn test_load_nonexistent_path() {
         let path = Path::new("/nonexistent/path/docent.toml");
-        let err = Config::load(path, false).unwrap_err();
+        let err = Config::load(path).unwrap_err();
         assert!(err.to_string().contains("Config file not found at"));
     }
 
@@ -83,7 +81,6 @@ same_src_score_decay = 0.95
 
         assert!((config.search.ranking.same_src_score_decay - 0.9).abs() < f32::EPSILON);
 
-        assert_eq!(config.server.log_level, "debug");
         assert_eq!(config.server.port, 7878);
     }
 }

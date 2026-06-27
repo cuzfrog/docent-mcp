@@ -11,8 +11,8 @@ pub fn run_init(console: &dyn Console) -> anyhow::Result<()> {
     let target = std::path::PathBuf::from("./docent.toml");
     if target.exists() {
         let existing = std::fs::read_to_string(&target)?;
-        let merged = merge_toml(DEFAULT_TEMPLATE, &existing)?;
-        std::fs::write(&target, &merged)?;
+        let merged_text = merge_toml(DEFAULT_TEMPLATE, &existing)?;
+        std::fs::write(&target, &merged_text)?;
         console.info(&format!("Merged new config fields into {}", target.display()));
     } else {
         std::fs::write(&target, DEFAULT_TEMPLATE)?;

@@ -11,6 +11,7 @@ pub use types::{
     RankingConfig,
     FusionConfig,
     Bm25Config,
+    FusionStrategy,
     GLOB_PATTERNS,
 };
 

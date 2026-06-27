@@ -1,10 +1,10 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+
+use arc_swap::ArcSwap;
 
 use crate::domain::IndexedBatch;
 use crate::domain::Vector;
 use super::bm25_builder::build_bm25;
-use super::merger::IndexMerger;
-use super::source_index::Index;
 
 #[derive(Clone)]
 pub(crate) struct MergedIndex {
@@ -15,42 +15,43 @@ pub(crate) struct MergedIndex {
 }
 
 impl MergedIndex {
-    pub(crate) fn empty() -> Self {
-        Self {
-            vectors: Vector::from_vec_vec(vec![]).expect("empty vector"),
+    pub(crate) fn empty() -> anyhow::Result<Self> {
+        Ok(Self {
+            vectors: Vector::from_vec_vec(vec![])?,
             metadata: Vec::new(),
             bm25_embeddings: Vec::new(),
             bm25_avgdl: 0.0,
-        }
+        })
     }
 
-    pub(crate) fn from_batch(batch: &IndexedBatch, k1: f32, b: f32) -> Self {
-        let vectors = Vector::from_vec_vec(batch.vectors.clone())
-            .expect("vectors must have consistent dims");
+    pub(crate) fn from_batch(batch: &IndexedBatch, k1: f32, b: f32) -> anyhow::Result<Self> {
+        let chunk_vectors = Vector::from_vec_vec(batch.vectors.clone())?;
         let chunk_texts: Vec<&str> = batch.metadata.iter().map(|m| m.chunk_text.as_str()).collect();
         let (bm25_embeddings, bm25_avgdl) = build_bm25(&chunk_texts, k1, b);
-        MergedIndex {
-            vectors,
+        Ok(MergedIndex {
+            vectors: chunk_vectors,
             metadata: batch.metadata.clone(),
             bm25_embeddings,
             bm25_avgdl,
-        }
+        })
     }
 }
 
 pub(crate) trait IndexRepository: Send + Sync {
-    fn store(&self, merged: MergedIndex);
-    fn snapshot(&self) -> MergedIndex;
+    fn store(&self, merged: MergedIndex) -> anyhow::Result<()>;
+    fn snapshot(&self) -> anyhow::Result<Arc<MergedIndex>>;
 }
 
 pub(crate) struct InMemoryIndexRepository {
-    inner: Arc<RwLock<Index>>,
+    inner: Arc<ArcSwap<MergedIndex>>,
 }
 
 impl InMemoryIndexRepository {
     pub(crate) fn new() -> Self {
         Self {
-            inner: Arc::new(RwLock::new(Index::empty())),
+            inner: Arc::new(ArcSwap::from_pointee(
+                MergedIndex::empty().expect("empty MergedIndex must construct"),
+            )),
         }
     }
 }
@@ -62,14 +63,13 @@ impl Default for InMemoryIndexRepository {
 }
 
 impl IndexRepository for InMemoryIndexRepository {
-    fn store(&self, merged: MergedIndex) {
-        let mut guard = self.inner.write().expect("index repository poisoned");
-        *guard = Index::from_merged(merged);
+    fn store(&self, merged: MergedIndex) -> anyhow::Result<()> {
+        self.inner.store(Arc::new(merged));
+        Ok(())
     }
 
-    fn snapshot(&self) -> MergedIndex {
-        let guard = self.inner.read().expect("index repository poisoned");
-        IndexMerger::merge((*guard).clone())
+    fn snapshot(&self) -> anyhow::Result<Arc<MergedIndex>> {
+        Ok(Arc::clone(&self.inner.load()))
     }
 }
 
@@ -85,15 +85,15 @@ mod tests {
 
     #[test]
     fn test_in_memory_repository_starts_empty() {
-        let repo = InMemoryIndexRepository::new();
-        let snap = repo.snapshot();
+        let index_repository = InMemoryIndexRepository::new();
+        let snap = index_repository.snapshot().unwrap();
         assert_eq!(snap.vectors.len(), 0);
         assert!(snap.metadata.is_empty());
     }
 
     #[test]
     fn test_in_memory_repository_store_then_snapshot() {
-        let repo = InMemoryIndexRepository::new();
+        let index_repository = InMemoryIndexRepository::new();
         let batch = IndexedBatch {
             vectors: vec![vec![1.0, 0.0, 0.0, 0.0], vec![0.0, 1.0, 0.0, 0.0]],
             metadata: vec![
@@ -125,9 +125,9 @@ mod tests {
                 },
             ],
         };
-        let merged = MergedIndex::from_batch(&batch, 1.2, 0.75);
-        repo.store(merged);
-        let snap = repo.snapshot();
+        let merged_index = MergedIndex::from_batch(&batch, 1.2, 0.75).unwrap();
+        index_repository.store(merged_index).unwrap();
+        let snap = index_repository.snapshot().unwrap();
         assert_eq!(snap.vectors.len(), 2);
         assert_eq!(snap.metadata.len(), 2);
         assert_eq!(snap.bm25_embeddings.len(), 2);

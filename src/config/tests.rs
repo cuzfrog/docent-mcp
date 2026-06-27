@@ -10,7 +10,6 @@ chunk_size = 1024
 chunk_overlap = 128
 
 [server]
-log_level = "debug"
 
 [search.ranking]
 same_src_score_decay = 0.85
@@ -20,7 +19,6 @@ same_src_score_decay = 0.85
     assert_eq!(config.index.doc_dirs, vec!["./ddrs".to_string(), "./notes/*".to_string()]);
     assert_eq!(config.index.chunk_size, 1024);
     assert_eq!(config.index.chunk_overlap, 128);
-    assert_eq!(config.server.log_level, "debug");
     assert_eq!(config.server.port, 0);
     assert!((config.search.ranking.same_src_score_decay - 0.85).abs() < f32::EPSILON);
 }
@@ -37,7 +35,6 @@ fn test_missing_fields_get_defaults() {
     assert_eq!(config.index.doc_dirs, super::defaults::default_doc_dirs());
     assert_eq!(config.index.chunk_size, super::defaults::default_chunk_size());
     assert_eq!(config.index.chunk_overlap, super::defaults::default_chunk_overlap());
-    assert_eq!(config.server.log_level, super::defaults::default_log_level());
     assert!((config.search.ranking.same_src_score_decay - super::defaults::default_same_src_score_decay()).abs() < f32::EPSILON);
 }
 
@@ -45,11 +42,9 @@ fn test_missing_fields_get_defaults() {
 fn test_missing_index_section() {
     let toml_str = r#"
 [server]
-log_level = "info"
 "#;
     let config: Config = toml::from_str(toml_str).unwrap();
     assert_eq!(config.index, IndexConfig::default());
-    assert_eq!(config.server.log_level, "info");
 }
 
 #[test]
@@ -60,7 +55,6 @@ embedding_model = "BGESmallENV15Q"
 "#;
     let config: Config = toml::from_str(toml_str).unwrap();
     assert_eq!(config.index.embedding_model, "BGESmallENV15Q");
-    assert_eq!(config.server.log_level, super::defaults::default_log_level());
 }
 
 #[test]
@@ -88,33 +82,51 @@ fn test_search_config_new_fields() {
 [index]
 embedding_model = "BGESmallENV15Q"
 
-[search.fusion]
+[search.fusion.strategy]
 strategy = "weighted_sum"
-rrf_k = 100.0
 semantic_weight = 0.3
 "#;
     let config: Config = toml::from_str(toml_str).unwrap();
-    assert_eq!(config.search.fusion.strategy, "weighted_sum");
-    assert!((config.search.fusion.rrf_k - 100.0).abs() < f32::EPSILON);
-    assert!((config.search.fusion.semantic_weight - 0.3).abs() < f32::EPSILON);
+    assert!(matches!(
+        config.search.fusion.strategy,
+        FusionStrategy::WeightedSum { semantic_weight } if (semantic_weight - 0.3).abs() < f32::EPSILON
+    ));
+}
+
+#[test]
+fn test_search_config_rrf_fields() {
+    let toml_str = r#"
+[index]
+embedding_model = "BGESmallENV15Q"
+
+[search.fusion.strategy]
+strategy = "rrf"
+k = 100.0
+"#;
+    let config: Config = toml::from_str(toml_str).unwrap();
+    assert!(matches!(
+        config.search.fusion.strategy,
+        FusionStrategy::Rrf { k } if (k - 100.0).abs() < f32::EPSILON
+    ));
 }
 
 #[test]
 fn test_fusion_strategy_default() {
     let config: Config = Config::default();
-    assert_eq!(config.search.fusion.strategy, "rrf");
+    assert!(matches!(
+        config.search.fusion.strategy,
+        FusionStrategy::Rrf { k } if (k - 60.0).abs() < f32::EPSILON
+    ));
 }
 
 #[test]
 fn test_rrf_k_default() {
     let config: Config = Config::default();
-    assert!((config.search.fusion.rrf_k - 60.0).abs() < f32::EPSILON);
-}
-
-#[test]
-fn test_semantic_weight_default() {
-    let config: Config = Config::default();
-    assert!((config.search.fusion.semantic_weight - 0.7).abs() < f32::EPSILON);
+    if let FusionStrategy::Rrf { k } = config.search.fusion.strategy {
+        assert!((k - 60.0).abs() < f32::EPSILON);
+    } else {
+        panic!("default strategy should be Rrf");
+    }
 }
 
 #[test]

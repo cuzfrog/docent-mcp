@@ -10,6 +10,3 @@ pub mod index;
 pub mod models;
 pub mod support;
 pub(crate) mod ui;
-
-#[cfg(test)]
-mod tests;

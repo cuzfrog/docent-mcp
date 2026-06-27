@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::domain::IndexableDocument;
+use crate::domain::{ChunkMetadata, IndexableDocument};
 use crate::index::Embedder;
 use std::sync::{Arc, Mutex};
 
@@ -15,8 +15,8 @@ pub(crate) struct RawChunk {
 pub(crate) fn chunk_documents(docs: &[IndexableDocument], config: &Config) -> Vec<RawChunk> {
     let mut out = Vec::new();
     for (doc_index, doc) in docs.iter().enumerate() {
-        let chunks = simple_chunk(&doc.body, config.index.chunk_size, config.index.chunk_overlap);
-        for (chunk_index, chunk) in chunks.into_iter().enumerate() {
+        let raw_chunks = simple_chunk(&doc.body, config.index.chunk_size, config.index.chunk_overlap);
+        for (chunk_index, chunk) in raw_chunks.into_iter().enumerate() {
             out.push(RawChunk {
                 doc_index,
                 text: chunk.text,
@@ -102,7 +102,6 @@ fn simple_chunk(body: &str, chunk_size: usize, chunk_overlap: usize) -> Vec<Simp
         }
         let chars: Vec<char> = text.chars().collect();
         let mut i = 0;
-        let mut local_idx = 0;
         while i < chars.len() {
             let end_i = (i + approx_chars).min(chars.len());
             let slice: String = chars[i..end_i].iter().collect();
@@ -112,13 +111,11 @@ fn simple_chunk(body: &str, chunk_size: usize, chunk_overlap: usize) -> Vec<Simp
                 line_start: start + 1,
                 line_end: end,
             });
-            local_idx += 1;
             if end_i >= chars.len() {
                 break;
             }
             i = end_i.saturating_sub(overlap_chars);
         }
-        let _ = local_idx;
     }
     out
 }
@@ -131,9 +128,11 @@ pub(crate) fn embed_chunks(
     let mut all = Vec::with_capacity(chunks.len());
     for batch in chunks.chunks(BATCH) {
         let batch_texts: Vec<String> = batch.iter().map(|c| c.text.clone()).collect();
-        let mut emb = embedder.lock().expect("embedder poisoned");
-        let vectors = emb.embed(&batch_texts)?;
-        all.extend(vectors);
+        let mut emb = embedder
+            .lock()
+            .map_err(|e| anyhow::anyhow!("embedder mutex poisoned: {}", e))?;
+        let chunk_vectors = emb.embed(&batch_texts)?;
+        all.extend(chunk_vectors);
     }
     Ok(all)
 }
@@ -141,10 +140,10 @@ pub(crate) fn embed_chunks(
 pub(crate) fn build_metadata(
     docs: &[IndexableDocument],
     chunks: &[RawChunk],
-) -> Vec<crate::domain::ChunkMetadata> {
+) -> Vec<ChunkMetadata> {
     chunks
         .iter()
-        .map(|c| crate::domain::ChunkMetadata {
+        .map(|c| ChunkMetadata {
             doc_ctx: docs[c.doc_index].doc_context(),
             chunk_text: c.text.clone(),
             section_heading: c.section_heading.clone(),
@@ -158,25 +157,99 @@ pub(crate) fn build_metadata(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::index::mock_embedder;
+
+    fn sample_doc(path: &str, title: &str, body: &str) -> IndexableDocument {
+        IndexableDocument {
+            source_path: path.to_string(),
+            source_revision: "rev1".to_string(),
+            title: title.to_string(),
+            body: body.to_string(),
+            modified_at: None,
+        }
+    }
+
+    fn sample_config() -> Config {
+        Config {
+            index: crate::config::IndexConfig {
+                embedding_model: "BGESmallENV15Q".to_string(),
+                chunk_size: 32,
+                chunk_overlap: 4,
+                ..crate::config::IndexConfig::default()
+            },
+            ..Config::default()
+        }
+    }
 
     #[test]
     fn simple_chunk_short_body_single_chunk() {
-        let chunks = simple_chunk("hello world", 8, 1);
-        assert_eq!(chunks.len(), 1);
-        assert_eq!(chunks[0].text, "hello world");
+        let raw_chunks = simple_chunk("hello world", 8, 1);
+        assert_eq!(raw_chunks.len(), 1);
+        assert_eq!(raw_chunks[0].text, "hello world");
     }
 
     #[test]
     fn simple_chunk_splits_long_body() {
         let body = "a".repeat(4000);
-        let chunks = simple_chunk(&body, 64, 4);
-        assert!(chunks.len() > 1);
+        let raw_chunks = simple_chunk(&body, 64, 4);
+        assert!(raw_chunks.len() > 1);
     }
 
     #[test]
     fn simple_chunk_respects_headings() {
         let body = "# Title\n\nbody\n\n## Sub\n\nmore";
-        let chunks = simple_chunk(body, 64, 4);
-        assert!(chunks.iter().any(|c| c.section_heading.as_deref() == Some("Title")));
+        let raw_chunks = simple_chunk(body, 64, 4);
+        assert!(raw_chunks
+            .iter()
+            .any(|c| c.section_heading.as_deref() == Some("Title")));
+    }
+
+    #[test]
+    fn chunk_documents_flattens_per_doc_and_offsets_indices() {
+        let docs = vec![
+            sample_doc("a.md", "A", "alpha bravo charlie"),
+            sample_doc("b.md", "B", "delta echo"),
+        ];
+        let config = sample_config();
+        let chunks = chunk_documents(&docs, &config);
+        assert_eq!(chunks.len(), 2);
+        let doc_a = chunks.iter().filter(|c| c.doc_index == 0).count();
+        let doc_b = chunks.iter().filter(|c| c.doc_index == 1).count();
+        assert_eq!(doc_a, 1);
+        assert_eq!(doc_b, 1);
+        let first_a = chunks.iter().find(|c| c.doc_index == 0).unwrap();
+        assert_eq!(first_a.chunk_index, 0);
+        let first_b = chunks.iter().find(|c| c.doc_index == 1).unwrap();
+        assert_eq!(first_b.chunk_index, 0);
+    }
+
+    #[test]
+    fn chunk_documents_empty_input_returns_empty() {
+        let docs: Vec<IndexableDocument> = vec![];
+        let chunks = chunk_documents(&docs, &sample_config());
+        assert!(chunks.is_empty());
+    }
+
+    #[test]
+    fn embed_chunks_returns_one_vector_per_chunk() {
+        let docs = vec![sample_doc("a.md", "A", "alpha bravo charlie delta")];
+        let chunks = chunk_documents(&docs, &sample_config());
+        let mock = mock_embedder();
+        let embedder: Arc<Mutex<dyn Embedder>> = Arc::new(Mutex::new(mock));
+        let vectors = embed_chunks(&chunks, &embedder).unwrap();
+        assert_eq!(vectors.len(), chunks.len());
+        assert!(vectors.iter().all(|v| v.len() == 4));
+    }
+
+    #[test]
+    fn build_metadata_aligns_with_chunks_and_doc_context() {
+        let docs = vec![sample_doc("a.md", "Title-A", "alpha bravo charlie")];
+        let chunks = chunk_documents(&docs, &sample_config());
+        let metadata = build_metadata(&docs, &chunks);
+        assert_eq!(metadata.len(), chunks.len());
+        assert_eq!(metadata[0].chunk_text, chunks[0].text);
+        assert_eq!(metadata[0].chunk_index, chunks[0].chunk_index);
+        assert_eq!(metadata[0].doc_ctx.source_path.as_ref(), "a.md");
+        assert_eq!(metadata[0].doc_ctx.title.as_ref(), "Title-A");
     }
 }

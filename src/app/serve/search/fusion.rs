@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::config::FusionStrategy;
+
 pub(crate) trait ScoreFusion: Send + Sync {
     fn fuse(&self, semantic: &[f32], bm25: &[f32]) -> Vec<f32>;
 }
@@ -111,17 +113,14 @@ impl ScoreFusion for CombMnzFusion {
     }
 }
 
-pub(crate) fn create_fusion(
-    strategy: &str,
-    rrf_k: f32,
-    semantic_weight: f32,
-) -> anyhow::Result<Arc<dyn ScoreFusion>> {
+pub(crate) fn create_fusion(strategy: &FusionStrategy) -> Arc<dyn ScoreFusion> {
     match strategy {
-        "rrf" => Ok(Arc::new(RrfFusion { k: rrf_k })),
-        "weighted_sum" => Ok(Arc::new(WeightedSumFusion { semantic_weight })),
-        "comb_sum" => Ok(Arc::new(CombSumFusion)),
-        "comb_mnz" => Ok(Arc::new(CombMnzFusion)),
-        other => anyhow::bail!("Unknown fusion strategy: {}", other),
+        FusionStrategy::Rrf { k } => Arc::new(RrfFusion { k: *k }),
+        FusionStrategy::WeightedSum { semantic_weight } => {
+            Arc::new(WeightedSumFusion { semantic_weight: *semantic_weight })
+        }
+        FusionStrategy::CombSum => Arc::new(CombSumFusion),
+        FusionStrategy::CombMnz => Arc::new(CombMnzFusion),
     }
 }
 
@@ -131,10 +130,10 @@ mod tests {
 
     #[test]
     fn test_rrf_fusion_uniform_scores() {
-        let semantic = vec![0.9, 0.8, 0.7];
-        let bm25 = vec![0.1, 0.2, 0.3];
-        let fusion = RrfFusion { k: 60.0 };
-        let result = fusion.fuse(&semantic, &bm25);
+        let semantic_scores = vec![0.9, 0.8, 0.7];
+        let bm25_scores = vec![0.1, 0.2, 0.3];
+        let rrf_fusion = RrfFusion { k: 60.0 };
+        let result = rrf_fusion.fuse(&semantic_scores, &bm25_scores);
         assert_eq!(result.len(), 3);
         for s in &result {
             assert!(*s > 0.0);
@@ -143,10 +142,10 @@ mod tests {
 
     #[test]
     fn test_weighted_sum_fusion() {
-        let semantic = vec![0.5, -0.5];
-        let bm25 = vec![2.0, 0.5];
-        let fusion = WeightedSumFusion { semantic_weight: 0.7 };
-        let result = fusion.fuse(&semantic, &bm25);
+        let semantic_scores = vec![0.5, -0.5];
+        let bm25_scores = vec![2.0, 0.5];
+        let weighted_sum_fusion = WeightedSumFusion { semantic_weight: 0.7 };
+        let result = weighted_sum_fusion.fuse(&semantic_scores, &bm25_scores);
         assert_eq!(result.len(), 2);
         assert!((result[0] - 0.825).abs() < 1e-5);
         assert!((result[1] - 0.25).abs() < 1e-5);
@@ -154,10 +153,10 @@ mod tests {
 
     #[test]
     fn test_comb_sum_fusion() {
-        let semantic = vec![1.0, 0.0];
-        let bm25 = vec![0.0, 3.0];
-        let fusion = CombSumFusion;
-        let result = fusion.fuse(&semantic, &bm25);
+        let semantic_scores = vec![1.0, 0.0];
+        let bm25_scores = vec![0.0, 3.0];
+        let comb_sum_fusion = CombSumFusion;
+        let result = comb_sum_fusion.fuse(&semantic_scores, &bm25_scores);
         assert_eq!(result.len(), 2);
         assert!((result[0] - 1.0).abs() < 1e-5);
         assert!((result[1] - 1.5).abs() < 1e-5);
@@ -165,10 +164,10 @@ mod tests {
 
     #[test]
     fn test_comb_mnz_fusion() {
-        let semantic = vec![0.0, 0.0];
-        let bm25 = vec![2.0, 0.0];
-        let fusion = CombMnzFusion;
-        let result = fusion.fuse(&semantic, &bm25);
+        let semantic_scores = vec![0.0, 0.0];
+        let bm25_scores = vec![2.0, 0.0];
+        let comb_mnz_fusion = CombMnzFusion;
+        let result = comb_mnz_fusion.fuse(&semantic_scores, &bm25_scores);
         assert_eq!(result.len(), 2);
         assert!((result[0] - 3.0).abs() < 1e-5);
         assert!((result[1] - 0.5).abs() < 1e-5);
@@ -176,17 +175,17 @@ mod tests {
 
     #[test]
     fn test_create_fusion_default_rrf() {
-        let f = create_fusion("rrf", 60.0, 0.7).unwrap();
+        let f = create_fusion(&FusionStrategy::Rrf { k: 60.0 });
         let result = f.fuse(&[0.9], &[0.1]);
         assert_eq!(result.len(), 1);
     }
 
     #[test]
     fn test_fusion_different_lengths() {
-        let semantic = vec![0.9, 0.8, 0.7];
-        let bm25 = vec![0.5, 0.4];
-        let fusion = RrfFusion { k: 60.0 };
-        let result = fusion.fuse(&semantic, &bm25);
+        let semantic_scores = vec![0.9, 0.8, 0.7];
+        let bm25_scores = vec![0.5, 0.4];
+        let rrf_fusion = RrfFusion { k: 60.0 };
+        let result = rrf_fusion.fuse(&semantic_scores, &bm25_scores);
         assert_eq!(result.len(), 3);
     }
 }

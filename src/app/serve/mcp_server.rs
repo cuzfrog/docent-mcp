@@ -13,6 +13,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::app::serve::search::SearchService;
+use crate::ui::router;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub(super) struct SearchDdrParams {
@@ -44,7 +45,7 @@ struct RmcpServer {
 
 impl MCPServer for RmcpServer {
     fn into_router(self) -> anyhow::Result<Router> {
-        let service: StreamableHttpService<RmcpServer, LocalSessionManager> =
+        let streamable_http_service: StreamableHttpService<RmcpServer, LocalSessionManager> =
             StreamableHttpService::new(
                 {
                     let server = self.clone();
@@ -53,7 +54,7 @@ impl MCPServer for RmcpServer {
                 LocalSessionManager::default().into(),
                 StreamableHttpServerConfig::default(),
             );
-        let router = crate::ui::router(service);
+        let router = router(streamable_http_service);
         Ok(router)
     }
 }
@@ -71,7 +72,6 @@ impl RmcpServer {
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
 
-        // Validate query
         if params.query.trim().is_empty() {
             return Err(ErrorData::invalid_params(
                 "query is required",
@@ -85,7 +85,6 @@ impl RmcpServer {
             ));
         }
 
-        // Execute search
         let results = self
             .search_service
             .search(&params.query, params.limit as usize, &params.file_hint)
