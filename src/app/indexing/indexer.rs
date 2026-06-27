@@ -185,34 +185,20 @@ fn title_from_path(rel: &str) -> String {
 }
 
 fn extract_title(body: &str) -> Option<String> {
+    let mut best: Option<(u8, String)> = None;
     for line in body.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        if let Some(text) = trimmed.strip_prefix("# ") {
-            if !text.is_empty() {
-                return Some(text.to_string());
+        let trimmed = line.trim_start();
+        let prefixes = [("# ", 1u8), ("## ", 2), ("### ", 3)];
+        for (prefix, level) in prefixes {
+            if let Some(text) = trimmed.strip_prefix(prefix) {
+                if !text.is_empty() && best.as_ref().is_none_or(|(l, _)| level < *l) {
+                    best = Some((level, text.to_string()));
+                }
+                break;
             }
         }
     }
-    for line in body.lines() {
-        let trimmed = line.trim();
-        if let Some(text) = trimmed.strip_prefix("## ") {
-            if !text.is_empty() {
-                return Some(text.to_string());
-            }
-        }
-    }
-    for line in body.lines() {
-        let trimmed = line.trim();
-        if let Some(text) = trimmed.strip_prefix("### ") {
-            if !text.is_empty() {
-                return Some(text.to_string());
-            }
-        }
-    }
-    None
+    best.map(|(_, t)| t)
 }
 
 #[cfg(test)]
@@ -227,6 +213,30 @@ mod tests {
     #[test]
     fn extract_title_falls_back() {
         assert_eq!(extract_title("no headings here"), None);
+    }
+
+    #[test]
+    fn extract_title_prefers_shallowest_heading() {
+        assert_eq!(
+            extract_title("## Inner\nbody\n# Top"),
+            Some("Top".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_title_falls_back_to_h2() {
+        assert_eq!(
+            extract_title("body\n## Section"),
+            Some("Section".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_title_falls_back_to_h3() {
+        assert_eq!(
+            extract_title("body\n### Detail"),
+            Some("Detail".to_string())
+        );
     }
 
     #[test]
