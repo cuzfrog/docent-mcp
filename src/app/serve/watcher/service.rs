@@ -37,13 +37,27 @@ pub(crate) fn create_watcher(
     indexer: Arc<dyn Indexer>,
     index_repository: Arc<dyn IndexRepository>,
     console: Arc<dyn Console>,
-) -> impl Watcher {
-    FileWatcher {
-        config,
-        watched_roots,
-        indexer,
-        index_repository,
-        console,
+) -> Box<dyn Watcher> {
+    if config.enabled {
+        Box::new(FileWatcher {
+            config,
+            watched_roots,
+            indexer,
+            index_repository,
+            console,
+        })
+    } else {
+        Box::new(NoopWatcher)
+    }
+}
+
+struct NoopWatcher;
+
+#[async_trait]
+impl Watcher for NoopWatcher {
+    async fn run(&self, shutdown: CancellationToken) -> anyhow::Result<()> {
+        shutdown.cancelled().await;
+        Ok(())
     }
 }
 
@@ -303,5 +317,46 @@ mod tests {
         shutdown.cancel();
         let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    fn deps() -> (Arc<dyn Indexer>, Arc<dyn IndexRepository>, Arc<dyn Console>) {
+        let repo: Arc<dyn IndexRepository> = Arc::new(mock_index_repository(
+            Vector::from_vec_vec(Vec::<Vec<f32>>::new()).unwrap(),
+            vec![],
+            vec![],
+        ));
+        let indexer: Arc<dyn Indexer> = create_indexer(
+            crate::config::Config::default(),
+            Arc::new(std::sync::Mutex::new(mock_embedder())),
+            Arc::new(create_console()),
+        );
+        let console: Arc<dyn Console> = Arc::new(create_console());
+        (indexer, repo, console)
+    }
+
+    #[tokio::test]
+    async fn test_create_watcher_disabled_returns_noop_that_awaits_shutdown() {
+        let (indexer, repo, console) = deps();
+        let watcher = create_watcher(
+            crate::config::WatchConfig {
+                enabled: false,
+                debounce_ms: 1000,
+                max_batch_size: 1,
+            },
+            vec![],
+            indexer,
+            repo,
+            console,
+        );
+        let shutdown = CancellationToken::new();
+        let shutdown_clone = shutdown.clone();
+        let handle = tokio::spawn(async move { watcher.run(shutdown_clone).await });
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        shutdown.cancel();
+        tokio::time::timeout(Duration::from_secs(1), handle)
+            .await
+            .expect("noop watcher did not exit on shutdown")
+            .expect("task panicked")
+            .expect("watcher.run returned Err");
     }
 }

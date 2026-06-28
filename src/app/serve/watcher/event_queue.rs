@@ -22,7 +22,7 @@ pub(super) struct DebouncedEventQueue {
 }
 
 impl DebouncedEventQueue {
-    pub(super) fn new(window: Duration) -> Self {
+    fn new(window: Duration) -> Self {
         let now = Instant::now();
         Self {
             pending: HashMap::new(),
@@ -31,11 +31,11 @@ impl DebouncedEventQueue {
         }
     }
 
-    pub(super) fn push(&mut self, event: WatchEvent) {
+    fn push(&mut self, event: WatchEvent) {
         self.pending.insert(event.path.clone(), event);
     }
 
-    pub(super) fn take_ready(&mut self) -> Vec<WatchEvent> {
+    fn take_ready(&mut self) -> Vec<WatchEvent> {
         if Instant::now() < self.deadline {
             return Vec::new();
         }
@@ -44,7 +44,7 @@ impl DebouncedEventQueue {
         events
     }
 
-    pub(super) fn pending_count(&self) -> usize {
+    fn pending_count(&self) -> usize {
         self.pending.len()
     }
 }

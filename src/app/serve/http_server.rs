@@ -47,6 +47,26 @@ pub fn create_http_server(
 
     let indexer = create_indexer(config.clone(), embedder.clone(), console.clone());
 
+    let watched_roots: Vec<WatchedRoot> = config
+        .index
+        .doc_dirs
+        .iter()
+        .map(|entry| {
+            let spec = config.index.spec_for(entry);
+            WatchedRoot {
+                root: PathBuf::from(&spec.root),
+                recursive: spec.recursive,
+            }
+        })
+        .collect();
+    let watcher: Arc<dyn Watcher> = Arc::from(create_watcher(
+        config.index.watch.clone(),
+        watched_roots,
+        indexer.clone(),
+        index_repository.clone(),
+        console.clone(),
+    ));
+
     let mcp = create_mcp_server(search_service);
     let router = mcp.into_router()?;
     Ok(Box::new(TokioHttpServer {
@@ -55,6 +75,7 @@ pub fn create_http_server(
         console,
         indexer,
         index_repository,
+        watcher,
     }))
 }
 
@@ -64,6 +85,7 @@ struct TokioHttpServer {
     console: Arc<dyn Console>,
     indexer: Arc<dyn Indexer>,
     index_repository: Arc<dyn IndexRepository>,
+    watcher: Arc<dyn Watcher>,
 }
 
 #[async_trait]
@@ -90,35 +112,14 @@ impl HttpServer for TokioHttpServer {
             run_initial_scan(indexer, repo, config, console, initial_token).await
         });
 
-        if self.config.index.watch.enabled {
-            let watched_roots: Vec<WatchedRoot> = self
-                .config
-                .index
-                .doc_dirs
-                .iter()
-                .map(|entry| {
-                    let spec = self.config.index.spec_for(entry);
-                    WatchedRoot {
-                        root: PathBuf::from(&spec.root),
-                        recursive: spec.recursive,
-                    }
-                })
-                .collect();
-            let watcher: Box<dyn Watcher> = Box::new(create_watcher(
-                self.config.index.watch.clone(),
-                watched_roots,
-                self.indexer.clone(),
-                self.index_repository.clone(),
-                self.console.clone(),
-            ));
-            let watcher_shutdown = shutdown.clone();
-            let watcher_console = self.console.clone();
-            tokio::spawn(async move {
-                if let Err(e) = watcher.run(watcher_shutdown).await {
-                    watcher_console.warn(&format!("Watcher exited with error: {}", e));
-                }
-            });
-        }
+        let watcher = self.watcher.clone();
+        let watcher_shutdown = shutdown.clone();
+        let watcher_console = self.console.clone();
+        tokio::spawn(async move {
+            if let Err(e) = watcher.run(watcher_shutdown).await {
+                watcher_console.warn(&format!("Watcher exited with error: {}", e));
+            }
+        });
 
         let addr = format!("127.0.0.1:{}", self.config.server.port);
         let listener = tokio::net::TcpListener::bind(&addr)
