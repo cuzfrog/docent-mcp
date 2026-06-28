@@ -13,22 +13,6 @@ pub(crate) struct InMemoryIndexRepository {
     inner: Arc<ArcSwap<MergedIndex>>,
 }
 
-impl InMemoryIndexRepository {
-    pub(crate) fn new() -> Self {
-        Self {
-            inner: Arc::new(ArcSwap::from_pointee(
-                MergedIndex::empty().expect("empty MergedIndex must construct"),
-            )),
-        }
-    }
-}
-
-impl Default for InMemoryIndexRepository {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl IndexRepository for InMemoryIndexRepository {
     fn store(&self, merged: MergedIndex) -> anyhow::Result<()> {
         self.inner.store(Arc::new(merged));
@@ -41,7 +25,11 @@ impl IndexRepository for InMemoryIndexRepository {
 }
 
 pub(crate) fn create_index_repository() -> impl IndexRepository {
-    InMemoryIndexRepository::new()
+    InMemoryIndexRepository {
+        inner: Arc::new(ArcSwap::from_pointee(
+            MergedIndex::empty().expect("empty MergedIndex must construct"),
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -51,9 +39,17 @@ mod tests {
     use crate::domain::DocumentContext;
     use crate::domain::IndexedBatch;
 
+    fn empty_repository() -> InMemoryIndexRepository {
+        InMemoryIndexRepository {
+            inner: Arc::new(ArcSwap::from_pointee(
+                MergedIndex::empty().expect("empty MergedIndex must construct"),
+            )),
+        }
+    }
+
     #[test]
     fn test_in_memory_repository_starts_empty() {
-        let index_repository = InMemoryIndexRepository::new();
+        let index_repository = empty_repository();
         let snap = index_repository.snapshot().unwrap();
         assert_eq!(snap.vectors.len(), 0);
         assert!(snap.metadata.is_empty());
@@ -61,7 +57,7 @@ mod tests {
 
     #[test]
     fn test_in_memory_repository_store_then_snapshot() {
-        let index_repository = InMemoryIndexRepository::new();
+        let index_repository = empty_repository();
         let batch = IndexedBatch {
             vectors: vec![vec![1.0, 0.0, 0.0, 0.0], vec![0.0, 1.0, 0.0, 0.0]],
             metadata: vec![
