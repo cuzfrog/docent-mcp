@@ -41,3 +41,15 @@ pub(crate) const fn default_bm25_b() -> f32 {
 pub(crate) const fn default_file_hint_boost() -> f32 {
     1.5
 }
+
+pub(crate) const fn default_watch_enabled() -> bool {
+    true
+}
+
+pub(crate) const fn default_watch_debounce_ms() -> u64 {
+    5000
+}
+
+pub(crate) const fn default_watch_max_batch_size() -> usize {
+    64
+}

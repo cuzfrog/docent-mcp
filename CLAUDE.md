@@ -40,7 +40,8 @@
 6. file private functions
 
 ### Git 
-When involving git operations, refer to @doc/AGENTS_GIT.md.
+- When involving git operations, refer to @doc/AGENTS_GIT.md.
+- do not use worktree or submodule, work in sequence.
 
 ## Coding Principles
 - Follow development principles, such as separation of concerns, SOLID principles, correct abstraction levels (e.g. reflected by the type hierarchy, type and file layout, code reusability, etc), loose coupled code. The goal is simplicity and maintainability.

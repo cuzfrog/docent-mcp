@@ -49,7 +49,7 @@ impl SearchService for SearchServiceImpl {
         let query = query.to_string();
         let file_hint = file_hint.to_string();
 
-        tokio::task::spawn_blocking(move || {
+        let results: Vec<SearchResult> = tokio::task::spawn_blocking(move || {
             let (semantic_backend, bm25_backend) = build_backends(
                 &merged_index,
                 embedder,
@@ -95,7 +95,17 @@ impl SearchService for SearchServiceImpl {
             Ok::<Vec<SearchResult>, anyhow::Error>(results)
         })
         .await
-        .map_err(|e| anyhow::anyhow!("Search task panicked: {}", e))?
+        .map_err(|e| anyhow::anyhow!("Search task panicked: {}", e))??;
+
+        let index_repository = Arc::clone(&self.index_repository);
+        let results: Vec<SearchResult> = results
+            .into_iter()
+            .map(|mut result| {
+                result.stale = index_repository.is_path_pending(&result.source_path);
+                result
+            })
+            .collect();
+        Ok(results)
     }
 }
 
@@ -105,7 +115,7 @@ mod tests {
     use crate::config::{Bm25Config, FusionConfig, FusionStrategy, RankingConfig, SearchConfig};
     use crate::domain::{ChunkMetadata, DocumentContext, Vector};
     use crate::index::mock_embedder;
-    use crate::index::mock_repository_returning_merged;
+    use crate::index::mock_index_repository;
 
     fn default_search_config() -> SearchConfig {
         SearchConfig {
@@ -155,7 +165,7 @@ mod tests {
         ];
 
         let index_repository: Arc<dyn IndexRepository> = Arc::new(
-            mock_repository_returning_merged(
+            mock_index_repository(
                 Vector::from_vec_vec(vec![
                     vec![1.0, 0.0, 0.0, 0.0],
                     vec![0.0, 1.0, 0.0, 0.0],
