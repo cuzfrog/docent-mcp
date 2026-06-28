@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use super::repository::{IndexRepository, MergedIndex};
+use super::merged_index::MergedIndex;
+use super::repository::IndexRepository;
 
 pub struct FixedMockIndexRepository {
     merged: std::sync::Mutex<Option<Arc<MergedIndex>>>,
