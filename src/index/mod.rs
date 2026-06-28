@@ -18,4 +18,4 @@ pub(crate) use embedder_mock::mock_embedder;
 mod repository_mock;
 
 #[cfg(test)]
-pub(crate) use repository_mock::*;
+pub(crate) use repository_mock::mock_index_repository;

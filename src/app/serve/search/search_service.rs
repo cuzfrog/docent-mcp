@@ -105,7 +105,7 @@ mod tests {
     use crate::config::{Bm25Config, FusionConfig, FusionStrategy, RankingConfig, SearchConfig};
     use crate::domain::{ChunkMetadata, DocumentContext, Vector};
     use crate::index::mock_embedder;
-    use crate::index::mock_repository_returning_merged;
+    use crate::index::mock_index_repository;
 
     fn default_search_config() -> SearchConfig {
         SearchConfig {
@@ -155,7 +155,7 @@ mod tests {
         ];
 
         let index_repository: Arc<dyn IndexRepository> = Arc::new(
-            mock_repository_returning_merged(
+            mock_index_repository(
                 Vector::from_vec_vec(vec![
                     vec![1.0, 0.0, 0.0, 0.0],
                     vec![0.0, 1.0, 0.0, 0.0],
