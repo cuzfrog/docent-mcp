@@ -1,6 +1,5 @@
 use super::bm25_builder::build_bm25;
 use crate::domain::ChunkMetadata;
-use crate::domain::IndexedBatch;
 use crate::domain::Replacement;
 use crate::domain::Vector;
 
@@ -19,22 +18,6 @@ impl MergedIndex {
             metadata: Vec::new(),
             bm25_embeddings: Vec::new(),
             bm25_avgdl: 0.0,
-        })
-    }
-
-    pub(crate) fn from_batch(batch: &IndexedBatch, k1: f32, b: f32) -> anyhow::Result<Self> {
-        let chunk_vectors = Vector::from_vec_vec(batch.vectors.clone())?;
-        let chunk_texts: Vec<&str> = batch
-            .metadata
-            .iter()
-            .map(|m| m.chunk_text.as_str())
-            .collect();
-        let (bm25_embeddings, bm25_avgdl) = build_bm25(&chunk_texts, k1, b);
-        Ok(MergedIndex {
-            vectors: chunk_vectors,
-            metadata: batch.metadata.clone(),
-            bm25_embeddings,
-            bm25_avgdl,
         })
     }
 

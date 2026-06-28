@@ -1,5 +1,6 @@
-use std::collections::HashMap;
 use std::sync::Arc;
+
+use dashmap::DashMap;
 
 use super::merged_index::MergedIndex;
 use super::repository::IndexRepository;
@@ -22,15 +23,28 @@ pub fn mock_index_repository(
 
 struct FixedMockIndexRepository {
     merged_index: std::sync::Mutex<Option<Arc<MergedIndex>>>,
-    pending_paths: std::sync::Mutex<HashMap<String, std::time::Instant>>,
+    pending_paths: Arc<DashMap<String, std::time::Instant>>,
 }
 
 impl FixedMockIndexRepository {
     pub fn new(merged: MergedIndex) -> Self {
         Self {
             merged_index: std::sync::Mutex::new(Some(Arc::new(merged))),
-            pending_paths: std::sync::Mutex::new(HashMap::new()),
+            pending_paths: Arc::new(DashMap::new()),
         }
+    }
+}
+
+struct PendingGuard {
+    pending: Arc<DashMap<String, std::time::Instant>>,
+    path: String,
+    my_instant: std::time::Instant,
+}
+
+impl Drop for PendingGuard {
+    fn drop(&mut self) {
+        self.pending
+            .remove_if(&self.path, |_, v| *v == self.my_instant);
     }
 }
 
@@ -54,10 +68,12 @@ impl IndexRepository for FixedMockIndexRepository {
         vectors: Vector,
     ) -> anyhow::Result<()> {
         let inserted_at = std::time::Instant::now();
-        {
-            let mut pending = self.pending_paths.lock().unwrap();
-            pending.insert(path.to_string(), inserted_at);
-        }
+        self.pending_paths.insert(path.to_string(), inserted_at);
+        let _pending_guard = PendingGuard {
+            pending: Arc::clone(&self.pending_paths),
+            path: path.to_string(),
+            my_instant: inserted_at,
+        };
 
         let snapshot = self.snapshot()?;
         let mut next = MergedIndex::clone(&snapshot);
@@ -95,20 +111,10 @@ impl IndexRepository for FixedMockIndexRepository {
         next.vectors = Vector::from_vec_vec(all_vectors_data)?;
 
         *self.merged_index.lock().unwrap() = Some(Arc::new(next));
-
-        {
-            let mut pending = self.pending_paths.lock().unwrap();
-            if let Some(current) = pending.get(path) {
-                if *current == inserted_at {
-                    pending.remove(path);
-                }
-            }
-        }
-
         Ok(())
     }
 
     fn is_path_pending(&self, path: &str) -> bool {
-        self.pending_paths.lock().unwrap().contains_key(path)
+        self.pending_paths.contains_key(path)
     }
 }

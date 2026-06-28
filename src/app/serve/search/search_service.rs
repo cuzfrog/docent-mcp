@@ -49,7 +49,7 @@ impl SearchService for SearchServiceImpl {
         let query = query.to_string();
         let file_hint = file_hint.to_string();
 
-        tokio::task::spawn_blocking(move || {
+        let results: Vec<SearchResult> = tokio::task::spawn_blocking(move || {
             let (semantic_backend, bm25_backend) = build_backends(
                 &merged_index,
                 embedder,
@@ -95,7 +95,17 @@ impl SearchService for SearchServiceImpl {
             Ok::<Vec<SearchResult>, anyhow::Error>(results)
         })
         .await
-        .map_err(|e| anyhow::anyhow!("Search task panicked: {}", e))?
+        .map_err(|e| anyhow::anyhow!("Search task panicked: {}", e))??;
+
+        let index_repository = Arc::clone(&self.index_repository);
+        let results: Vec<SearchResult> = results
+            .into_iter()
+            .map(|mut result| {
+                result.stale = index_repository.is_path_pending(&result.source_path);
+                result
+            })
+            .collect();
+        Ok(results)
     }
 }
 

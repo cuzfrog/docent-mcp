@@ -9,6 +9,7 @@ use tokio_util::sync::CancellationToken;
 use crate::app::indexing::{create_indexer, Indexer};
 use crate::app::serve::mcp_server::{create_mcp_server, MCPServer};
 use crate::app::serve::search::{create_search_service, SearchService};
+use crate::app::serve::watcher::{create_watcher, WatchedRoot, Watcher};
 use crate::config::{Config, GLOB_PATTERNS};
 use crate::index::{
     create_embedder, create_index_repository, Embedder, IndexRepository, MergedIndex,
@@ -88,6 +89,36 @@ impl HttpServer for TokioHttpServer {
         let indexer_handle = tokio::spawn(async move {
             run_initial_scan(indexer, repo, config, console, initial_token).await
         });
+
+        if self.config.index.watch.enabled {
+            let watched_roots: Vec<WatchedRoot> = self
+                .config
+                .index
+                .doc_dirs
+                .iter()
+                .map(|entry| {
+                    let spec = self.config.index.spec_for(entry);
+                    WatchedRoot {
+                        root: PathBuf::from(&spec.root),
+                        recursive: spec.recursive,
+                    }
+                })
+                .collect();
+            let watcher: Box<dyn Watcher> = Box::new(create_watcher(
+                self.config.index.watch.clone(),
+                watched_roots,
+                self.indexer.clone(),
+                self.index_repository.clone(),
+                self.console.clone(),
+            ));
+            let watcher_shutdown = shutdown.clone();
+            let watcher_console = self.console.clone();
+            tokio::spawn(async move {
+                if let Err(e) = watcher.run(watcher_shutdown).await {
+                    watcher_console.warn(&format!("Watcher exited with error: {}", e));
+                }
+            });
+        }
 
         let addr = format!("127.0.0.1:{}", self.config.server.port);
         let listener = tokio::net::TcpListener::bind(&addr)

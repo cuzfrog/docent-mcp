@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
 
 use arc_swap::ArcSwap;
+use dashmap::DashMap;
 
 use super::merged_index::MergedIndex;
 use crate::domain::ChunkMetadata;
@@ -24,7 +24,7 @@ pub(crate) trait IndexRepository: Send + Sync {
 pub(crate) struct InMemoryIndexRepository {
     inner: Arc<ArcSwap<MergedIndex>>,
     writer_mutex: Mutex<()>,
-    pending_paths: Mutex<HashMap<String, Instant>>,
+    pending_paths: Arc<DashMap<String, Instant>>,
 }
 
 impl InMemoryIndexRepository {
@@ -34,7 +34,7 @@ impl InMemoryIndexRepository {
                 MergedIndex::empty().expect("empty MergedIndex must construct"),
             )),
             writer_mutex: Mutex::new(()),
-            pending_paths: Mutex::new(HashMap::new()),
+            pending_paths: Arc::new(DashMap::new()),
         }
     }
 }
@@ -42,6 +42,19 @@ impl InMemoryIndexRepository {
 impl Default for InMemoryIndexRepository {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+struct PendingGuard {
+    pending: Arc<DashMap<String, Instant>>,
+    path: String,
+    my_instant: Instant,
+}
+
+impl Drop for PendingGuard {
+    fn drop(&mut self) {
+        self.pending
+            .remove_if(&self.path, |_, v| *v == self.my_instant);
     }
 }
 
@@ -67,36 +80,18 @@ impl IndexRepository for InMemoryIndexRepository {
             .map_err(|e| anyhow::anyhow!("writer mutex poisoned: {}", e))?;
 
         let inserted_at = Instant::now();
-        {
-            let mut pending = self
-                .pending_paths
-                .lock()
-                .map_err(|e| anyhow::anyhow!("pending mutex poisoned: {}", e))?;
-            pending.insert(path.to_string(), inserted_at);
-        }
+        self.pending_paths.insert(path.to_string(), inserted_at);
+        let _pending_guard = PendingGuard {
+            pending: Arc::clone(&self.pending_paths),
+            path: path.to_string(),
+            my_instant: inserted_at,
+        };
 
-        let result = self.replace_path_inner(path, metadata, vectors);
-
-        {
-            let mut pending = self
-                .pending_paths
-                .lock()
-                .map_err(|e| anyhow::anyhow!("pending mutex poisoned: {}", e))?;
-            if let Some(current) = pending.get(path) {
-                if *current == inserted_at {
-                    pending.remove(path);
-                }
-            }
-        }
-
-        result
+        self.replace_path_inner(path, metadata, vectors)
     }
 
     fn is_path_pending(&self, path: &str) -> bool {
-        match self.pending_paths.lock() {
-            Ok(p) => p.contains_key(path),
-            Err(_) => false,
-        }
+        self.pending_paths.contains_key(path)
     }
 }
 
@@ -230,7 +225,19 @@ mod tests {
                 },
             ],
         };
-        let merged_index = MergedIndex::from_batch(&batch, 1.2, 0.75).unwrap();
+        let replacements: Vec<Replacement> = batch
+            .metadata
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(i, m)| Replacement {
+                source_path: m.doc_ctx.source_path.to_string(),
+                metadata: vec![m],
+                vectors: crate::domain::Vector::from_vec_vec(vec![batch.vectors[i].clone()])
+                    .unwrap(),
+            })
+            .collect();
+        let merged_index = MergedIndex::from_replacements(&replacements, 1.2, 0.75).unwrap();
         index_repository.store(merged_index).unwrap();
         let snap = index_repository.snapshot().unwrap();
         assert_eq!(snap.vectors.len(), 2);

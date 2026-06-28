@@ -5,6 +5,11 @@ doc_dirs        = ["./"]              # directories to scan for markdown files (
 chunk_size      = 512                 # max tokens per chunk
 chunk_overlap   = 64                  # overlap between consecutive chunks
 
+[index.watch]
+enabled        = true                 # auto-refresh the index when files change
+debounce_ms    = 5000                 # wait this long after a change before reindexing
+max_batch_size = 64                   # max concurrent in-flight reindexes
+
 [search.ranking]
 same_src_score_decay = 0.9            # score multiplier for subsequent chunks from same source
 file_hint_boost      = 1.5            # score multiplier for chunks matching the MCP file_hint parameter
