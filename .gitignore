@@ -8,5 +8,5 @@ target/
 .venv/
 __pycache__
 tmp/
-e2e-tests/.ddr-index/
+e2e-tests/.doc-index/
 node_modules/

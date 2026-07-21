@@ -58,7 +58,7 @@ def search(base_url: str, client: requests.Session, session_id: str, query: str)
         base_url,
         client,
         "tools/call",
-        {"name": "search_ddr", "arguments": {"query": query, "limit": 5}},
+        {"name": "search_doc", "arguments": {"query": query, "limit": 5}},
         session_id=session_id,
     )
     text = resp["result"]["content"][0]["text"]

@@ -5,7 +5,7 @@ fn test_valid_config_parse() {
     let toml_str = r#"
 [index]
 embedding_model = "BAAI/bge-large-en"
-doc_dirs = ["./ddrs", "./notes/*"]
+doc_dirs = ["./docs", "./notes/*"]
 chunk_size = 1024
 chunk_overlap = 128
 
@@ -16,7 +16,7 @@ same_src_score_decay = 0.85
 "#;
     let config: Config = toml::from_str(toml_str).unwrap();
     assert_eq!(config.index.embedding_model, "BAAI/bge-large-en");
-    assert_eq!(config.index.doc_dirs, vec!["./ddrs".to_string(), "./notes/*".to_string()]);
+    assert_eq!(config.index.doc_dirs, vec!["./docs".to_string(), "./notes/*".to_string()]);
     assert_eq!(config.index.chunk_size, 1024);
     assert_eq!(config.index.chunk_overlap, 128);
     assert_eq!(config.server.port, 0);

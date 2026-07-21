@@ -125,12 +125,12 @@ class TestInitialize:
 
 
 # ---------------------------------------------------------------------------
-# tools/list returns search_ddr
+# tools/list returns search_doc
 # ---------------------------------------------------------------------------
 
 
 class TestToolsList:
-    def test_returns_search_ddr_tool(self):
+    def test_returns_search_doc_tool(self):
         client = requests.Session()
         _, session_id = initialize(client)
 
@@ -141,7 +141,7 @@ class TestToolsList:
         assert len(tools) == 1
 
         tool = tools[0]
-        assert tool["name"] == "search_ddr"
+        assert tool["name"] == "search_doc"
         assert len(tool["description"]) > 0
 
         schema = tool["inputSchema"]
@@ -152,11 +152,11 @@ class TestToolsList:
 
 
 # ---------------------------------------------------------------------------
-# tools/call — search_ddr
+# tools/call — search_doc
 # ---------------------------------------------------------------------------
 
 
-class TestSearchDdr:
+class TestSearchDoc:
     def test_valid_query_structure(self):
         """Verify response structure only (not content)."""
         client = requests.Session()
@@ -165,7 +165,7 @@ class TestSearchDdr:
         response = send_mcp_request(
             client,
             "tools/call",
-            {"name": "search_ddr", "arguments": {"query": "authentication design", "limit": 3}},
+            {"name": "search_doc", "arguments": {"query": "authentication design", "limit": 3}},
             session_id=session_id,
         )
 
@@ -197,7 +197,7 @@ class TestSearchDdr:
         response = send_mcp_request(
             client,
             "tools/call",
-            {"name": "search_ddr", "arguments": {"query": "test", "limit": 0}},
+            {"name": "search_doc", "arguments": {"query": "test", "limit": 0}},
             session_id=session_id,
         )
 
@@ -211,7 +211,7 @@ class TestSearchDdr:
         response = send_mcp_request(
             client,
             "tools/call",
-            {"name": "search_ddr", "arguments": {"query": "", "limit": 3}},
+            {"name": "search_doc", "arguments": {"query": "", "limit": 3}},
             session_id=session_id,
         )
 
@@ -227,7 +227,7 @@ class TestSearchDdr:
         resp_no_hint = send_mcp_request(
             client,
             "tools/call",
-            {"name": "search_ddr", "arguments": {"query": "authentication", "limit": 5}},
+            {"name": "search_doc", "arguments": {"query": "authentication", "limit": 5}},
             session_id=session_id,
         )
         results_no_hint = json.loads(resp_no_hint["result"]["content"][0]["text"])
@@ -238,7 +238,7 @@ class TestSearchDdr:
             resp_hint = send_mcp_request(
                 client,
                 "tools/call",
-                {"name": "search_ddr", "arguments": {
+                {"name": "search_doc", "arguments": {
                     "query": "authentication",
                     "limit": 5,
                     "file_hint": target_path,

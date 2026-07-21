@@ -30,7 +30,7 @@ mod tests {
         let toml_str = r#"
 [index]
 embedding_model = "BGESmallENV15Q"
-doc_dirs = ["./ddrs"]
+doc_dirs = ["./docs"]
 chunk_size = 256
 chunk_overlap = 32
 
@@ -44,7 +44,7 @@ same_src_score_decay = 0.95
 
         let config = Config::load(&temp_path).unwrap();
         assert_eq!(config.index.embedding_model, "BGESmallENV15Q");
-        assert_eq!(config.index.doc_dirs, vec!["./ddrs".to_string()]);
+        assert_eq!(config.index.doc_dirs, vec!["./docs".to_string()]);
         assert_eq!(config.index.chunk_size, 256);
         assert_eq!(config.index.chunk_overlap, 32);
         assert!((config.search.ranking.same_src_score_decay - 0.95).abs() < f32::EPSILON);

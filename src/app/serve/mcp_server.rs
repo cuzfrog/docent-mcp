@@ -16,7 +16,7 @@ use crate::app::serve::search::SearchService;
 use crate::ui::router;
 
 #[derive(Debug, Deserialize, JsonSchema)]
-pub(super) struct SearchDdrParams {
+pub(super) struct SearchDocParams {
     pub query: String,
     /// Result limit (1-10). The serde-deserialized value allows 0, but
     /// the handler enforces the 1..=10 range at runtime.
@@ -66,9 +66,9 @@ impl RmcpServer {
                        Call this before assuming code is wrong or refactoring it. \
                        Searches design decision records and documentation."
     )]
-    async fn search_ddr(
+    async fn search_doc(
         &self,
-        params: Parameters<SearchDdrParams>,
+        params: Parameters<SearchDocParams>,
     ) -> Result<CallToolResult, ErrorData> {
         let params = params.0;
 
@@ -121,7 +121,7 @@ mod tests {
     #[test]
     fn test_params_deserialize_minimal() {
         let json = r#"{"query": "hello"}"#;
-        let params: SearchDdrParams = serde_json::from_str(json).unwrap();
+        let params: SearchDocParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.query, "hello");
         assert_eq!(params.limit, 3);
         assert_eq!(params.file_hint, "");
@@ -130,7 +130,7 @@ mod tests {
     #[test]
     fn test_params_deserialize_full() {
         let json = r#"{"query": "hello", "limit": 5, "file_hint": "src/main.rs"}"#;
-        let params: SearchDdrParams = serde_json::from_str(json).unwrap();
+        let params: SearchDocParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.query, "hello");
         assert_eq!(params.limit, 5);
         assert_eq!(params.file_hint, "src/main.rs");
@@ -139,21 +139,21 @@ mod tests {
     #[test]
     fn test_params_missing_query_fails() {
         let json = r#"{}"#;
-        let result = serde_json::from_str::<SearchDdrParams>(json);
+        let result = serde_json::from_str::<SearchDocParams>(json);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_params_backward_compat() {
         let json = r#"{"query": "hello", "limit": 3}"#;
-        let params: SearchDdrParams = serde_json::from_str(json).unwrap();
+        let params: SearchDocParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.file_hint, "");
     }
 
     #[test]
     fn test_params_limit_zero_rejected() {
         let json = r#"{"query": "hello", "limit": 0}"#;
-        let params: SearchDdrParams = serde_json::from_str(json).unwrap();
+        let params: SearchDocParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.limit, 0);
     }
 }
