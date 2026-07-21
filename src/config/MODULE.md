@@ -1,3 +1,3 @@
 ---
-sealed: [mod.rs]
+no-new-exports: [mod.rs]
 ---
