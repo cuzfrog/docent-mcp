@@ -1,21 +1,32 @@
 use crate::config::Config;
-use crate::domain::{ChunkMetadata, IndexableDocument};
+use crate::domain::IndexableDocument;
+
+#[cfg(test)]
+use crate::domain::ChunkMetadata;
+
+#[cfg(test)]
 use crate::index::Embedder;
+
+#[cfg(test)]
 use std::sync::{Arc, Mutex};
 
-pub(crate) struct RawChunk {
-    pub doc_index: usize,
-    pub text: String,
-    pub section_heading: Option<String>,
-    pub chunk_index: usize,
-    pub line_start: usize,
-    pub line_end: usize,
+pub(super) struct RawChunk {
+    pub(super) doc_index: usize,
+    pub(super) text: String,
+    pub(super) section_heading: Option<String>,
+    pub(super) chunk_index: usize,
+    pub(super) line_start: usize,
+    pub(super) line_end: usize,
 }
 
 pub(crate) fn chunk_documents(docs: &[IndexableDocument], config: &Config) -> Vec<RawChunk> {
     let mut out = Vec::new();
     for (doc_index, doc) in docs.iter().enumerate() {
-        let raw_chunks = simple_chunk(&doc.body, config.index.chunk_size, config.index.chunk_overlap);
+        let raw_chunks = simple_chunk(
+            &doc.body,
+            config.index.chunk_size,
+            config.index.chunk_overlap,
+        );
         for (chunk_index, chunk) in raw_chunks.into_iter().enumerate() {
             out.push(RawChunk {
                 doc_index,
@@ -120,7 +131,8 @@ fn simple_chunk(body: &str, chunk_size: usize, chunk_overlap: usize) -> Vec<Simp
     out
 }
 
-pub(crate) fn embed_chunks(
+#[cfg(test)]
+fn embed_chunks(
     chunks: &[RawChunk],
     embedder: &Arc<Mutex<dyn Embedder>>,
 ) -> anyhow::Result<Vec<Vec<f32>>> {
@@ -137,10 +149,8 @@ pub(crate) fn embed_chunks(
     Ok(all)
 }
 
-pub(crate) fn build_metadata(
-    docs: &[IndexableDocument],
-    chunks: &[RawChunk],
-) -> Vec<ChunkMetadata> {
+#[cfg(test)]
+fn build_metadata(docs: &[IndexableDocument], chunks: &[RawChunk]) -> Vec<ChunkMetadata> {
     chunks
         .iter()
         .map(|c| ChunkMetadata {

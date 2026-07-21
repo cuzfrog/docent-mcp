@@ -1,18 +1,11 @@
 mod defaults;
+mod load;
 mod types;
 mod validate;
-mod load;
 
 pub use types::{
-    Config,
-    IndexConfig,
-    ServerConfig,
-    SearchConfig,
-    RankingConfig,
-    FusionConfig,
-    Bm25Config,
-    FusionStrategy,
-    GLOB_PATTERNS,
+    Bm25Config, Config, FusionConfig, FusionStrategy, IndexConfig, RankingConfig, SearchConfig,
+    ServerConfig, WatchConfig, GLOB_PATTERNS,
 };
 
 #[cfg(test)]

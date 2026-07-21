@@ -48,6 +48,18 @@ impl Config {
         if self.search.bm25.b < 0.0 || self.search.bm25.b > 1.0 {
             anyhow::bail!("search.bm25.b must be in range 0.0..=1.0, got {}", self.search.bm25.b);
         }
+        if self.index.watch.debounce_ms < 100 || self.index.watch.debounce_ms > 30000 {
+            anyhow::bail!(
+                "index.watch.debounce_ms must be in range 100..=30000, got {}",
+                self.index.watch.debounce_ms
+            );
+        }
+        if self.index.watch.max_batch_size == 0 {
+            anyhow::bail!(
+                "index.watch.max_batch_size must be > 0, got {}",
+                self.index.watch.max_batch_size
+            );
+        }
         Ok(())
     }
 }

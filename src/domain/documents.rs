@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use super::vector::Vector;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct DocumentContext {
     pub source_path: Arc<str>,
@@ -58,6 +60,12 @@ impl IndexableDocument {
 pub struct IndexedBatch {
     pub vectors: Vec<Vec<f32>>,
     pub metadata: Vec<ChunkMetadata>,
+}
+
+pub(crate) struct Replacement {
+    pub source_path: String,
+    pub metadata: Vec<ChunkMetadata>,
+    pub vectors: Vector,
 }
 
 #[cfg(test)]

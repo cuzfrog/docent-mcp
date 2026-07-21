@@ -25,6 +25,18 @@ pub struct IndexConfig {
     pub chunk_size: usize,
     #[serde(default = "super::defaults::default_chunk_overlap")]
     pub chunk_overlap: usize,
+    #[serde(default)]
+    pub watch: WatchConfig,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+pub struct WatchConfig {
+    #[serde(default = "super::defaults::default_watch_enabled")]
+    pub enabled: bool,
+    #[serde(default = "super::defaults::default_watch_debounce_ms")]
+    pub debounce_ms: u64,
+    #[serde(default = "super::defaults::default_watch_max_batch_size")]
+    pub max_batch_size: usize,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -82,6 +94,17 @@ impl Default for IndexConfig {
             cache_dir: super::defaults::default_cache_dir(),
             chunk_size: super::defaults::default_chunk_size(),
             chunk_overlap: super::defaults::default_chunk_overlap(),
+            watch: WatchConfig::default(),
+        }
+    }
+}
+
+impl Default for WatchConfig {
+    fn default() -> Self {
+        Self {
+            enabled: super::defaults::default_watch_enabled(),
+            debounce_ms: super::defaults::default_watch_debounce_ms(),
+            max_batch_size: super::defaults::default_watch_max_batch_size(),
         }
     }
 }

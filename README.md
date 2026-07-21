@@ -2,7 +2,7 @@
 
 # docent
 
-**Semantic + BM25 Document search for Design Decision Records** — an experimental MCP server written in Rust that indexes markdown documents, letting agents query *why* code looks the way it does.
+**Semantic + BM25 Document search** — an experimental MCP server written in Rust that indexes markdown documents, letting agents query *why* code looks the way it does.
 
 ```
   files ──▼── index (in-memory) ──▶  MCP server  ◀──── query
@@ -34,8 +34,9 @@ Flags: `--config <path>` (default `./docent.toml`).
 2. **Section-aware chunking** — Splits documents into chunks, preserving heading structure.
 3. **Embedding** — Converts chunks to vectors via `fastembed` (configurable model).
 4. **In-memory index** — Builds an in-memory semantic + BM25 index on `serve` startup; nothing is persisted to disk.
-5. **Semantic + BM25 search** — Hybrid scoring with configurable algorithm.
-6. **MCP server** — Exposes `search_ddr` tool over streamable HTTP.
+5. **Auto-refresh** — Watches `doc_dirs` for changes (debounced) and incrementally reindexes edited files. Stale results during reindex are flagged via `SearchResult.stale = true`.
+6. **Semantic + BM25 search** — Hybrid scoring with configurable algorithm.
+7. **MCP server** — Exposes `search_doc` tool over streamable HTTP.
 
 ## Install
 

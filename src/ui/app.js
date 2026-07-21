@@ -1,7 +1,7 @@
 /* Application controller — wires transport, search API, and view. Owns state transitions. */
 
 import { McpClient } from './mcp_client.js';
-import { searchDdr } from './search_api.js';
+import { searchDoc } from './search_api.js';
 import { View } from './view.js';
 
 const client = new McpClient();
@@ -58,7 +58,7 @@ async function handleSearch(event) {
   view.elements.rawContent.textContent = '';
 
   try {
-    const { results, raw, error } = await searchDdr(client, query, limit);
+    const { results, raw, error } = await searchDoc(client, query, limit);
     state.lastRaw = raw;
     view.renderRawResponse(raw);
     if (error) {

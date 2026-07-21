@@ -17,19 +17,19 @@
 
 export const PROTOCOL = {
   VERSION: '2025-11-25',
-  TOOL_NAME: 'search_ddr',
+  TOOL_NAME: 'search_doc',
   SESSION_HEADER: 'Mcp-Session-Id',
   PROTOCOL_VERSION_HEADER: 'MCP-Protocol-Version',
 };
 
 /**
- * Call the search_ddr tool and normalize the response.
+ * Call the search_doc tool and normalize the response.
  * @param {import('./mcp_client.js').McpClient} client
  * @param {string} query
  * @param {number} limit
  * @returns {Promise<{results: NormalizedResult[], raw: object, error: string|null}>}
  */
-export async function searchDdr(client, query, limit) {
+export async function searchDoc(client, query, limit) {
   const raw = await client.callTool(PROTOCOL.TOOL_NAME, { query, limit });
   return { ...parseSearchResponse(raw), raw };
 }
