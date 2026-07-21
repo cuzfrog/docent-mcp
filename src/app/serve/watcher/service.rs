@@ -18,8 +18,8 @@ use crate::config::WatchConfig;
 use crate::index::IndexRepository;
 use crate::support::Console;
 
-use super::event_queue::{run_debounce_loop, WatchEvent, WatchEventKind};
-use super::handler::detect_network_mount;
+use super::event_queue::{run_debounce_loop, WatchEvent};
+use super::handler::{classify_notify_kind, detect_network_mount, index_key_for};
 
 #[async_trait]
 pub trait Watcher: Send + Sync {
@@ -146,6 +146,7 @@ struct Supervisor {
 
 impl Supervisor {
     fn handle_events(&self, events: Vec<WatchEvent>) {
+        self.reap_completed();
         for event in events {
             let path = event.path.clone();
             let prior: Option<(String, (CancellationToken, JoinHandle<()>))> =
@@ -153,24 +154,18 @@ impl Supervisor {
             if let Some((_k, (c, _h))) = prior {
                 c.cancel();
             }
-            let permit = match self.semaphore.clone().try_acquire_owned() {
-                Ok(p) => p,
-                Err(_) => {
-                    self.console.warn(&format!(
-                        "watcher: dropping event for {} (no permit available)",
-                        path
-                    ));
-                    continue;
-                }
-            };
             let child = CancellationToken::new();
             let indexer = Arc::clone(&self.indexer);
             let repo = Arc::clone(&self.index_repository);
             let console = Arc::clone(&self.console);
+            let semaphore = Arc::clone(&self.semaphore);
             let path_for_task = path.clone();
             let child_for_task = child.clone();
             let handle = tokio::spawn(async move {
-                let _permit = permit;
+                let _permit = match semaphore.acquire_owned().await {
+                    Ok(permit) => permit,
+                    Err(_) => return,
+                };
                 match indexer
                     .reindex_paths(std::slice::from_ref(&path_for_task), child_for_task.clone())
                     .await
@@ -198,6 +193,10 @@ impl Supervisor {
             });
             self.inflight.insert(path, (child, handle));
         }
+    }
+
+    fn reap_completed(&self) {
+        self.inflight.retain(|_path, (_token, handle)| !handle.is_finished());
     }
 }
 
@@ -230,27 +229,33 @@ fn run_debouncer(
         }
     }
 
-    for result in raw_rx.iter() {
+    loop {
         if shutdown.is_cancelled() {
             break;
         }
-        if let Ok(events) = result {
-            for event in events {
-                for path in &event.event.paths {
-                    let kind = if path.exists() {
-                        WatchEventKind::Modify
-                    } else {
-                        WatchEventKind::Remove
+        match raw_rx.recv_timeout(Duration::from_millis(200)) {
+            Ok(Ok(events)) => {
+                for event in events {
+                    let Some(kind) = classify_notify_kind(&event.event.kind) else {
+                        continue;
                     };
-                    let watch_event = WatchEvent {
-                        path: path.to_string_lossy().to_string(),
-                        kind,
-                    };
-                    if event_tx.blocking_send(watch_event).is_err() {
-                        break;
+                    for path in &event.event.paths {
+                        let Some(index_key) = index_key_for(path, &watched_roots) else {
+                            continue;
+                        };
+                        let watch_event = WatchEvent {
+                            path: index_key,
+                            kind,
+                        };
+                        if event_tx.blocking_send(watch_event).is_err() {
+                            break;
+                        }
                     }
                 }
             }
+            Ok(Err(_)) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
         }
     }
     drop(debouncer);
@@ -259,6 +264,7 @@ fn run_debouncer(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::event_queue::WatchEventKind;
     use crate::app::indexing::create_indexer;
     use crate::domain::Vector;
     use crate::index::mock_embedder;
@@ -315,7 +321,10 @@ mod tests {
         });
         tokio::time::sleep(Duration::from_millis(100)).await;
         shutdown.cancel();
-        let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
+        tokio::time::timeout(Duration::from_secs(2), handle)
+            .await
+            .expect("watcher did not exit on shutdown")
+            .expect("watcher task panicked");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
@@ -332,6 +341,54 @@ mod tests {
         );
         let console: Arc<dyn Console> = Arc::new(create_console());
         (indexer, repo, console)
+    }
+
+    struct BlockingIndexer;
+
+    #[async_trait]
+    impl Indexer for BlockingIndexer {
+        async fn reindex_paths(
+            &self,
+            _paths: &[String],
+            _cancel: CancellationToken,
+        ) -> anyhow::Result<Vec<crate::domain::Replacement>> {
+            std::future::pending::<()>().await;
+            Ok(Vec::new())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_saturated_semaphore_queues_events_instead_of_dropping() {
+        let inflight: Arc<DashMap<String, (CancellationToken, JoinHandle<()>)>> =
+            Arc::new(DashMap::new());
+        let supervisor = Supervisor {
+            inflight: Arc::clone(&inflight),
+            semaphore: Arc::new(Semaphore::new(1)),
+            indexer: Arc::new(BlockingIndexer),
+            index_repository: Arc::new(mock_index_repository(
+                Vector::from_vec_vec(Vec::<Vec<f32>>::new()).unwrap(),
+                vec![],
+                vec![],
+            )),
+            console: Arc::new(create_console()),
+        };
+
+        supervisor.handle_events(vec![
+            WatchEvent {
+                path: "a.md".to_string(),
+                kind: WatchEventKind::Modify,
+            },
+            WatchEvent {
+                path: "b.md".to_string(),
+                kind: WatchEventKind::Modify,
+            },
+        ]);
+
+        assert_eq!(
+            inflight.len(),
+            2,
+            "both events must be queued for processing, none dropped"
+        );
     }
 
     #[tokio::test]
