@@ -22,15 +22,14 @@ pub(super) fn classify_notify_kind(kind: &EventKind) -> Option<WatchEventKind> {
     }
 }
 
-/// Maps an absolute filesystem path reported by the watcher to the index key
-/// (the path relative to its watched root) used throughout the index layer.
-/// Returns `None` when the path is not under any watched root, or does not
+/// Maps an absolute filesystem path reported by the watcher to an absolute index
+/// key. Returns `None` when the path is not under any watched root, or does not
 /// match the indexed file patterns (e.g. non-Markdown files).
 pub(super) fn index_key_for(path: &Path, watched_roots: &[(PathBuf, bool)]) -> Option<String> {
     for (root, _recursive) in watched_roots {
-        if let Ok(relative) = path.strip_prefix(root) {
-            let relative_key = path_to_string(relative);
-            return matches_index_pattern(&relative_key).then_some(relative_key);
+        if path.starts_with(root) {
+            let absolute_key = path_to_string(path);
+            return matches_index_pattern(&absolute_key).then_some(absolute_key);
         }
     }
     None
@@ -181,13 +180,13 @@ mod tests {
     }
 
     #[test]
-    fn index_key_for_strips_watched_root_to_relative_key() {
+    fn index_key_for_returns_absolute_path_inside_root() {
         let tmp = std::env::temp_dir().join("docent_index_key_rel");
         let watched_roots = roots(&tmp);
         let absolute = tmp.join("nested").join("doc.md");
         assert_eq!(
             index_key_for(&absolute, &watched_roots),
-            Some(format!("nested{}doc.md", std::path::MAIN_SEPARATOR))
+            Some(path_to_string(&absolute))
         );
     }
 
@@ -214,7 +213,7 @@ mod tests {
         let markdown_file = tmp.join("doc.md");
         assert_eq!(
             index_key_for(&markdown_file, &watched_roots),
-            Some("doc.md".to_string())
+            Some(path_to_string(&markdown_file))
         );
     }
 }

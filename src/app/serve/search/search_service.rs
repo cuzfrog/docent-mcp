@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use crate::config::SearchConfig;
 use crate::index::{Embedder, IndexRepository};
 use crate::app::serve::search::backend::build_backends;
+use super::path_filter::filter_by_glob;
 use super::fusion::create_fusion;
 use super::ranking::create_decay_ranker;
 use super::types::SearchResult;
@@ -14,6 +15,7 @@ pub trait SearchService: Send + Sync {
         query: &str,
         limit: usize,
         file_hint: &str,
+        search_path: &str,
     ) -> anyhow::Result<Vec<SearchResult>>;
 }
 
@@ -42,12 +44,14 @@ impl SearchService for SearchServiceImpl {
         query: &str,
         limit: usize,
         file_hint: &str,
+        search_path: &str,
     ) -> anyhow::Result<Vec<SearchResult>> {
         let merged_index = self.index_repository.snapshot()?;
         let search_config = Arc::clone(&self.search_config);
         let embedder = Arc::clone(&self.embedder);
         let query = query.to_string();
         let file_hint = file_hint.to_string();
+        let search_path = search_path.to_string();
 
         let results: Vec<SearchResult> = tokio::task::spawn_blocking(move || {
             let (semantic_backend, bm25_backend) = build_backends(
@@ -79,9 +83,12 @@ impl SearchService for SearchServiceImpl {
                 chunk_count
             );
 
+            let (metadata, semantic_scores, bm25_scores) =
+                filter_by_glob(&merged_index.metadata, &semantic_scores, &bm25_scores, &search_path)?;
+
             let fused = score_fusion.fuse(&semantic_scores, &bm25_scores);
             let file_hint: Option<&str> = if file_hint.is_empty() { None } else { Some(&file_hint) };
-            let results = ranker.rank(&fused, &merged_index.metadata, limit, file_hint);
+            let results = ranker.rank(&fused, &metadata, limit, file_hint);
 
             let results: Vec<SearchResult> = results
                 .into_iter()
@@ -182,7 +189,7 @@ mod tests {
             create_search_service(index_repository, embedder, &search_config);
 
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let results = rt.block_on(search_service.search("apples", 5, "")).unwrap();
+        let results = rt.block_on(search_service.search("apples", 5, "", "/**")).unwrap();
 
         assert!(!results.is_empty(), "Should return results");
         assert!(

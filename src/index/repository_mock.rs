@@ -1,11 +1,12 @@
+use std::path::Path;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 
 use dashmap::DashMap;
 
 use super::merged_index::MergedIndex;
 use super::repository::IndexRepository;
-use crate::domain::ChunkMetadata;
-use crate::domain::Vector;
+use crate::domain::{ChunkMetadata, IndexedRoot, Vector};
 
 pub fn mock_index_repository(
     vectors: crate::domain::Vector,
@@ -24,6 +25,8 @@ pub fn mock_index_repository(
 struct FixedMockIndexRepository {
     merged_index: std::sync::Mutex<Option<Arc<MergedIndex>>>,
     pending_paths: Arc<DashMap<String, std::time::Instant>>,
+    roots: std::sync::Mutex<Vec<IndexedRoot>>,
+    next_id: AtomicI64,
 }
 
 impl FixedMockIndexRepository {
@@ -31,6 +34,8 @@ impl FixedMockIndexRepository {
         Self {
             merged_index: std::sync::Mutex::new(Some(Arc::new(merged))),
             pending_paths: Arc::new(DashMap::new()),
+            roots: std::sync::Mutex::new(Vec::new()),
+            next_id: AtomicI64::new(1),
         }
     }
 }
@@ -116,5 +121,60 @@ impl IndexRepository for FixedMockIndexRepository {
 
     fn is_path_pending(&self, path: &str) -> bool {
         self.pending_paths.contains_key(path)
+    }
+
+    fn list_roots(&self) -> anyhow::Result<Vec<IndexedRoot>> {
+        Ok(self.roots.lock().unwrap().clone())
+    }
+
+    fn add_root(
+        &self,
+        path: &Path,
+        watched: bool,
+        recursive: bool,
+    ) -> anyhow::Result<IndexedRoot> {
+        let mut roots = self.roots.lock().unwrap();
+        for root in roots.iter_mut() {
+            if root.path == path {
+                root.watched = watched;
+                root.recursive = recursive;
+                return Ok(root.clone());
+            }
+        }
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        let root = IndexedRoot {
+            id,
+            path: path.to_path_buf(),
+            watched,
+            recursive,
+        };
+        roots.push(root.clone());
+        roots.sort_by_key(|r| r.path.components().count());
+        roots.reverse();
+        Ok(root)
+    }
+
+    fn remove_root_by_path(&self, path: &Path) -> anyhow::Result<()> {
+        let mut roots = self.roots.lock().unwrap();
+        if let Some(pos) = roots.iter().position(|r| r.path == path) {
+            roots.remove(pos);
+        }
+        Ok(())
+    }
+
+    fn set_watched_by_path(&self, path: &Path, watched: bool) -> anyhow::Result<()> {
+        let mut roots = self.roots.lock().unwrap();
+        for root in roots.iter_mut() {
+            if root.path == path {
+                root.watched = watched;
+                return Ok(());
+            }
+        }
+        anyhow::bail!("root not found: {}", path.display())
+    }
+
+    fn find_root_for_path(&self, path: &Path) -> anyhow::Result<Option<IndexedRoot>> {
+        let roots = self.roots.lock().unwrap();
+        Ok(roots.iter().find(|root| path.starts_with(&root.path)).cloned())
     }
 }

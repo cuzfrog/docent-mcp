@@ -96,7 +96,9 @@ pub(crate) fn rank_results(
         .zip(metadata.iter())
         .map(|((orig_idx, score), meta)| {
             let boosted = if let Some(hint) = file_hint {
-                if meta.doc_ctx.source_path.as_ref() == hint
+                let source = std::path::Path::new(meta.doc_ctx.source_path.as_ref());
+                let hint_path = std::path::Path::new(hint);
+                if source.ends_with(hint_path)
                     && (file_hint_boost - 1.0).abs() > f32::EPSILON
                 {
                     score * file_hint_boost

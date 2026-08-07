@@ -191,6 +191,29 @@ header .subtitle {
   cursor: not-allowed;
 }
 
+#search-path,
+.search-path-input {
+  width: 160px;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.95rem;
+  border: 1px solid #ccc;
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+#search-path:focus,
+.search-path-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.15);
+}
+
+#search-path:disabled,
+.search-path-input:disabled {
+  background: #e9ecef;
+  cursor: not-allowed;
+}
+
 #search-btn {
   padding: 0.65rem 1.25rem;
   font-size: 0.9rem;
@@ -542,7 +565,7 @@ header .subtitle {
     min-width: 100%;
   }
 
-  #limit, #search-btn {
+  #limit, #search-path, #search-btn {
     flex: 1;
   }
 

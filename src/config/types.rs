@@ -1,9 +1,9 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// The file types that docent indexes. Currently only Markdown files.
 pub const GLOB_PATTERNS: &[&str] = &["*.md"];
 
-#[derive(Debug, Deserialize, PartialEq, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default, Clone)]
 pub struct Config {
     #[serde(default)]
     pub index: IndexConfig,
@@ -13,7 +13,7 @@ pub struct Config {
     pub search: SearchConfig,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct IndexConfig {
     #[serde(default)]
     pub embedding_model: String,
@@ -29,7 +29,7 @@ pub struct IndexConfig {
     pub watch: WatchConfig,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct WatchConfig {
     #[serde(default = "super::defaults::default_watch_enabled")]
     pub enabled: bool,
@@ -39,13 +39,13 @@ pub struct WatchConfig {
     pub max_batch_size: usize,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct ServerConfig {
     #[serde(default = "super::defaults::default_port")]
     pub port: u16,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Default)]
 pub struct SearchConfig {
     #[serde(default)]
     pub ranking: RankingConfig,
@@ -55,7 +55,7 @@ pub struct SearchConfig {
     pub bm25: Bm25Config,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct RankingConfig {
     #[serde(default = "super::defaults::default_same_src_score_decay")]
     pub same_src_score_decay: f32,
@@ -63,7 +63,7 @@ pub struct RankingConfig {
     pub file_hint_boost: f32,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 #[serde(tag = "strategy", rename_all = "snake_case")]
 pub enum FusionStrategy {
     Rrf { k: f32 },
@@ -72,13 +72,13 @@ pub enum FusionStrategy {
     CombMnz,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct FusionConfig {
     #[serde(default = "super::defaults::default_fusion_strategy")]
     pub strategy: FusionStrategy,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Bm25Config {
     #[serde(default = "super::defaults::default_bm25_k1")]
     pub k1: f32,

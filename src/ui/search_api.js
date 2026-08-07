@@ -27,10 +27,12 @@ export const PROTOCOL = {
  * @param {import('./mcp_client.js').McpClient} client
  * @param {string} query
  * @param {number} limit
+ * @param {string} searchPath
  * @returns {Promise<{results: NormalizedResult[], raw: object, error: string|null}>}
  */
-export async function searchDoc(client, query, limit) {
-  const raw = await client.callTool(PROTOCOL.TOOL_NAME, { query, limit });
+export async function searchDoc(client, query, limit, searchPath) {
+  const resolvedSearchPath = searchPath ? searchPath : '/**';
+  const raw = await client.callTool(PROTOCOL.TOOL_NAME, { query, limit, search_path: resolvedSearchPath });
   return { ...parseSearchResponse(raw), raw };
 }
 

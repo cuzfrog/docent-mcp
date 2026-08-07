@@ -2,19 +2,21 @@ use super::*;
 
 #[test]
 fn test_valid_config_parse() {
-    let toml_str = r#"
-[index]
-embedding_model = "BAAI/bge-large-en"
-doc_dirs = ["./docs", "./notes/*"]
-chunk_size = 1024
-chunk_overlap = 128
-
-[server]
-
-[search.ranking]
-same_src_score_decay = 0.85
-"#;
-    let config: Config = toml::from_str(toml_str).unwrap();
+    let json_str = r#"{
+        "index": {
+            "embedding_model": "BAAI/bge-large-en",
+            "doc_dirs": ["./docs", "./notes/*"],
+            "chunk_size": 1024,
+            "chunk_overlap": 128
+        },
+        "server": {},
+        "search": {
+            "ranking": {
+                "same_src_score_decay": 0.85
+            }
+        }
+    }"#;
+    let config: Config = serde_json::from_str(json_str).unwrap();
     assert_eq!(config.index.embedding_model, "BAAI/bge-large-en");
     assert_eq!(config.index.doc_dirs, vec!["./docs".to_string(), "./notes/*".to_string()]);
     assert_eq!(config.index.chunk_size, 1024);
@@ -25,12 +27,11 @@ same_src_score_decay = 0.85
 
 #[test]
 fn test_missing_fields_get_defaults() {
-    let toml_str = r#"
-[index]
-
-[server]
-"#;
-    let config: Config = toml::from_str(toml_str).unwrap();
+    let json_str = r#"{
+        "index": {},
+        "server": {}
+    }"#;
+    let config: Config = serde_json::from_str(json_str).unwrap();
     assert_eq!(config.index.embedding_model, String::new());
     assert_eq!(config.index.doc_dirs, super::defaults::default_doc_dirs());
     assert_eq!(config.index.chunk_size, super::defaults::default_chunk_size());
@@ -40,53 +41,59 @@ fn test_missing_fields_get_defaults() {
 
 #[test]
 fn test_missing_index_section() {
-    let toml_str = r#"
-[server]
-"#;
-    let config: Config = toml::from_str(toml_str).unwrap();
+    let json_str = r#"{
+        "server": {}
+    }"#;
+    let config: Config = serde_json::from_str(json_str).unwrap();
     assert_eq!(config.index, IndexConfig::default());
 }
 
 #[test]
 fn test_missing_server_section() {
-    let toml_str = r#"
-[index]
-embedding_model = "BGESmallENV15Q"
-"#;
-    let config: Config = toml::from_str(toml_str).unwrap();
+    let json_str = r#"{
+        "index": {
+            "embedding_model": "BGESmallENV15Q"
+        }
+    }"#;
+    let config: Config = serde_json::from_str(json_str).unwrap();
     assert_eq!(config.index.embedding_model, "BGESmallENV15Q");
 }
 
 #[test]
 fn test_empty_file_all_defaults() {
-    let toml_str = "";
-    let config: Config = toml::from_str(toml_str).unwrap();
+    let json_str = "{}";
+    let config: Config = serde_json::from_str(json_str).unwrap();
     assert_eq!(config, Config::default());
 }
 
 #[test]
 fn test_search_config_defaults() {
-    let toml_str = r#"
-[index]
-embedding_model = "BGESmallENV15Q"
-
-[search]
-"#;
-    let config: Config = toml::from_str(toml_str).unwrap();
+    let json_str = r#"{
+        "index": {
+            "embedding_model": "BGESmallENV15Q"
+        },
+        "search": {}
+    }"#;
+    let config: Config = serde_json::from_str(json_str).unwrap();
     assert!((config.search.ranking.same_src_score_decay - 0.9).abs() < f32::EPSILON);
 }
 
 #[test]
 fn test_search_config_new_fields() {
-    let toml_str = r#"
-[index]
-embedding_model = "BGESmallENV15Q"
-
-[search.fusion.strategy]
-strategy = "weighted_sum"
-semantic_weight = 0.3
-"#;
-    let config: Config = toml::from_str(toml_str).unwrap();
+    let json_str = r#"{
+        "index": {
+            "embedding_model": "BGESmallENV15Q"
+        },
+        "search": {
+            "fusion": {
+                "strategy": {
+                    "strategy": "weighted_sum",
+                    "semantic_weight": 0.3
+                }
+            }
+        }
+    }"#;
+    let config: Config = serde_json::from_str(json_str).unwrap();
     assert!(matches!(
         config.search.fusion.strategy,
         FusionStrategy::WeightedSum { semantic_weight } if (semantic_weight - 0.3).abs() < f32::EPSILON
@@ -95,15 +102,20 @@ semantic_weight = 0.3
 
 #[test]
 fn test_search_config_rrf_fields() {
-    let toml_str = r#"
-[index]
-embedding_model = "BGESmallENV15Q"
-
-[search.fusion.strategy]
-strategy = "rrf"
-k = 100.0
-"#;
-    let config: Config = toml::from_str(toml_str).unwrap();
+    let json_str = r#"{
+        "index": {
+            "embedding_model": "BGESmallENV15Q"
+        },
+        "search": {
+            "fusion": {
+                "strategy": {
+                    "strategy": "rrf",
+                    "k": 100.0
+                }
+            }
+        }
+    }"#;
+    let config: Config = serde_json::from_str(json_str).unwrap();
     assert!(matches!(
         config.search.fusion.strategy,
         FusionStrategy::Rrf { k } if (k - 100.0).abs() < f32::EPSILON
@@ -130,9 +142,9 @@ fn test_rrf_k_default() {
 }
 
 #[test]
-fn test_doc_dirs_default_is_current_dir() {
+fn test_doc_dirs_default_is_empty() {
     let config: Config = Config::default();
-    assert_eq!(config.index.doc_dirs, vec!["./".to_string()]);
+    assert!(config.index.doc_dirs.is_empty());
 }
 
 #[test]

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -7,10 +8,11 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config::Config;
 use crate::domain::{ChunkMetadata, IndexableDocument, Replacement};
-use crate::index::Embedder;
-use crate::support::{sha256_hex, Console};
+use crate::index::{Embedder, IndexRepository};
+use crate::support::{path_to_string, sha256_hex, Console};
 
 use super::chunker;
+use super::discover::{default_patterns, discover_all_paths, discover_files};
 
 #[async_trait]
 pub trait Indexer: Send + Sync {
@@ -19,16 +21,30 @@ pub trait Indexer: Send + Sync {
         paths: &[String],
         cancel: CancellationToken,
     ) -> anyhow::Result<Vec<Replacement>>;
+
+    async fn reindex_root(
+        &self,
+        root: &Path,
+        recursive: bool,
+        cancel: CancellationToken,
+    ) -> anyhow::Result<Vec<Replacement>>;
+
+    async fn reindex_all(
+        &self,
+        cancel: CancellationToken,
+    ) -> anyhow::Result<Vec<Replacement>>;
 }
 
 pub fn create_indexer(
     config: Config,
     embedder: Arc<Mutex<dyn Embedder>>,
+    index_repository: Arc<dyn IndexRepository>,
     console: Arc<dyn Console>,
 ) -> Arc<dyn Indexer> {
     Arc::new(FileIndexer {
         config,
         embedder,
+        index_repository,
         console,
     })
 }
@@ -36,6 +52,7 @@ pub fn create_indexer(
 struct FileIndexer {
     config: Config,
     embedder: Arc<Mutex<dyn Embedder>>,
+    index_repository: Arc<dyn IndexRepository>,
     console: Arc<dyn Console>,
 }
 
@@ -52,26 +69,35 @@ impl Indexer for FileIndexer {
         let mut documents: Vec<IndexableDocument> = Vec::new();
         let mut replacements: Vec<Replacement> = Vec::with_capacity(paths.len());
 
-        let doc_dirs = &self.config.index.doc_dirs;
-
         for path in paths {
             if cancel.is_cancelled() {
                 return Err(anyhow!("reindex cancelled"));
             }
 
-            let root = match self.find_doc_root(path, doc_dirs) {
-                Some(r) => r,
-                None => {
-                    replacements.push(Replacement {
-                        source_path: path.clone(),
-                        metadata: Vec::new(),
-                        vectors: crate::domain::Vector::from_vec_vec(vec![])?,
-                    });
-                    continue;
-                }
-            };
+            let absolute_path = PathBuf::from(path);
+            if self.index_repository.find_root_for_path(&absolute_path)?.is_none() {
+                self.console.warn(&format!(
+                    "path {} is not under any indexed root; skipping",
+                    path
+                ));
+                replacements.push(Replacement {
+                    source_path: path.clone(),
+                    metadata: Vec::new(),
+                    vectors: crate::domain::Vector::from_vec_vec(vec![])?,
+                });
+                continue;
+            }
 
-            match read_document(&root, path) {
+            if !absolute_path.exists() {
+                replacements.push(Replacement {
+                    source_path: path.clone(),
+                    metadata: Vec::new(),
+                    vectors: crate::domain::Vector::from_vec_vec(vec![])?,
+                });
+                continue;
+            }
+
+            match read_document(path) {
                 ReadOutcome::Found(doc) => documents.push(doc),
                 ReadOutcome::NotFound => {
                     replacements.push(Replacement {
@@ -93,9 +119,8 @@ impl Indexer for FileIndexer {
         }
 
         let chunks = chunker::chunk_documents(&documents, &self.config);
-        let vectors = self
-            .embed_documents(documents.iter().map(|d| d.body.as_str()).collect(), &cancel)
-            .await?;
+        let chunk_texts: Vec<&str> = chunks.iter().map(|c| c.text.as_str()).collect();
+        let vectors = self.embed_documents(chunk_texts, &cancel).await?;
 
         if chunks.len() != vectors.len() {
             return Err(anyhow!(
@@ -105,16 +130,11 @@ impl Indexer for FileIndexer {
             ));
         }
 
-        let mut per_doc_chunks: std::collections::HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>> =
-            std::collections::HashMap::new();
+        let mut per_doc_chunks: HashMap<String, Vec<(ChunkMetadata, Vec<f32>)>> = HashMap::new();
         for (chunk, vector) in chunks.into_iter().zip(vectors) {
-            let doc = documents.get(chunk.doc_index).cloned();
-            let source_path = doc
-                .as_ref()
-                .map(|d| d.source_path.clone())
-                .unwrap_or_default();
+            let doc = &documents[chunk.doc_index];
             let metadata = ChunkMetadata {
-                doc_ctx: doc.as_ref().map(|d| d.doc_context()).unwrap_or_default(),
+                doc_ctx: doc.doc_context(),
                 chunk_text: chunk.text,
                 section_heading: chunk.section_heading,
                 chunk_index: chunk.chunk_index,
@@ -122,7 +142,7 @@ impl Indexer for FileIndexer {
                 line_end: chunk.line_end,
             };
             per_doc_chunks
-                .entry(source_path)
+                .entry(doc.source_path.clone())
                 .or_default()
                 .push((metadata, vector));
         }
@@ -130,9 +150,8 @@ impl Indexer for FileIndexer {
         for path in paths {
             match per_doc_chunks.remove(path) {
                 Some(items) => {
-                    let metadata: Vec<ChunkMetadata> =
-                        items.iter().map(|(m, _)| m.clone()).collect();
-                    let vectors_data: Vec<Vec<f32>> = items.into_iter().map(|(_, v)| v).collect();
+                    let (metadata, vectors_data): (Vec<ChunkMetadata>, Vec<Vec<f32>>) =
+                        items.into_iter().unzip();
                     let vectors = crate::domain::Vector::from_vec_vec(vectors_data)?;
                     replacements.push(Replacement {
                         source_path: path.clone(),
@@ -152,21 +171,31 @@ impl Indexer for FileIndexer {
 
         Ok(replacements)
     }
+
+    async fn reindex_root(
+        &self,
+        root: &Path,
+        recursive: bool,
+        cancel: CancellationToken,
+    ) -> anyhow::Result<Vec<Replacement>> {
+        self.console
+            .info(&format!("Discovering files under: {}", path_to_string(root)));
+        let patterns = default_patterns();
+        let paths = discover_files(root, recursive, &patterns, self.console.as_ref());
+        self.reindex_paths(&paths, cancel).await
+    }
+
+    async fn reindex_all(
+        &self,
+        cancel: CancellationToken,
+    ) -> anyhow::Result<Vec<Replacement>> {
+        self.console.info("Discovering all indexed files...");
+        let paths = discover_all_paths(self.index_repository.clone(), self.console.as_ref())?;
+        self.reindex_paths(&paths, cancel).await
+    }
 }
 
 impl FileIndexer {
-    fn find_doc_root(&self, rel: &str, doc_dirs: &[String]) -> Option<PathBuf> {
-        for entry in doc_dirs {
-            let spec = self.config.index.spec_for(entry);
-            let root = PathBuf::from(&spec.root);
-            let candidate = root.join(rel);
-            if candidate.exists() {
-                return Some(root);
-            }
-        }
-        None
-    }
-
     async fn embed_documents(
         &self,
         texts: Vec<&str>,
@@ -204,8 +233,8 @@ enum ReadOutcome {
     ReadError(anyhow::Error),
 }
 
-fn read_document(root: &Path, rel: &str) -> ReadOutcome {
-    let full = root.join(rel);
+fn read_document(absolute_path: &str) -> ReadOutcome {
+    let full = PathBuf::from(absolute_path);
     let content = match std::fs::read_to_string(&full) {
         Ok(c) => c,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return ReadOutcome::NotFound,
@@ -214,11 +243,11 @@ fn read_document(root: &Path, rel: &str) -> ReadOutcome {
     if content.is_empty() {
         return ReadOutcome::NotFound;
     }
-    let title = extract_title(&content).unwrap_or_else(|| title_from_path(rel));
+    let title = extract_title(&content).unwrap_or_else(|| title_from_path(absolute_path));
     let source_revision = sha256_hex(content.as_bytes());
     let modified_at = file_modified_iso8601(&full);
     ReadOutcome::Found(IndexableDocument {
-        source_path: rel.to_string(),
+        source_path: absolute_path.to_string(),
         source_revision,
         title,
         body: content,
@@ -342,7 +371,7 @@ mod tests {
         std::fs::create_dir_all(&tmp).unwrap();
         let file = tmp.join("doc.md");
         std::fs::write(&file, "# Title\n\nbody").unwrap();
-        match read_document(&tmp, "doc.md") {
+        match read_document(file.to_str().unwrap()) {
             ReadOutcome::Found(doc) => assert!(doc.modified_at.is_some()),
             other => panic!("expected Found, got {:?}", std::mem::discriminant(&other)),
         }
@@ -354,7 +383,8 @@ mod tests {
         let tmp = std::env::temp_dir().join("docent_read_doc_missing");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
-        match read_document(&tmp, "nope.md") {
+        let missing = tmp.join("nope.md");
+        match read_document(missing.to_str().unwrap()) {
             ReadOutcome::NotFound => {}
             other => panic!(
                 "expected NotFound, got {:?}",
@@ -366,14 +396,20 @@ mod tests {
 
     use crate::app::indexing::create_indexer;
     use crate::index::mock_embedder;
+    use crate::index::InMemoryIndexRepository;
 
-    fn sample_indexer_config(tmp: &Path) -> Config {
+    fn sample_indexer_config(_tmp: &Path) -> Config {
         let mut cfg = Config::default();
         cfg.index.embedding_model = "BGESmallENV15Q".to_string();
-        cfg.index.doc_dirs = vec![tmp.to_string_lossy().to_string()];
         cfg.index.chunk_size = 32;
         cfg.index.chunk_overlap = 4;
         cfg
+    }
+
+    fn sample_index_repository(tmp: &Path) -> Arc<dyn IndexRepository> {
+        let repo = InMemoryIndexRepository::default();
+        repo.add_root(tmp, true, true).unwrap();
+        Arc::new(repo)
     }
 
     #[tokio::test]
@@ -385,14 +421,13 @@ mod tests {
         let embedder: Arc<std::sync::Mutex<dyn crate::index::Embedder>> =
             Arc::new(std::sync::Mutex::new(mock_embedder()));
         let console: Arc<dyn Console> = Arc::new(crate::support::create_console());
-        let indexer = create_indexer(cfg.clone(), embedder, console);
-        let rt = tokio::runtime::Handle::current();
+        let index_repository = sample_index_repository(&tmp);
+        let indexer = create_indexer(cfg.clone(), embedder, index_repository, console);
         let result = indexer
             .reindex_paths(&[], CancellationToken::new())
             .await
             .unwrap();
         assert!(result.is_empty());
-        drop(rt);
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
@@ -405,13 +440,15 @@ mod tests {
         let embedder: Arc<std::sync::Mutex<dyn crate::index::Embedder>> =
             Arc::new(std::sync::Mutex::new(mock_embedder()));
         let console: Arc<dyn Console> = Arc::new(crate::support::create_console());
-        let indexer = create_indexer(cfg.clone(), embedder, console);
+        let index_repository = sample_index_repository(&tmp);
+        let indexer = create_indexer(cfg.clone(), embedder, index_repository, console);
+        let missing = tmp.join("nope.md");
         let result = indexer
-            .reindex_paths(&["nope.md".to_string()], CancellationToken::new())
+            .reindex_paths(&[missing.to_string_lossy().to_string()], CancellationToken::new())
             .await
             .unwrap();
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].source_path, "nope.md");
+        assert_eq!(result[0].source_path, missing.to_string_lossy());
         assert!(result[0].metadata.is_empty());
         assert_eq!(result[0].vectors.len(), 0);
         let _ = std::fs::remove_dir_all(&tmp);
@@ -427,17 +464,48 @@ mod tests {
         let embedder: Arc<std::sync::Mutex<dyn crate::index::Embedder>> =
             Arc::new(std::sync::Mutex::new(mock_embedder()));
         let console: Arc<dyn Console> = Arc::new(crate::support::create_console());
-        let indexer = create_indexer(cfg.clone(), embedder, console);
+        let index_repository = sample_index_repository(&tmp);
+        let indexer = create_indexer(cfg.clone(), embedder, index_repository, console);
+        let absolute = tmp.join("a.md");
         let result = indexer
-            .reindex_paths(&["a.md".to_string()], CancellationToken::new())
+            .reindex_paths(&[absolute.to_string_lossy().to_string()], CancellationToken::new())
             .await
             .unwrap();
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].source_path, "a.md");
+        assert_eq!(result[0].source_path, absolute.to_string_lossy());
         assert!(
             !result[0].metadata.is_empty(),
             "expected at least one chunk for a non-empty doc"
         );
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[tokio::test]
+    async fn test_reindex_paths_multi_chunk_file_returns_matching_vectors() {
+        let tmp = std::env::temp_dir().join("docent_reindex_multi");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let body = "alpha bravo charlie delta ".repeat(30);
+        std::fs::write(tmp.join("a.md"), format!("# Title\n\n{}", body)).unwrap();
+        let cfg = sample_indexer_config(&tmp);
+        let embedder: Arc<std::sync::Mutex<dyn crate::index::Embedder>> =
+            Arc::new(std::sync::Mutex::new(mock_embedder()));
+        let console: Arc<dyn Console> = Arc::new(crate::support::create_console());
+        let index_repository = sample_index_repository(&tmp);
+        let indexer = create_indexer(cfg.clone(), embedder, index_repository, console);
+        let absolute = tmp.join("a.md");
+        let result = indexer
+            .reindex_paths(&[absolute.to_string_lossy().to_string()], CancellationToken::new())
+            .await
+            .unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].source_path, absolute.to_string_lossy());
+        assert!(
+            result[0].metadata.len() > 1,
+            "expected multiple chunks for a long doc"
+        );
+        assert_eq!(result[0].vectors.len(), result[0].metadata.len());
+        assert_eq!(result[0].vectors.dims(), 4);
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
@@ -451,10 +519,12 @@ mod tests {
         let embedder: Arc<std::sync::Mutex<dyn crate::index::Embedder>> =
             Arc::new(std::sync::Mutex::new(mock_embedder()));
         let console: Arc<dyn Console> = Arc::new(crate::support::create_console());
-        let indexer = create_indexer(cfg.clone(), embedder, console);
+        let index_repository = sample_index_repository(&tmp);
+        let indexer = create_indexer(cfg.clone(), embedder, index_repository, console);
         let cancel = CancellationToken::new();
         cancel.cancel();
-        let result = indexer.reindex_paths(&["a.md".to_string()], cancel).await;
+        let absolute = tmp.join("a.md");
+        let result = indexer.reindex_paths(&[absolute.to_string_lossy().to_string()], cancel).await;
         assert!(result.is_err(), "expected Err when cancelled");
         let _ = std::fs::remove_dir_all(&tmp);
     }

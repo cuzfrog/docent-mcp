@@ -1,13 +1,16 @@
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use anyhow::Context;
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
 
 use super::merged_index::MergedIndex;
-use crate::domain::ChunkMetadata;
-use crate::domain::Vector;
+use super::storage::{create_connection, create_index_chunk_store, create_index_meta_store, IndexChunkStore, IndexMetaStore};
+use crate::config::Config;
+use crate::domain::{ChunkMetadata, IndexedRoot, Vector};
 
 pub(crate) trait IndexRepository: Send + Sync {
     fn store(&self, merged: MergedIndex) -> anyhow::Result<()>;
@@ -19,29 +22,91 @@ pub(crate) trait IndexRepository: Send + Sync {
         vectors: Vector,
     ) -> anyhow::Result<()>;
     fn is_path_pending(&self, path: &str) -> bool;
+
+    fn list_roots(&self) -> anyhow::Result<Vec<IndexedRoot>>;
+    fn add_root(&self, path: &Path, watched: bool, recursive: bool) -> anyhow::Result<IndexedRoot>;
+    fn remove_root_by_path(&self, path: &Path) -> anyhow::Result<()>;
+    fn set_watched_by_path(&self, path: &Path, watched: bool) -> anyhow::Result<()>;
+    fn find_root_for_path(&self, path: &Path) -> anyhow::Result<Option<IndexedRoot>>;
+}
+
+pub(crate) fn create_index_repository(
+    config: &Config,
+    db_path: &Path,
+) -> anyhow::Result<Arc<dyn IndexRepository>> {
+    let connection = create_connection(db_path)
+        .with_context(|| format!("failed to open index database {}", db_path.display()))?;
+    let meta_store: Arc<dyn IndexMetaStore> = Arc::new(create_index_meta_store(connection.clone()));
+    let chunk_store: Arc<dyn IndexChunkStore> = Arc::new(create_index_chunk_store(connection.clone()));
+
+    let repository = SqliteIndexRepository {
+        inner: InMemoryIndexRepository::new(config.search.bm25.k1, config.search.bm25.b),
+        meta_store,
+        chunk_store,
+        k1: config.search.bm25.k1,
+        b: config.search.bm25.b,
+    };
+
+    for entry in &config.index.doc_dirs {
+        let spec = config.index.spec_for(entry);
+        let root = make_absolute_root(&spec.root);
+        if !root.exists() {
+            continue;
+        }
+        let canonical = root.canonicalize().unwrap_or(root);
+        let _ = repository.meta_store.upsert_root(&canonical, true, spec.recursive)?;
+    }
+
+    let replacements = repository.chunk_store.load_all()?;
+    let merged = if replacements.is_empty() {
+        MergedIndex::empty()?
+    } else {
+        MergedIndex::from_replacements(&replacements, repository.k1, repository.b)?
+    };
+    repository.inner.store(merged)?;
+
+    Ok(Arc::new(repository))
+}
+
+fn make_absolute_root(root: &str) -> PathBuf {
+    let path = PathBuf::from(root);
+    if path.is_absolute() {
+        return path;
+    }
+    std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join(path)
 }
 
 pub(crate) struct InMemoryIndexRepository {
     inner: Arc<ArcSwap<MergedIndex>>,
     writer_mutex: Mutex<()>,
     pending_paths: Arc<DashMap<String, Instant>>,
+    roots: Mutex<Vec<IndexedRoot>>,
+    next_id: AtomicI64,
+    k1: f32,
+    b: f32,
 }
 
 impl InMemoryIndexRepository {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(k1: f32, b: f32) -> Self {
         Self {
             inner: Arc::new(ArcSwap::from_pointee(
                 MergedIndex::empty().expect("empty MergedIndex must construct"),
             )),
             writer_mutex: Mutex::new(()),
             pending_paths: Arc::new(DashMap::new()),
+            roots: Mutex::new(Vec::new()),
+            next_id: AtomicI64::new(1),
+            k1,
+            b,
         }
     }
 }
 
 impl Default for InMemoryIndexRepository {
     fn default() -> Self {
-        Self::new()
+        Self::new(1.2, 0.75)
     }
 }
 
@@ -74,6 +139,83 @@ impl IndexRepository for InMemoryIndexRepository {
         metadata: Vec<ChunkMetadata>,
         vectors: Vector,
     ) -> anyhow::Result<()> {
+        self.replace_with(path, metadata, vectors, |_path, _metadata, _vectors| Ok(()))
+    }
+
+    fn is_path_pending(&self, path: &str) -> bool {
+        self.pending_paths.contains_key(path)
+    }
+
+    fn list_roots(&self) -> anyhow::Result<Vec<IndexedRoot>> {
+        let roots = self.roots.lock().map_err(|e| anyhow::anyhow!("roots mutex poisoned: {}", e))?;
+        Ok(roots.clone())
+    }
+
+    fn add_root(
+        &self,
+        path: &Path,
+        watched: bool,
+        recursive: bool,
+    ) -> anyhow::Result<IndexedRoot> {
+        let mut roots = self.roots.lock().map_err(|e| anyhow::anyhow!("roots mutex poisoned: {}", e))?;
+        for root in roots.iter_mut() {
+            if root.path == path {
+                root.watched = watched;
+                root.recursive = recursive;
+                return Ok(root.clone());
+            }
+        }
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        let root = IndexedRoot {
+            id,
+            path: path.to_path_buf(),
+            watched,
+            recursive,
+        };
+        roots.push(root.clone());
+        roots.sort_by_key(|r| r.path.components().count());
+        roots.reverse();
+        Ok(root)
+    }
+
+    fn remove_root_by_path(&self, path: &Path) -> anyhow::Result<()> {
+        let mut roots = self.roots.lock().map_err(|e| anyhow::anyhow!("roots mutex poisoned: {}", e))?;
+        let pos = roots.iter().position(|r| r.path == path);
+        if pos.is_none() {
+            anyhow::bail!("root not found: {}", path.display());
+        }
+        roots.remove(pos.unwrap());
+        self.remove_path_from_index(path)
+    }
+
+    fn set_watched_by_path(&self, path: &Path, watched: bool) -> anyhow::Result<()> {
+        let mut roots = self.roots.lock().map_err(|e| anyhow::anyhow!("roots mutex poisoned: {}", e))?;
+        for root in roots.iter_mut() {
+            if root.path == path {
+                root.watched = watched;
+                return Ok(());
+            }
+        }
+        anyhow::bail!("root not found: {}", path.display())
+    }
+
+    fn find_root_for_path(&self, path: &Path) -> anyhow::Result<Option<IndexedRoot>> {
+        let roots = self.roots.lock().map_err(|e| anyhow::anyhow!("roots mutex poisoned: {}", e))?;
+        Ok(roots.iter().find(|root| path.starts_with(&root.path)).cloned())
+    }
+}
+
+impl InMemoryIndexRepository {
+    fn replace_with<F>(
+        &self,
+        path: &str,
+        metadata: Vec<ChunkMetadata>,
+        vectors: Vector,
+        persist: F,
+    ) -> anyhow::Result<()>
+    where
+        F: FnOnce(&str, &[ChunkMetadata], &Vector) -> anyhow::Result<()>,
+    {
         let _writer_guard = self
             .writer_mutex
             .lock()
@@ -87,15 +229,10 @@ impl IndexRepository for InMemoryIndexRepository {
             my_instant: inserted_at,
         };
 
+        persist(path, &metadata, &vectors)?;
         self.replace_path_inner(path, metadata, vectors)
     }
 
-    fn is_path_pending(&self, path: &str) -> bool {
-        self.pending_paths.contains_key(path)
-    }
-}
-
-impl InMemoryIndexRepository {
     fn replace_path_inner(
         &self,
         path: &str,
@@ -143,7 +280,49 @@ impl InMemoryIndexRepository {
             .map(|m| m.chunk_text.as_str())
             .collect();
         let (bm25_embeddings, bm25_avgdl) =
-            super::bm25_builder::build_bm25(&chunk_texts, 1.2, 0.75);
+            super::bm25_builder::build_bm25(&chunk_texts, self.k1, self.b);
+        next.bm25_embeddings = bm25_embeddings;
+        next.bm25_avgdl = bm25_avgdl;
+
+        self.inner.store(Arc::new(next));
+        Ok(())
+    }
+
+    fn remove_path_from_index(&self, path: &Path) -> anyhow::Result<()> {
+        let current = self.inner.load();
+        let mut next = MergedIndex::clone(&current);
+
+        let keep_indices: Vec<usize> = next
+            .metadata
+            .iter()
+            .enumerate()
+            .filter_map(|(i, m)| {
+                let source = Path::new(m.doc_ctx.source_path.as_ref());
+                if source.starts_with(path) {
+                    None
+                } else {
+                    Some(i)
+                }
+            })
+            .collect();
+
+        next.metadata = keep_indices
+            .iter()
+            .map(|&i| next.metadata[i].clone())
+            .collect();
+        let kept_vectors_data: Vec<Vec<f32>> = keep_indices
+            .iter()
+            .map(|&i| next.vectors.get(i).to_vec())
+            .collect();
+        next.vectors = Vector::from_vec_vec(kept_vectors_data)?;
+
+        let chunk_texts: Vec<&str> = next
+            .metadata
+            .iter()
+            .map(|m| m.chunk_text.as_str())
+            .collect();
+        let (bm25_embeddings, bm25_avgdl) =
+            super::bm25_builder::build_bm25(&chunk_texts, self.k1, self.b);
         next.bm25_embeddings = bm25_embeddings;
         next.bm25_avgdl = bm25_avgdl;
 
@@ -152,8 +331,75 @@ impl InMemoryIndexRepository {
     }
 }
 
-pub(crate) fn create_index_repository() -> impl IndexRepository {
-    InMemoryIndexRepository::new()
+struct SqliteIndexRepository {
+    inner: InMemoryIndexRepository,
+    meta_store: Arc<dyn IndexMetaStore>,
+    chunk_store: Arc<dyn IndexChunkStore>,
+    k1: f32,
+    b: f32,
+}
+
+impl IndexRepository for SqliteIndexRepository {
+    fn store(&self, merged: MergedIndex) -> anyhow::Result<()> {
+        self.inner.store(merged)
+    }
+
+    fn snapshot(&self) -> anyhow::Result<Arc<MergedIndex>> {
+        self.inner.snapshot()
+    }
+
+    fn replace_path(
+        &self,
+        path: &str,
+        metadata: Vec<ChunkMetadata>,
+        vectors: Vector,
+    ) -> anyhow::Result<()> {
+        self.inner.replace_with(
+            path,
+            metadata,
+            vectors,
+            |p, m, v| self.chunk_store.replace_path(p, m, v),
+        )
+    }
+
+    fn is_path_pending(&self, path: &str) -> bool {
+        self.inner.is_path_pending(path)
+    }
+
+    fn list_roots(&self) -> anyhow::Result<Vec<IndexedRoot>> {
+        self.meta_store.list_roots()
+    }
+
+    fn add_root(
+        &self,
+        path: &Path,
+        watched: bool,
+        recursive: bool,
+    ) -> anyhow::Result<IndexedRoot> {
+        self.meta_store.upsert_root(path, watched, recursive)
+    }
+
+    fn remove_root_by_path(&self, path: &Path) -> anyhow::Result<()> {
+        let root = self
+            .meta_store
+            .find_root_by_path(path)?
+            .with_context(|| format!("root not found for {}", path.display()))?;
+        self.meta_store.delete_root(root.id)?;
+        self.inner.remove_path_from_index(path)?;
+        Ok(())
+    }
+
+    fn set_watched_by_path(&self, path: &Path, watched: bool) -> anyhow::Result<()> {
+        let root = self
+            .meta_store
+            .find_root_by_path(path)?
+            .with_context(|| format!("root not found for {}", path.display()))?;
+        self.meta_store.set_watched(root.id, watched)
+    }
+
+    fn find_root_for_path(&self, path: &Path) -> anyhow::Result<Option<IndexedRoot>> {
+        self.meta_store.find_root_for_path(path)
+    }
 }
 
 #[cfg(test)]
@@ -185,7 +431,7 @@ mod tests {
 
     #[test]
     fn test_in_memory_repository_starts_empty() {
-        let index_repository = InMemoryIndexRepository::new();
+        let index_repository = InMemoryIndexRepository::default();
         let snap = index_repository.snapshot().unwrap();
         assert_eq!(snap.vectors.len(), 0);
         assert!(snap.metadata.is_empty());
@@ -193,7 +439,7 @@ mod tests {
 
     #[test]
     fn test_in_memory_repository_store_then_snapshot() {
-        let index_repository = InMemoryIndexRepository::new();
+        let index_repository = InMemoryIndexRepository::default();
         let batch = IndexedBatch {
             vectors: vec![vec![1.0, 0.0, 0.0, 0.0], vec![0.0, 1.0, 0.0, 0.0]],
             metadata: vec![
@@ -248,13 +494,13 @@ mod tests {
 
     #[test]
     fn test_is_path_pending_false_by_default() {
-        let index_repository = InMemoryIndexRepository::new();
+        let index_repository = InMemoryIndexRepository::default();
         assert!(!index_repository.is_path_pending("a.md"));
     }
 
     #[test]
     fn test_replace_path_removes_old_chunks_for_path() {
-        let index_repository = InMemoryIndexRepository::new();
+        let index_repository = InMemoryIndexRepository::default();
         let initial = MergedIndex::from_replacements(
             &[Replacement {
                 source_path: "a.md".to_string(),
@@ -278,7 +524,7 @@ mod tests {
 
     #[test]
     fn test_replace_path_appends_new_chunks_for_path() {
-        let index_repository = InMemoryIndexRepository::new();
+        let index_repository = InMemoryIndexRepository::default();
         let initial = MergedIndex::from_replacements(
             &[Replacement {
                 source_path: "a.md".to_string(),
@@ -306,7 +552,7 @@ mod tests {
 
     #[test]
     fn test_replace_path_refits_bm25() {
-        let index_repository = InMemoryIndexRepository::new();
+        let index_repository = InMemoryIndexRepository::default();
         index_repository
             .replace_path(
                 "a.md",
@@ -322,7 +568,7 @@ mod tests {
 
     #[test]
     fn test_replace_path_serializes_against_concurrent_writer() {
-        let index_repository = Arc::new(InMemoryIndexRepository::new());
+        let index_repository = Arc::new(InMemoryIndexRepository::default());
 
         let mut handles = Vec::new();
         for i in 0..8 {
@@ -345,7 +591,7 @@ mod tests {
 
     #[test]
     fn test_pending_cleared_after_successful_replace() {
-        let index_repository = InMemoryIndexRepository::new();
+        let index_repository = InMemoryIndexRepository::default();
         index_repository
             .replace_path(
                 "a.md",
@@ -361,7 +607,7 @@ mod tests {
 
     #[test]
     fn test_existing_snapshot_unchanged_during_replace_path() {
-        let index_repository = InMemoryIndexRepository::new();
+        let index_repository = InMemoryIndexRepository::default();
         index_repository
             .replace_path(
                 "a.md",
@@ -386,7 +632,7 @@ mod tests {
 
     #[test]
     fn test_replace_path_replaces_existing_chunks_for_same_path() {
-        let index_repository = InMemoryIndexRepository::new();
+        let index_repository = InMemoryIndexRepository::default();
         index_repository
             .replace_path(
                 "a.md",
@@ -407,5 +653,23 @@ mod tests {
         for m in &snap.metadata {
             assert_eq!(m.doc_ctx.source_path.as_ref(), "a.md");
         }
+    }
+
+    #[test]
+    fn test_in_memory_repository_add_and_list_roots() {
+        let repo = InMemoryIndexRepository::default();
+        let root = repo.add_root(Path::new("/docs"), true, true).unwrap();
+        assert_eq!(root.path, PathBuf::from("/docs"));
+        let roots = repo.list_roots().unwrap();
+        assert_eq!(roots.len(), 1);
+    }
+
+    #[test]
+    fn test_in_memory_repository_find_longest_root_prefix() {
+        let repo = InMemoryIndexRepository::default();
+        repo.add_root(Path::new("/tmp"), true, true).unwrap();
+        repo.add_root(Path::new("/tmp/docs"), true, true).unwrap();
+        let found = repo.find_root_for_path(Path::new("/tmp/docs/file.md")).unwrap();
+        assert_eq!(found.unwrap().path, PathBuf::from("/tmp/docs"));
     }
 }

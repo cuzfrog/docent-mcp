@@ -46,7 +46,7 @@
 ## Coding Principles
 - Follow development principles, such as separation of concerns, SOLID principles, correct abstraction levels (e.g. reflected by the type hierarchy, type and file layout, code reusability, etc), loose coupled code. The goal is simplicity and maintainability.
 - Given a change, do not first attempt to insert into current code base. First look at it from a higher perspective, discover refactor opportunities to avoid violating context rules.
-- Favor trait-based design over procedural design.
+- Favor trait-based OOP design over procedural design.
 - Naming must reflect the abstraction level. If a newly introduced function violates this, considering renaming related types/functions/variables to maintain correct abstraction levels.
 - Avoid "helper" functions, they are where code is coupled out of class hierarchy. "helper" functions are functions that are outside the abstraction hierarchy, containing domain logic, serving the only purpose of code reuse. They are different from "utility/support" functions that are purely technical without complex domain logic. Utility functions do not have a position in the abstraction hierarchy.
 - A function's parameters should be data it consumes, parameters should not be its dependencies. A high-order function should only be used for transformation instead of procedural processing. Context and config types are exempted from this rule.
@@ -61,7 +61,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - For multi-file module, since each file is its own module, all other things must be file private or `pub(super)`
 - Unit tests should be collocated with its prod code.
 - Integration tests outside the module should only test the exposed `pub trait` or `pub(crate) trait`.
-- In each module, search `MODULE.md` for its public surface. Any export must be carefully reasoned and justified.
+- Exports are limited by module-gates/`MODULE.md`. Before an export can be added/updated, the `no-new-exports` need to be temporarily commented out to lift the gates, however any new export must be carefully reasoned and justified.
 - all `mod` in `mod.rs` must be private. Any exposed types must use explicit re-export.
 - Cross boundary domain types, config types, DTOs are exempted from the visibility rule.
 
