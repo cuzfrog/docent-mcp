@@ -1,23 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::config::types::Config;
-
-const SETTINGS_DIR: &str = ".docent";
-const SETTINGS_FILE: &str = "settings.json";
-
-fn settings_path() -> PathBuf {
-    let home = dirs_next::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-    home.join(SETTINGS_DIR).join(SETTINGS_FILE)
-}
-
-fn ensure_settings_dir() -> anyhow::Result<PathBuf> {
-    let path = settings_path();
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| anyhow::anyhow!("Failed to create config directory '{}': {}", parent.display(), e))?;
-    }
-    Ok(path)
-}
+use crate::support::settings_path;
 
 impl Config {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
@@ -77,7 +61,12 @@ impl Config {
 }
 
 fn ensure_settings_path() -> anyhow::Result<PathBuf> {
-    ensure_settings_dir()
+    let path = settings_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| anyhow::anyhow!("Failed to create config directory '{}': {}", parent.display(), e))?;
+    }
+    Ok(path)
 }
 
 #[cfg(test)]

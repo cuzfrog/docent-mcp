@@ -51,6 +51,7 @@ async function handleSearch(event) {
   if (!query) return;
 
   const limit = parseInt(view.elements.limit.value, 10);
+  const searchPath = view.elements.searchPath.value.trim() || '/**';
 
   state.searching = true;
   view.renderBusy(true);
@@ -58,7 +59,7 @@ async function handleSearch(event) {
   view.elements.rawContent.textContent = '';
 
   try {
-    const { results, raw, error } = await searchDoc(client, query, limit);
+    const { results, raw, error } = await searchDoc(client, query, limit, searchPath);
     state.lastRaw = raw;
     view.renderRawResponse(raw);
     if (error) {

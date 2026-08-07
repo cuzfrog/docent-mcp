@@ -11,6 +11,7 @@ export class View {
       form: doc.getElementById('search-form'),
       query: doc.getElementById('query'),
       limit: doc.getElementById('limit'),
+      searchPath: doc.getElementById('search-path'),
       searchBtn: doc.getElementById('search-btn'),
       results: doc.getElementById('results'),
       rawContent: doc.getElementById('raw-content'),
@@ -41,6 +42,7 @@ export class View {
   renderBusy(isBusy) {
     this.elements.query.disabled = isBusy;
     this.elements.limit.disabled = isBusy;
+    this.elements.searchPath.disabled = isBusy;
     this.elements.searchBtn.disabled = isBusy;
 
     if (this.elements.resultsSection) {

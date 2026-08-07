@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseSearchResponse } from '../search_api.js';
+import { searchDoc, parseSearchResponse } from '../search_api.js';
 
 describe('parseSearchResponse', () => {
   it('returns error for null/undefined input', () => {
@@ -120,10 +120,41 @@ describe('parseSearchResponse', () => {
   });
 
   it('handles unexpected errors gracefully', () => {
-    // raw.result exists but content is somehow null
     const raw = { result: { content: null } };
-    // Should not throw — return a structured error
     const r = parseSearchResponse(raw);
     assert.ok(r.error);
+  });
+});
+
+describe('searchDoc', () => {
+  it('passes query, limit, and search_path to the client', async () => {
+    let recordedCall = null;
+    const client = {
+      callTool: async (name, args) => {
+        recordedCall = { name, args };
+        return { result: { content: [{ text: '[]' }] } };
+      },
+    };
+
+    await searchDoc(client, 'test query', 5, '/docs/**/*.md');
+
+    assert.equal(recordedCall.name, 'search_doc');
+    assert.equal(recordedCall.args.query, 'test query');
+    assert.equal(recordedCall.args.limit, 5);
+    assert.equal(recordedCall.args.search_path, '/docs/**/*.md');
+  });
+
+  it('defaults empty search_path to /**', async () => {
+    let recordedCall = null;
+    const client = {
+      callTool: async (name, args) => {
+        recordedCall = { name, args };
+        return { result: { content: [{ text: '[]' }] } };
+      },
+    };
+
+    await searchDoc(client, 'test query', 3, '');
+
+    assert.equal(recordedCall.args.search_path, '/**');
   });
 });

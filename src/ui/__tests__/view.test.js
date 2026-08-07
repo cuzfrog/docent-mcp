@@ -11,6 +11,7 @@ const HTML = `<!DOCTYPE html>
     <option value="5">5</option>
     <option value="10">10</option>
   </select>
+  <input id="search-path" class="search-path-input" value="/**">
   <button id="search-btn">Search</button>
 </form>
 <div id="results"></div>
@@ -135,12 +136,14 @@ describe('View', () => {
     view.renderBusy(true);
     assert.equal(view.elements.query.disabled, true);
     assert.equal(view.elements.limit.disabled, true);
+    assert.equal(view.elements.searchPath.disabled, true);
     assert.equal(view.elements.searchBtn.disabled, true);
     assert.ok(view.elements.searchBtn.innerHTML.includes('spinner'));
 
     view.renderBusy(false);
     assert.equal(view.elements.query.disabled, false);
     assert.equal(view.elements.limit.disabled, false);
+    assert.equal(view.elements.searchPath.disabled, false);
     assert.equal(view.elements.searchBtn.disabled, false);
     assert.equal(view.elements.searchBtn.textContent, 'Search');
   });

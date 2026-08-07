@@ -24,6 +24,9 @@ pub(super) struct SearchDocParams {
     pub limit: u8,
     #[serde(default)]
     pub file_hint: String,
+    /// Glob pattern that scopes the search to matching absolute source paths.
+    /// Use `/**` to search all indexed paths.
+    pub search_path: String,
 }
 
 fn default_limit() -> u8 {
@@ -84,10 +87,16 @@ impl RmcpServer {
                 Some(serde_json::json!({"field": "limit", "reason": "must be between 1 and 10"})),
             ));
         }
+        if globset::Glob::new(&params.search_path).is_err() {
+            return Err(ErrorData::invalid_params(
+                "search_path must be a valid glob pattern",
+                Some(serde_json::json!({"field": "search_path", "reason": "invalid glob"})),
+            ));
+        }
 
         let results = self
             .search_service
-            .search(&params.query, params.limit as usize, &params.file_hint)
+            .search(&params.query, params.limit as usize, &params.file_hint, &params.search_path)
             .await
             .map_err(|e| {
                 ErrorData::new(
@@ -120,39 +129,41 @@ mod tests {
 
     #[test]
     fn test_params_deserialize_minimal() {
-        let json = r#"{"query": "hello"}"#;
+        let json = r#"{"query": "hello", "search_path": "/**"}"#;
         let params: SearchDocParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.query, "hello");
         assert_eq!(params.limit, 3);
         assert_eq!(params.file_hint, "");
+        assert_eq!(params.search_path, "/**");
     }
 
     #[test]
     fn test_params_deserialize_full() {
-        let json = r#"{"query": "hello", "limit": 5, "file_hint": "src/main.rs"}"#;
+        let json = r#"{"query": "hello", "limit": 5, "file_hint": "src/main.rs", "search_path": "/**"}"#;
         let params: SearchDocParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.query, "hello");
         assert_eq!(params.limit, 5);
         assert_eq!(params.file_hint, "src/main.rs");
+        assert_eq!(params.search_path, "/**");
     }
 
     #[test]
     fn test_params_missing_query_fails() {
-        let json = r#"{}"#;
+        let json = r#"{"search_path": "/**"}"#;
         let result = serde_json::from_str::<SearchDocParams>(json);
         assert!(result.is_err());
     }
 
     #[test]
-    fn test_params_backward_compat() {
-        let json = r#"{"query": "hello", "limit": 3}"#;
-        let params: SearchDocParams = serde_json::from_str(json).unwrap();
-        assert_eq!(params.file_hint, "");
+    fn test_params_missing_search_path_fails() {
+        let json = r#"{"query": "hello"}"#;
+        let result = serde_json::from_str::<SearchDocParams>(json);
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_params_limit_zero_rejected() {
-        let json = r#"{"query": "hello", "limit": 0}"#;
+        let json = r#"{"query": "hello", "limit": 0, "search_path": "/**"}"#;
         let params: SearchDocParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.limit, 0);
     }
