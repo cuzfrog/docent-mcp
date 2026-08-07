@@ -1,8 +1,6 @@
 ## Git 
-### branching
 - Main branch: `main`
-- Feature branches: `<task_id>_<short-description>`, e.g., `IMPL-2_config-loader`
-- User branches: `dev_*`, `fix_`.
+- By default, use `scripts/gh-bot.mjs` as a `gh` wrapper to give you an identity; unless the user asks you to merge PR via `gh` on their behalf.
 
 ### PR title - semantic-pull-request format:
 <type>([optional task_id]): <description>
