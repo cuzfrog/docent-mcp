@@ -2,7 +2,7 @@
 
 # docent
 
-**Semantic + BM25 Document search** — an experimental MCP server written in Rust that indexes markdown documents, letting agents query *why* code looks the way it does.
+**Semantic + BM25 Document search** — an experimental MCP server written in Rust that indexes markdown documents as a local knowledge base.
 
 ```
   files ──▼── index (in-memory+cache) ──▶  MCP server  ◀──── query
