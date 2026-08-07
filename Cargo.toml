@@ -2,42 +2,51 @@
 name = "docent-mcp"
 version = "0.8.1"
 edition = "2021"
+rust-version = "1.97.1"
 
 [[bin]]
 name = "docent"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "=1.0.102"
-async-trait = "=0.1.89"
+anyhow = { version = "=1.0.104", default-features = false, features = ["std"] }
+arc-swap = "=1.9.2"
+async-trait = "=0.1.91"
+axum = { version = "=0.8.9", default-features = false, features = ["http1", "tokio"] }
 bm25 = "=2.3.2"
-bincode = "=1.3.3"
-axum = { version = "=0.8.8", default-features = false, features = ["http1", "tokio"] }
-chrono = "=0.4.41"
-clap = { version = "=4.6.1", features = ["derive"] }
-dirs-next = "=2.0.0"
-fastembed = { version = "=5.13.4", default-features = false, features = ["ort-download-binaries-rustls-tls", "hf-hub-rustls-tls"] }
-rmcp = { version = "=1.8.0", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
-schemars = { version = "=1.2.1", features = ["derive"] }
-serde = { version = "=1.0.228", features = ["derive"] }
-serde_json = "=1.0.140"
-sha2 = "=0.10.8"
-tokenizers = { version = "=0.22.2", default-features = false, features = ["onig"] }
-tokio = { version = "=1.52.2", features = ["full"] }
-tokio-util = { version = "=0.7.13", features = ["rt"] }
-tower = "=0.5.3"
-notify-debouncer-full = "=0.7.0"
+bytemuck = "=1.25.2"
+chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
+clap = { version = "=4.6.6", default-features = false, features = ["derive", "std", "help", "usage", "error-context"] }
 dashmap = "=6.1.0"
+dirs-next = "=2.0.0"
+fastembed = { version = "=5.17.4", default-features = false, features = ["ort-download-binaries-rustls-tls", "hf-hub-rustls-tls"] }
+globset = { version = "=0.4.20", default-features = false, features = ["log"] }
+notify-debouncer-full = "=0.7.0"
+rmcp = { version = "=1.8.0", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
+schemars = { version = "=1.2.2", default-features = false, features = ["derive", "std"] }
+serde = { version = "=1.0.229", default-features = false, features = ["derive", "std"] }
+serde_json = { version = "=1.0.151", default-features = false, features = ["std"] }
+sha2 = { version = "=0.10.8", default-features = false, features = ["std"] }
+tokio = { version = "=1.53.1", default-features = false, features = ["rt-multi-thread", "rt", "macros", "sync", "time", "net", "signal", "io-util"] }
+tokio-util = { version = "=0.7.19", default-features = false, features = ["rt"] }
 toml = "=0.8.23"
+tower = { version = "=0.5.3", default-features = false, features = ["util"] }
 walkdir = "=2.5.0"
-globset = "=0.4.16"
-rayon = "=1.10.0"
-bytemuck = "=1.22.0"
-arc-swap = "=1.7.1"
 
 [dev-dependencies]
-reqwest = { version = "=0.12.26", default-features = false, features = ["blocking", "json", "rustls-tls"] }
-tempfile = "=3.25.0"
-criterion = { version = "=0.5.1", features = ["html_reports"] }
-mockall = "=0.11.3"
+mockall = { version = "=0.14.0", default-features = false }
 
+[profile.dev]
+debug = 1
+incremental = false
+
+[profile.dev.build-override]
+opt-level = 3
+debug = false
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true
+codegen-units = 1
+panic = "abort"
