@@ -5,7 +5,7 @@
 ## Architecture
 ```
   files ──▼── index ──▶  MCP server  ◀──── query
-                 (cache)        (HTTP)
+            (cache)        (HTTP)
 ```
 
 ## Conventions
@@ -61,7 +61,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - For multi-file module, since each file is its own module, all other things must be file private or `pub(super)`
 - Unit tests should be collocated with its prod code.
 - Integration tests outside the module should only test the exposed `pub trait` or `pub(crate) trait`.
-- In each module, search `MODULE.md` for its api, responsibilities, and files layout. You must follow its specifications. You cannot change the visibility. You should not modify this file. You cannot add any other public types/functions.
+- In each module, search `MODULE.md` for its public surface. Any export must be carefully reasoned and justified.
 - all `mod` in `mod.rs` must be private. Any exposed types must use explicit re-export.
 - Cross boundary domain types, config types, DTOs are exempted from the visibility rule.
 
@@ -69,14 +69,6 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 ```md
 ---
 no-new-exports: [mod.rs]
----
-```
-or
-```md
----
-visible:
-  - path: Type1
-    modifier: pub(super)
 ---
 ```
 
