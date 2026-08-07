@@ -124,11 +124,10 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_doc_dirs_passes_validation() {
+    fn test_valid_config_passes_validation() {
         let config = Config {
             index: IndexConfig {
                 embedding_model: "BGESmallENV15Q".to_string(),
-                doc_dirs: vec![],
                 ..IndexConfig::default()
             },
             ..Config::default()

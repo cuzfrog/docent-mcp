@@ -1,12 +1,15 @@
 mod bm25_builder;
+mod embedder;
 mod merged_index;
 mod repository;
+mod sqlite;
 
+pub(crate) use embedder::{create_embedder, Embedder};
 pub(crate) use merged_index::MergedIndex;
 pub(crate) use repository::{create_index_repository, IndexRepository};
 
-mod embedder;
-pub(crate) use embedder::{create_embedder, Embedder};
+#[cfg(test)]
+pub(crate) use repository::InMemoryIndexRepository;
 
 #[cfg(test)]
 mod embedder_mock;

@@ -26,14 +26,8 @@ pub trait Watcher: Send + Sync {
     async fn run(&self, shutdown: CancellationToken) -> anyhow::Result<()>;
 }
 
-pub(crate) struct WatchedRoot {
-    pub root: PathBuf,
-    pub recursive: bool,
-}
-
 pub(crate) fn create_watcher(
     config: WatchConfig,
-    watched_roots: Vec<WatchedRoot>,
     indexer: Arc<dyn Indexer>,
     index_repository: Arc<dyn IndexRepository>,
     console: Arc<dyn Console>,
@@ -41,7 +35,6 @@ pub(crate) fn create_watcher(
     if config.enabled {
         Box::new(FileWatcher {
             config,
-            watched_roots,
             indexer,
             index_repository,
             console,
@@ -63,7 +56,6 @@ impl Watcher for NoopWatcher {
 
 struct FileWatcher {
     config: WatchConfig,
-    watched_roots: Vec<WatchedRoot>,
     indexer: Arc<dyn Indexer>,
     index_repository: Arc<dyn IndexRepository>,
     console: Arc<dyn Console>,
@@ -72,11 +64,17 @@ struct FileWatcher {
 #[async_trait]
 impl Watcher for FileWatcher {
     async fn run(&self, shutdown: CancellationToken) -> anyhow::Result<()> {
-        for root in &self.watched_roots {
-            if detect_network_mount(&root.root) {
+        let watched_roots = self.index_repository.list_roots()?;
+        let watched_roots: Vec<_> = watched_roots
+            .into_iter()
+            .filter(|r| r.watched)
+            .collect();
+
+        for root in &watched_roots {
+            if detect_network_mount(&root.path) {
                 self.console.warn(&format!(
                     "watcher: '{}' appears to be on a network mount; events may be unreliable.",
-                    root.root.display()
+                    root.path.display()
                 ));
             }
         }
@@ -90,10 +88,9 @@ impl Watcher for FileWatcher {
         let watcher_token = shutdown.child_token();
         let watcher_token_for_debouncer = watcher_token.clone();
         let event_tx_for_debouncer = event_tx.clone();
-        let watched_roots_for_debouncer: Vec<(PathBuf, bool)> = self
-            .watched_roots
-            .iter()
-            .map(|r| (r.root.clone(), r.recursive))
+        let watched_roots_for_debouncer: Vec<(PathBuf, bool)> = watched_roots
+            .into_iter()
+            .map(|r| (r.path, r.recursive))
             .collect();
         let debouncer_window = Duration::from_millis(self.config.debounce_ms);
         let debouncer_handle = tokio::task::spawn_blocking(move || {
@@ -171,13 +168,27 @@ impl Supervisor {
                     .await
                 {
                     Ok(repls) => {
-                        if let Some(r) = repls.into_iter().next() {
-                            if let Err(e) = repo.replace_path(&r.source_path, r.metadata, r.vectors)
+                        if let Some(replacement) = repls.into_iter().next() {
+                            let source_path = replacement.source_path.clone();
+                            let source_path_for_error = source_path.clone();
+                            match tokio::task::spawn_blocking(move || {
+                                repo.replace_path(
+                                    &source_path,
+                                    replacement.metadata,
+                                    replacement.vectors,
+                                )
+                            })
+                            .await
                             {
-                                console.warn(&format!(
+                                Ok(Ok(())) => {}
+                                Ok(Err(e)) => console.warn(&format!(
                                     "watcher: replace_path failed for {}: {}",
-                                    r.source_path, e
-                                ));
+                                    source_path_for_error, e
+                                )),
+                                Err(e) => console.warn(&format!(
+                                    "watcher: replace_path task panicked for {}: {}",
+                                    source_path_for_error, e
+                                )),
                             }
                         }
                     }
@@ -269,13 +280,13 @@ mod tests {
     use crate::domain::Vector;
     use crate::index::mock_embedder;
     use crate::index::mock_index_repository;
+    use crate::index::InMemoryIndexRepository;
     use crate::support::create_console;
 
-    fn watched_root(tmp: &Path) -> WatchedRoot {
-        WatchedRoot {
-            root: tmp.to_path_buf(),
-            recursive: true,
-        }
+    fn sample_index_repository(tmp: &Path, watched: bool) -> Arc<dyn IndexRepository> {
+        let repo = InMemoryIndexRepository::default();
+        repo.add_root(tmp, watched, true).unwrap();
+        Arc::new(repo)
     }
 
     #[tokio::test]
@@ -284,23 +295,20 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
 
-        let indexer: Arc<dyn Indexer> = create_indexer(
-            crate::config::Config {
-                index: crate::config::IndexConfig {
-                    embedding_model: "BGESmallENV15Q".to_string(),
-                    doc_dirs: vec![tmp.to_string_lossy().to_string()],
-                    ..crate::config::IndexConfig::default()
-                },
-                ..crate::config::Config::default()
+        let cfg = crate::config::Config {
+            index: crate::config::IndexConfig {
+                embedding_model: "BGESmallENV15Q".to_string(),
+                ..crate::config::IndexConfig::default()
             },
+            ..crate::config::Config::default()
+        };
+        let repo = sample_index_repository(&tmp, true);
+        let indexer: Arc<dyn Indexer> = create_indexer(
+            cfg,
             Arc::new(std::sync::Mutex::new(mock_embedder())),
+            repo.clone(),
             Arc::new(create_console()),
         );
-        let repo: Arc<dyn IndexRepository> = Arc::new(mock_index_repository(
-            Vector::from_vec_vec(Vec::<Vec<f32>>::new()).unwrap(),
-            vec![],
-            vec![],
-        ));
         let console: Arc<dyn Console> = Arc::new(create_console());
         let watcher = create_watcher(
             crate::config::WatchConfig {
@@ -308,7 +316,6 @@ mod tests {
                 debounce_ms: 50,
                 max_batch_size: 2,
             },
-            vec![watched_root(&tmp)],
             indexer,
             repo,
             console,
@@ -329,17 +336,17 @@ mod tests {
     }
 
     fn deps() -> (Arc<dyn Indexer>, Arc<dyn IndexRepository>, Arc<dyn Console>) {
-        let repo: Arc<dyn IndexRepository> = Arc::new(mock_index_repository(
-            Vector::from_vec_vec(Vec::<Vec<f32>>::new()).unwrap(),
-            vec![],
-            vec![],
-        ));
+        let console: Arc<dyn Console> = Arc::new(create_console());
+        let tmp = std::env::temp_dir().join("docent_watcher_deps");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let repo = sample_index_repository(&tmp, true);
         let indexer: Arc<dyn Indexer> = create_indexer(
             crate::config::Config::default(),
             Arc::new(std::sync::Mutex::new(mock_embedder())),
-            Arc::new(create_console()),
+            repo.clone(),
+            console.clone(),
         );
-        let console: Arc<dyn Console> = Arc::new(create_console());
         (indexer, repo, console)
     }
 
@@ -353,6 +360,22 @@ mod tests {
             _cancel: CancellationToken,
         ) -> anyhow::Result<Vec<crate::domain::Replacement>> {
             std::future::pending::<()>().await;
+            Ok(Vec::new())
+        }
+
+        async fn reindex_root(
+            &self,
+            _root: &Path,
+            _recursive: bool,
+            _cancel: CancellationToken,
+        ) -> anyhow::Result<Vec<crate::domain::Replacement>> {
+            Ok(Vec::new())
+        }
+
+        async fn reindex_all(
+            &self,
+            _cancel: CancellationToken,
+        ) -> anyhow::Result<Vec<crate::domain::Replacement>> {
             Ok(Vec::new())
         }
     }
@@ -375,11 +398,11 @@ mod tests {
 
         supervisor.handle_events(vec![
             WatchEvent {
-                path: "a.md".to_string(),
+                path: "/tmp/a.md".to_string(),
                 kind: WatchEventKind::Modify,
             },
             WatchEvent {
-                path: "b.md".to_string(),
+                path: "/tmp/b.md".to_string(),
                 kind: WatchEventKind::Modify,
             },
         ]);
@@ -400,7 +423,6 @@ mod tests {
                 debounce_ms: 1000,
                 max_batch_size: 1,
             },
-            vec![],
             indexer,
             repo,
             console,

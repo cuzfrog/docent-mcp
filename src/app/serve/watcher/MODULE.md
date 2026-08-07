@@ -1,10 +1,10 @@
 ---
-no-new-exports: [mod.rs]
+no-new-exports: []
 ---
 
 # Module - watcher
 
-Watches the configured `doc_dirs` for file-system changes and drives
+Watches the roots in the shared `IndexRepository` for file-system changes and drives
 incremental per-file reindexing. The watcher module is the per-file upsert
 side of the index layer: it consumes `notify-debouncer-full` events, debounces
 them, and calls `Indexer::reindex_paths(&[path])` followed by

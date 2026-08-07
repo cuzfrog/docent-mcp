@@ -1,7 +1,11 @@
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use clap::{Parser, Subcommand};
-use docent_mcp::app::{create_application, Application};
+
+use docent_mcp::app::{create_application, create_index_command, list_models, Application, IndexCommand};
 use docent_mcp::config::Config;
-use docent_mcp::support::Console;
+use docent_mcp::support::{create_console, Console};
 
 #[derive(Parser)]
 #[command(name = "docent", about = "MCP server for Document & Code indexing and querying.")]
@@ -15,6 +19,10 @@ enum Commands {
     Serve,
     ListModels,
     SetModel(SetModelArgs),
+    Watch(WatchArgs),
+    Unwatch(WatchArgs),
+    #[command(subcommand)]
+    Index(IndexSubcommand),
 }
 
 #[derive(clap::Args)]
@@ -22,24 +30,65 @@ struct SetModelArgs {
     model: String,
 }
 
+#[derive(clap::Args)]
+struct WatchArgs {
+    dir: PathBuf,
+}
+
+#[derive(Subcommand)]
+enum IndexSubcommand {
+    Add(IndexArgs),
+    Remove(IndexArgs),
+    List,
+}
+
+#[derive(clap::Args)]
+struct IndexArgs {
+    dir: PathBuf,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+    let console: Arc<dyn Console> = Arc::new(create_console());
     match cli.command {
         Commands::Serve => {
             let config = Config::load_or_create_global()?;
             create_application(config)?.run_serve().await?;
         }
         Commands::ListModels => {
-            let console = docent_mcp::support::create_console();
-            docent_mcp::app::list_models(&console);
+            list_models(console.as_ref());
         }
         Commands::SetModel(args) => {
-            let console = docent_mcp::support::create_console();
             let mut config = Config::load_or_create_global()?;
             config.index.embedding_model = args.model;
             config.save_global()?;
             console.info(&format!("Set embedding model to {}", config.index.embedding_model));
+        }
+        Commands::Watch(args) => {
+            let config = Config::load_or_create_global()?;
+            let index = create_index_command(&config, console)?;
+            index.watch(&args.dir).await?;
+        }
+        Commands::Unwatch(args) => {
+            let config = Config::load_or_create_global()?;
+            let index = create_index_command(&config, console)?;
+            index.unwatch(&args.dir).await?;
+        }
+        Commands::Index(IndexSubcommand::Add(args)) => {
+            let config = Config::load_or_create_global()?;
+            let index = create_index_command(&config, console)?;
+            index.add(&args.dir).await?;
+        }
+        Commands::Index(IndexSubcommand::Remove(args)) => {
+            let config = Config::load_or_create_global()?;
+            let index = create_index_command(&config, console)?;
+            index.remove(&args.dir).await?;
+        }
+        Commands::Index(IndexSubcommand::List) => {
+            let config = Config::load_or_create_global()?;
+            let index = create_index_command(&config, console)?;
+            index.list()?;
         }
     }
     Ok(())
@@ -88,14 +137,57 @@ mod tests {
     }
 
     #[test]
-    fn test_index_subcommand_removed() {
-        let cli = Cli::try_parse_from(["docent", "index"]);
-        assert!(cli.is_err());
+    fn test_index_add_subcommand() {
+        let cli = Cli::try_parse_from(["docent", "index", "add", "/docs"]);
+        assert!(cli.is_ok());
+        match cli.unwrap().command {
+            Commands::Index(IndexSubcommand::Add(args)) => {
+                assert_eq!(args.dir, PathBuf::from("/docs"));
+            }
+            _ => panic!("expected Index add command"),
+        }
     }
 
     #[test]
-    fn test_index_file_subcommand_removed() {
-        let cli = Cli::try_parse_from(["docent", "index-file"]);
-        assert!(cli.is_err());
+    fn test_index_remove_subcommand() {
+        let cli = Cli::try_parse_from(["docent", "index", "remove", "/docs"]);
+        assert!(cli.is_ok());
+        match cli.unwrap().command {
+            Commands::Index(IndexSubcommand::Remove(args)) => {
+                assert_eq!(args.dir, PathBuf::from("/docs"));
+            }
+            _ => panic!("expected Index remove command"),
+        }
+    }
+
+    #[test]
+    fn test_index_list_subcommand() {
+        let cli = Cli::try_parse_from(["docent", "index", "list"]);
+        assert!(cli.is_ok());
+        assert!(matches!(cli.unwrap().command, Commands::Index(IndexSubcommand::List)));
+    }
+
+    #[test]
+    fn test_watch_subcommand() {
+        let cli = Cli::try_parse_from(["docent", "watch", "/docs"]);
+        assert!(cli.is_ok());
+        match cli.unwrap().command {
+            Commands::Watch(args) => {
+                assert_eq!(args.dir, PathBuf::from("/docs"));
+            }
+            _ => panic!("expected Watch command"),
+        }
+    }
+
+    #[test]
+    fn test_unwatch_subcommand() {
+        let cli = Cli::try_parse_from(["docent", "unwatch", "/docs"]);
+        assert!(cli.is_ok());
+        match cli.unwrap().command {
+            Commands::Unwatch(args) => {
+                assert_eq!(args.dir, PathBuf::from("/docs"));
+            }
+            _ => panic!("expected Unwatch command"),
+        }
     }
 }
