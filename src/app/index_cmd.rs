@@ -60,9 +60,9 @@ impl IndexCommand for IndexCommandImpl {
                 return Ok(());
             }
             self.index_repository
-                .set_watched_by_path(&canonical, true)?;
+                .set_watched_by_path(&root.path, true)?;
             self.console
-                .info(&format!("Started watching {}", path_to_string(&canonical)));
+                .info(&format!("Started watching {}", path_to_string(&root.path)));
             self.index_root(&canonical, root.recursive).await
         } else {
             let root = self.add_root(dir)?;
