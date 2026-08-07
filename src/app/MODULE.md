@@ -15,10 +15,7 @@ This module represents the application's execution hierarchy and workflow.
 * `pub(super) fn create_http_server`
 
 ---
-Below 2 modules are special in terms of they directly called by `main.rs` to avoid unnecessary application building.
+`list_models.rs` is directly called by `main.rs` to avoid building the application.
 
-## list_modules.rs
-* `pub fn list_models()` - for command `list_models`.
-
-## init.rs
-* `pub fn run_init()` - for command `init`, checking and setup config toml file.
+## list_models.rs
+* `pub fn list_models()` - for command `list-models`.

@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use docent_mcp::app::{create_application, Application};
 use docent_mcp::config::Config;
-use std::path::PathBuf;
+use docent_mcp::support::Console;
 
 #[derive(Parser)]
 #[command(name = "docent", about = "MCP server for Document & Code indexing and querying.")]
@@ -12,32 +12,34 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    Init,
-    Serve(ServeArgs),
+    Serve,
     ListModels,
+    SetModel(SetModelArgs),
 }
 
 #[derive(clap::Args)]
-struct ServeArgs {
-    #[arg(long, default_value = "./docent.toml")]
-    config: PathBuf,
+struct SetModelArgs {
+    model: String,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Serve(args) => {
-            let config = Config::load(&args.config)?;
+        Commands::Serve => {
+            let config = Config::load_or_create_global()?;
             create_application(config)?.run_serve().await?;
         }
         Commands::ListModels => {
             let console = docent_mcp::support::create_console();
             docent_mcp::app::list_models(&console);
         }
-        Commands::Init => {
+        Commands::SetModel(args) => {
             let console = docent_mcp::support::create_console();
-            docent_mcp::app::run_init(&console)?;
+            let mut config = Config::load_or_create_global()?;
+            config.index.embedding_model = args.model;
+            config.save_global()?;
+            console.info(&format!("Set embedding model to {}", config.index.embedding_model));
         }
     }
     Ok(())
@@ -49,29 +51,11 @@ mod tests {
     use clap::Parser;
 
     #[test]
-    fn test_serve_default_config() {
+    fn test_serve_command() {
         let cli = Cli::try_parse_from(["docent", "serve"]);
         assert!(cli.is_ok());
         let cli = cli.unwrap();
-        match cli.command {
-            Commands::Serve(args) => {
-                assert_eq!(args.config, std::path::PathBuf::from("./docent.toml"));
-            }
-            _ => panic!("expected Serve command"),
-        }
-    }
-
-    #[test]
-    fn test_serve_custom_config() {
-        let cli = Cli::try_parse_from(["docent", "serve", "--config", "prod.toml"]);
-        assert!(cli.is_ok());
-        let cli = cli.unwrap();
-        match cli.command {
-            Commands::Serve(args) => {
-                assert_eq!(args.config, std::path::PathBuf::from("prod.toml"));
-            }
-            _ => panic!("expected Serve command"),
-        }
+        assert!(matches!(cli.command, Commands::Serve));
     }
 
     #[test]
@@ -92,10 +76,15 @@ mod tests {
     }
 
     #[test]
-    fn test_init_subcommand() {
-        let cli = Cli::try_parse_from(["docent", "init"]);
+    fn test_set_model_subcommand() {
+        let cli = Cli::try_parse_from(["docent", "set-model", "BGESmallENV15Q"]);
         assert!(cli.is_ok());
-        assert!(matches!(cli.unwrap().command, Commands::Init));
+        match cli.unwrap().command {
+            Commands::SetModel(args) => {
+                assert_eq!(args.model, "BGESmallENV15Q");
+            }
+            _ => panic!("expected SetModel command"),
+        }
     }
 
     #[test]

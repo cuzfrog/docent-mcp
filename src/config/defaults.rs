@@ -1,7 +1,9 @@
 use super::types::FusionStrategy;
 
+pub(crate) const DEFAULT_EMBEDDING_MODEL: &str = "BGESmallENV15Q";
+
 pub(crate) fn default_doc_dirs() -> Vec<String> {
-    vec!["./".to_string()]
+    Vec::new()
 }
 
 pub(crate) fn default_cache_dir() -> String {

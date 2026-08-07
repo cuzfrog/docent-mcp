@@ -4,12 +4,9 @@ impl Config {
     pub fn validate(&self) -> anyhow::Result<()> {
         if self.index.embedding_model.is_empty() {
             anyhow::bail!(
-                "embedding_model is required in docent.toml. \
-                Run `docent list-models` to see available models."
+                "embedding_model is required. \
+                Run `docent list-models` to see available models, then `docent set-model <model>`."
             );
-        }
-        if self.index.doc_dirs.is_empty() {
-            anyhow::bail!("doc_dirs must not be empty");
         }
         if self.index.chunk_size == 0 {
             anyhow::bail!("chunk_size must be greater than 0");
@@ -121,12 +118,13 @@ mod tests {
             ..Config::default()
         };
         let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("embedding_model is required in docent.toml"));
+        assert!(err.to_string().contains("embedding_model is required"));
         assert!(err.to_string().contains("docent list-models"));
+        assert!(err.to_string().contains("docent set-model"));
     }
 
     #[test]
-    fn test_empty_doc_dirs_validation_error() {
+    fn test_empty_doc_dirs_passes_validation() {
         let config = Config {
             index: IndexConfig {
                 embedding_model: "BGESmallENV15Q".to_string(),
@@ -135,8 +133,7 @@ mod tests {
             },
             ..Config::default()
         };
-        let err = config.validate().unwrap_err();
-        assert_eq!(err.to_string(), "doc_dirs must not be empty");
+        assert!(config.validate().is_ok());
     }
 
     #[test]
@@ -161,14 +158,11 @@ mod tests {
 
     #[test]
     fn test_invalid_fusion_strategy_validation_error() {
-        let toml_str = r#"
-[index]
-embedding_model = "BGESmallENV15Q"
-
-[search.fusion.strategy]
-strategy = "invalid"
-"#;
-        let result: Result<Config, _> = toml::from_str(toml_str);
+        let json_str = r#"{
+            "index": { "embedding_model": "BGESmallENV15Q" },
+            "search": { "fusion": { "strategy": { "strategy": "invalid" } } }
+        }"#;
+        let result: Result<Config, _> = serde_json::from_str(json_str);
         let err = result.unwrap_err();
         assert!(err.to_string().contains("unknown variant"));
     }
