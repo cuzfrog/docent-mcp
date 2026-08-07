@@ -5,8 +5,8 @@
 **Semantic + BM25 Document search** — an experimental MCP server written in Rust that indexes markdown documents, letting agents query *why* code looks the way it does.
 
 ```
-  files ──▼── index (in-memory) ──▶  MCP server  ◀──── query
-                              (HTTP)
+  files ──▼── index (in-memory+cache) ──▶  MCP server  ◀──── query
+                                              (HTTP)
 ```
 
 ## Quick Start
