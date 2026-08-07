@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
 
-use docent_mcp::app::{create_application, create_index_command, list_models, Application, IndexCommand};
+use docent_mcp::app::{create_application, Application};
 use docent_mcp::config::Config;
 use docent_mcp::support::{create_console, Console};
 
@@ -54,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Commands::Serve => {
             let config = Config::load_or_create_global()?;
-            create_application(config)?.run_serve().await?;
+            create_application(config, console.clone())?.run_serve().await?;
         }
         Commands::ListModels => {
             for model in fastembed::TextEmbedding::list_supported_models() {
@@ -69,28 +69,28 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Watch(args) => {
             let config = Config::load_or_create_global()?;
-            let index = create_index_command(&config, console)?;
-            index.watch(&args.dir).await?;
+            let application = create_application(config, console.clone())?;
+            application.watch_indexed_directory(&args.dir).await?;
         }
         Commands::Unwatch(args) => {
             let config = Config::load_or_create_global()?;
-            let index = create_index_command(&config, console)?;
-            index.unwatch(&args.dir).await?;
+            let application = create_application(config, console.clone())?;
+            application.unwatch_indexed_directory(&args.dir).await?;
         }
         Commands::Index(IndexSubcommand::Add(args)) => {
             let config = Config::load_or_create_global()?;
-            let index = create_index_command(&config, console)?;
-            index.add(&args.dir).await?;
+            let application = create_application(config, console.clone())?;
+            application.add_indexed_directory(&args.dir).await?;
         }
         Commands::Index(IndexSubcommand::Remove(args)) => {
             let config = Config::load_or_create_global()?;
-            let index = create_index_command(&config, console)?;
-            index.remove(&args.dir).await?;
+            let application = create_application(config, console.clone())?;
+            application.remove_indexed_directory(&args.dir).await?;
         }
         Commands::Index(IndexSubcommand::List) => {
             let config = Config::load_or_create_global()?;
-            let index = create_index_command(&config, console)?;
-            index.list()?;
+            let application = create_application(config, console.clone())?;
+            application.list_indexed_directories()?;
         }
     }
     Ok(())

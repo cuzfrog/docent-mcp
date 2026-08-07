@@ -8,7 +8,7 @@ use arc_swap::ArcSwap;
 use dashmap::DashMap;
 
 use super::merged_index::MergedIndex;
-use super::sqlite::{create_chunk_store, create_connection, create_root_store, ChunkStore, RootStore};
+use super::storage::{create_connection, create_index_chunk_store, create_index_meta_store, IndexChunkStore, IndexMetaStore};
 use crate::config::Config;
 use crate::domain::{ChunkMetadata, IndexedRoot, Vector};
 
@@ -36,12 +36,12 @@ pub(crate) fn create_index_repository(
 ) -> anyhow::Result<Arc<dyn IndexRepository>> {
     let connection = create_connection(db_path)
         .with_context(|| format!("failed to open index database {}", db_path.display()))?;
-    let root_store: Arc<dyn RootStore> = Arc::new(create_root_store(connection.clone()));
-    let chunk_store: Arc<dyn ChunkStore> = Arc::new(create_chunk_store(connection.clone()));
+    let meta_store: Arc<dyn IndexMetaStore> = Arc::new(create_index_meta_store(connection.clone()));
+    let chunk_store: Arc<dyn IndexChunkStore> = Arc::new(create_index_chunk_store(connection.clone()));
 
     let repository = SqliteIndexRepository {
         inner: InMemoryIndexRepository::new(config.search.bm25.k1, config.search.bm25.b),
-        root_store,
+        meta_store,
         chunk_store,
         k1: config.search.bm25.k1,
         b: config.search.bm25.b,
@@ -54,7 +54,7 @@ pub(crate) fn create_index_repository(
             continue;
         }
         let canonical = root.canonicalize().unwrap_or(root);
-        let _ = repository.root_store.upsert_root(&canonical, true, spec.recursive)?;
+        let _ = repository.meta_store.upsert_root(&canonical, true, spec.recursive)?;
     }
 
     let replacements = repository.chunk_store.load_all()?;
@@ -333,8 +333,8 @@ impl InMemoryIndexRepository {
 
 struct SqliteIndexRepository {
     inner: InMemoryIndexRepository,
-    root_store: Arc<dyn RootStore>,
-    chunk_store: Arc<dyn ChunkStore>,
+    meta_store: Arc<dyn IndexMetaStore>,
+    chunk_store: Arc<dyn IndexChunkStore>,
     k1: f32,
     b: f32,
 }
@@ -367,7 +367,7 @@ impl IndexRepository for SqliteIndexRepository {
     }
 
     fn list_roots(&self) -> anyhow::Result<Vec<IndexedRoot>> {
-        self.root_store.list_roots()
+        self.meta_store.list_roots()
     }
 
     fn add_root(
@@ -376,29 +376,29 @@ impl IndexRepository for SqliteIndexRepository {
         watched: bool,
         recursive: bool,
     ) -> anyhow::Result<IndexedRoot> {
-        self.root_store.upsert_root(path, watched, recursive)
+        self.meta_store.upsert_root(path, watched, recursive)
     }
 
     fn remove_root_by_path(&self, path: &Path) -> anyhow::Result<()> {
         let root = self
-            .root_store
+            .meta_store
             .find_root_by_path(path)?
             .with_context(|| format!("root not found for {}", path.display()))?;
-        self.root_store.delete_root(root.id)?;
+        self.meta_store.delete_root(root.id)?;
         self.inner.remove_path_from_index(path)?;
         Ok(())
     }
 
     fn set_watched_by_path(&self, path: &Path, watched: bool) -> anyhow::Result<()> {
         let root = self
-            .root_store
+            .meta_store
             .find_root_by_path(path)?
             .with_context(|| format!("root not found for {}", path.display()))?;
-        self.root_store.set_watched(root.id, watched)
+        self.meta_store.set_watched(root.id, watched)
     }
 
     fn find_root_for_path(&self, path: &Path) -> anyhow::Result<Option<IndexedRoot>> {
-        self.root_store.find_root_for_path(path)
+        self.meta_store.find_root_for_path(path)
     }
 }
 

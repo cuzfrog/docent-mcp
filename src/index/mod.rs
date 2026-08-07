@@ -2,7 +2,7 @@ mod bm25_builder;
 mod embedder;
 mod merged_index;
 mod repository;
-mod sqlite;
+mod storage;
 
 pub(crate) use embedder::{create_embedder, Embedder};
 pub(crate) use merged_index::MergedIndex;

@@ -9,7 +9,7 @@ use crate::support::path_to_string;
 
 use super::connection::SharedConnection;
 
-pub(crate) trait RootStore: Send + Sync {
+pub(crate) trait IndexMetaStore: Send + Sync {
     fn list_roots(&self) -> anyhow::Result<Vec<IndexedRoot>>;
     fn upsert_root(&self, path: &Path, watched: bool, recursive: bool) -> anyhow::Result<IndexedRoot>;
     fn set_watched(&self, id: i64, watched: bool) -> anyhow::Result<()>;
@@ -18,15 +18,15 @@ pub(crate) trait RootStore: Send + Sync {
     fn find_root_by_path(&self, path: &Path) -> anyhow::Result<Option<IndexedRoot>>;
 }
 
-pub(crate) fn create_root_store(connection: SharedConnection) -> impl RootStore {
-    SqliteRootStore { connection }
+pub(crate) fn create_index_meta_store(connection: SharedConnection) -> impl IndexMetaStore {
+    SqliteIndexMetaStore { connection }
 }
 
-struct SqliteRootStore {
+struct SqliteIndexMetaStore {
     connection: SharedConnection,
 }
 
-impl RootStore for SqliteRootStore {
+impl IndexMetaStore for SqliteIndexMetaStore {
     fn list_roots(&self) -> anyhow::Result<Vec<IndexedRoot>> {
         let conn = self
             .connection
@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn upsert_and_list_roots() {
         let (conn, tmp) = open();
-        let store = create_root_store(conn);
+        let store = create_index_meta_store(conn);
 
         let root = store.upsert_root(Path::new("/tmp/docs"), true, false).unwrap();
         assert_eq!(root.path, PathBuf::from("/tmp/docs"));
@@ -195,7 +195,7 @@ mod tests {
     #[test]
     fn upsert_updates_existing_root() {
         let (conn, tmp) = open();
-        let store = create_root_store(conn);
+        let store = create_index_meta_store(conn);
 
         let first = store.upsert_root(Path::new("/tmp/docs"), true, true).unwrap();
         let second = store.upsert_root(Path::new("/tmp/docs"), false, false).unwrap();
@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn set_watched_changes_flag() {
         let (conn, tmp) = open();
-        let store = create_root_store(conn);
+        let store = create_index_meta_store(conn);
 
         let root = store.upsert_root(Path::new("/tmp/docs"), true, true).unwrap();
         store.set_watched(root.id, false).unwrap();
@@ -226,7 +226,7 @@ mod tests {
     #[test]
     fn delete_root_removes_it() {
         let (conn, tmp) = open();
-        let store = create_root_store(conn);
+        let store = create_index_meta_store(conn);
 
         let root = store.upsert_root(Path::new("/tmp/docs"), true, true).unwrap();
         store.delete_root(root.id).unwrap();
@@ -240,7 +240,7 @@ mod tests {
     #[test]
     fn find_root_for_path_prefers_longest_prefix() {
         let (conn, tmp) = open();
-        let store = create_root_store(conn);
+        let store = create_index_meta_store(conn);
 
         let _ = store.upsert_root(Path::new("/tmp"), true, true).unwrap();
         let nested = store.upsert_root(Path::new("/tmp/docs"), true, true).unwrap();
@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn find_root_for_path_returns_none_outside_roots() {
         let (conn, tmp) = open();
-        let store = create_root_store(conn);
+        let store = create_index_meta_store(conn);
 
         store.upsert_root(Path::new("/tmp/docs"), true, true).unwrap();
 

@@ -9,9 +9,9 @@ use rusqlite::params;
 use crate::domain::{ChunkMetadata, DocumentContext, IndexedRoot, Replacement, Vector};
 
 use super::connection::SharedConnection;
-use super::root_store::find_root_for_path_in_tx;
+use super::index_meta_store::find_root_for_path_in_tx;
 
-pub(crate) trait ChunkStore: Send + Sync {
+pub(crate) trait IndexChunkStore: Send + Sync {
     fn replace_path(
         &self,
         source_path: &str,
@@ -21,15 +21,15 @@ pub(crate) trait ChunkStore: Send + Sync {
     fn load_all(&self) -> anyhow::Result<Vec<Replacement>>;
 }
 
-pub(crate) fn create_chunk_store(connection: SharedConnection) -> impl ChunkStore {
-    SqliteChunkStore { connection }
+pub(crate) fn create_index_chunk_store(connection: SharedConnection) -> impl IndexChunkStore {
+    SqliteIndexChunkStore { connection }
 }
 
-struct SqliteChunkStore {
+struct SqliteIndexChunkStore {
     connection: SharedConnection,
 }
 
-impl ChunkStore for SqliteChunkStore {
+impl IndexChunkStore for SqliteIndexChunkStore {
     fn replace_path(
         &self,
         source_path: &str,
@@ -230,7 +230,7 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     use super::*;
-    use super::super::RootStore;
+    use super::super::IndexMetaStore;
     use crate::domain::DocumentContext;
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -243,7 +243,7 @@ mod tests {
         let db_path = tmp.join("docent.db");
         let conn = super::super::create_connection(&db_path).unwrap();
 
-        let root_store = super::super::create_root_store(Arc::clone(&conn));
+        let root_store = super::super::create_index_meta_store(Arc::clone(&conn));
         let root = root_store
             .upsert_root(Path::new("/tmp/docs"), true, true)
             .unwrap();
@@ -274,7 +274,7 @@ mod tests {
     #[test]
     fn replace_path_inserts_and_loads_chunks() {
         let (conn, tmp, _root) = open();
-        let store = create_chunk_store(conn);
+        let store = create_index_chunk_store(conn);
 
         let source_path = "/tmp/docs/file.md";
         let chunks = vec![
@@ -299,7 +299,7 @@ mod tests {
     #[test]
     fn replace_path_replaces_existing_chunks() {
         let (conn, tmp, _root) = open();
-        let store = create_chunk_store(conn);
+        let store = create_index_chunk_store(conn);
 
         let source_path = "/tmp/docs/file.md";
         let old = vec![make_chunk(source_path, "old", 0)];
@@ -325,7 +325,7 @@ mod tests {
     #[test]
     fn replace_path_errors_when_no_root_matches() {
         let (conn, tmp, _root) = open();
-        let store = create_chunk_store(conn);
+        let store = create_index_chunk_store(conn);
 
         let chunks = vec![make_chunk("/other/file.md", "text", 0)];
         let vector = make_vector(&[vec![1.0, 0.0, 0.0]]);

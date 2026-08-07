@@ -1,7 +1,7 @@
-mod chunk_store;
 mod connection;
-mod root_store;
+mod index_chunk_store;
+mod index_meta_store;
 
-pub(super) use chunk_store::{create_chunk_store, ChunkStore};
 pub(super) use connection::create_connection;
-pub(super) use root_store::{create_root_store, RootStore};
+pub(super) use index_chunk_store::{create_index_chunk_store, IndexChunkStore};
+pub(super) use index_meta_store::{create_index_meta_store, IndexMetaStore};

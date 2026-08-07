@@ -1,19 +1,17 @@
-use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::Context;
 use async_trait::async_trait;
 use axum::Router;
 use tokio_util::sync::CancellationToken;
 
-use crate::app::indexing::{create_indexer, Indexer};
+use crate::app::indexing::Indexer;
 use crate::app::serve::mcp_server::{create_mcp_server, MCPServer};
 use crate::app::serve::search::{create_search_service, SearchService};
 use crate::app::serve::watcher::{create_watcher, Watcher};
 use crate::config::Config;
-use crate::index::{create_embedder, create_index_repository, Embedder, IndexRepository};
-use crate::models::create_model_factory;
-use crate::support::{docent_db_path, Console};
+use crate::index::{Embedder, IndexRepository};
+use crate::support::Console;
 
 #[async_trait]
 pub trait HttpServer: Send + Sync {
@@ -23,27 +21,12 @@ pub trait HttpServer: Send + Sync {
 pub fn create_http_server(
     config: Config,
     console: Arc<dyn Console>,
+    index_repository: Arc<dyn IndexRepository>,
+    embedder: Arc<Mutex<dyn Embedder>>,
+    indexer: Arc<dyn Indexer>,
 ) -> anyhow::Result<Box<dyn HttpServer>> {
-    let index_repository: Arc<dyn IndexRepository> =
-        create_index_repository(&config, &docent_db_path())
-            .with_context(|| "failed to load index from database")?;
-
-    let factory = create_model_factory(
-        &config.index.embedding_model,
-        Path::new(&config.index.cache_dir),
-    )
-    .with_context(|| "failed to create model factory")?;
-    let model = factory
-        .build_model()
-        .with_context(|| "failed to initialize embedding model; cannot start server")?;
-    let embedder: Arc<std::sync::Mutex<dyn Embedder>> =
-        Arc::new(std::sync::Mutex::new(create_embedder(model)));
-
     let search_service: Arc<dyn SearchService> =
-        create_search_service(index_repository.clone(), embedder.clone(), &config.search);
-
-    let indexer: Arc<dyn Indexer> =
-        create_indexer(config.clone(), embedder, index_repository.clone(), console.clone());
+        create_search_service(index_repository.clone(), embedder, &config.search);
 
     let watcher: Arc<dyn Watcher> = Arc::from(create_watcher(
         config.index.watch.clone(),
