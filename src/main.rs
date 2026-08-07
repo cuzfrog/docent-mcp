@@ -57,7 +57,9 @@ async fn main() -> anyhow::Result<()> {
             create_application(config)?.run_serve().await?;
         }
         Commands::ListModels => {
-            list_models(console.as_ref());
+            for model in fastembed::TextEmbedding::list_supported_models() {
+                console.info(&format!("{} (dim: {})", model.model, model.dim));
+            }
         }
         Commands::SetModel(args) => {
             let mut config = Config::load_or_create_global()?;

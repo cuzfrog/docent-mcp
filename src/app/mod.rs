@@ -7,4 +7,3 @@ mod indexing;
 
 pub use application::{Application, create_application};
 pub use index_cmd::{create_index_command, IndexCommand};
-pub use list_models::list_models;
