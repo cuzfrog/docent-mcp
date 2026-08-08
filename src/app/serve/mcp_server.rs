@@ -33,8 +33,8 @@ fn default_limit() -> u8 {
     3
 }
 
-pub(super) trait MCPServer: Send {
-    fn into_router(self) -> anyhow::Result<Router>;
+pub(super) trait MCPServer: Send + Sync {
+    fn router(&self) -> Router;
 }
 
 pub(super) fn create_mcp_server(search_service: Arc<dyn SearchService>) -> impl MCPServer {
@@ -47,7 +47,7 @@ struct RmcpServer {
 }
 
 impl MCPServer for RmcpServer {
-    fn into_router(self) -> anyhow::Result<Router> {
+    fn router(&self) -> Router {
         let streamable_http_service: StreamableHttpService<RmcpServer, LocalSessionManager> =
             StreamableHttpService::new(
                 {
@@ -57,8 +57,7 @@ impl MCPServer for RmcpServer {
                 LocalSessionManager::default().into(),
                 StreamableHttpServerConfig::default(),
             );
-        let router = router(streamable_http_service);
-        Ok(router)
+        router(streamable_http_service)
     }
 }
 

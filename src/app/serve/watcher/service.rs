@@ -32,26 +32,12 @@ pub(crate) fn create_watcher(
     index_repository: Arc<dyn IndexRepository>,
     console: Arc<dyn Console>,
 ) -> Box<dyn Watcher> {
-    if config.enabled {
-        Box::new(FileWatcher {
-            config,
-            indexer,
-            index_repository,
-            console,
-        })
-    } else {
-        Box::new(NoopWatcher)
-    }
-}
-
-struct NoopWatcher;
-
-#[async_trait]
-impl Watcher for NoopWatcher {
-    async fn run(&self, shutdown: CancellationToken) -> anyhow::Result<()> {
-        shutdown.cancelled().await;
-        Ok(())
-    }
+    Box::new(FileWatcher {
+        config,
+        indexer,
+        index_repository,
+        console,
+    })
 }
 
 struct FileWatcher {
@@ -64,6 +50,11 @@ struct FileWatcher {
 #[async_trait]
 impl Watcher for FileWatcher {
     async fn run(&self, shutdown: CancellationToken) -> anyhow::Result<()> {
+        if !self.config.enabled {
+            shutdown.cancelled().await;
+            return Ok(());
+        }
+
         let watched_roots = self.index_repository.list_roots()?;
         let watched_roots: Vec<_> = watched_roots
             .into_iter()
@@ -415,7 +406,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_watcher_disabled_returns_noop_that_awaits_shutdown() {
+    async fn test_create_watcher_disabled_awaits_shutdown_without_watching() {
         let (indexer, repo, console) = deps();
         let watcher = create_watcher(
             crate::config::WatchConfig {
@@ -434,7 +425,7 @@ mod tests {
         shutdown.cancel();
         tokio::time::timeout(Duration::from_secs(1), handle)
             .await
-            .expect("noop watcher did not exit on shutdown")
+            .expect("disabled watcher did not exit on shutdown")
             .expect("task panicked")
             .expect("watcher.run returned Err");
     }

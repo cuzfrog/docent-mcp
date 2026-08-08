@@ -36,7 +36,7 @@ pub fn create_http_server(
     ));
 
     let mcp = create_mcp_server(search_service);
-    let router = mcp.into_router()?;
+    let router = mcp.router();
     Ok(Box::new(TokioHttpServer {
         router,
         config,
