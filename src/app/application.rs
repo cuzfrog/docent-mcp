@@ -3,21 +3,18 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use async_trait::async_trait;
+use shaku::{Component, Interface};
 use tokio_util::sync::CancellationToken;
 
-use super::serve::{
-    create_http_server, create_search_module, create_watcher_module, HttpServer, SearchService,
-    Watcher,
-};
-use super::indexing::{create_indexing_module, Indexer};
-use crate::config::{create_config_module, Config};
+use super::serve::{create_http_server, HttpServer, SearchService, Watcher};
+use super::indexing::Indexer;
+use crate::config::Config;
 use crate::domain::IndexedRoot;
-use crate::index::{create_index_module, IndexRepository};
-use crate::models::create_models_module;
-use crate::support::{docent_db_path, path_to_string, Console, SupportModule};
+use crate::index::IndexRepository;
+use crate::support::{path_to_string, Console};
 
 #[async_trait]
-pub trait Application: Send + Sync {
+pub trait Application: Interface + Send + Sync {
     async fn run_serve(&self) -> anyhow::Result<()>;
     async fn add_indexed_directory(&self, dir: &Path) -> anyhow::Result<()>;
     async fn watch_indexed_directory(&self, dir: &Path) -> anyhow::Result<()>;
@@ -26,48 +23,20 @@ pub trait Application: Send + Sync {
     fn list_indexed_directories(&self) -> anyhow::Result<()>;
 }
 
-pub fn create_application(
-    config: Config,
-    support_module: Arc<dyn SupportModule>,
-) -> anyhow::Result<impl Application> {
-    let console: Arc<dyn Console> = support_module.resolve();
-    let config_module = create_config_module(config.clone());
-    let models_module = create_models_module(config_module.clone());
-    let index_module = create_index_module(models_module, &config, &docent_db_path())
-        .with_context(|| "failed to open index repository")?;
-    let indexing_module = create_indexing_module(
-        config_module.clone(),
-        index_module.clone(),
-        support_module.clone(),
-    );
-    let search_module = create_search_module(config_module.clone(), index_module.clone());
-    let watcher_module = create_watcher_module(
-        config_module,
-        index_module.clone(),
-        indexing_module.clone(),
-        support_module,
-    );
-    let index_repository: Arc<dyn IndexRepository> = index_module.resolve();
-    let indexer: Arc<dyn Indexer> = indexing_module.resolve();
-    let search_service: Arc<dyn SearchService> = search_module.resolve();
-    let watcher: Arc<dyn Watcher> = watcher_module.resolve();
-
-    Ok(AppImpl {
-        config,
-        console,
-        index_repository,
-        indexer,
-        search_service,
-        watcher,
-    })
-}
-
-struct AppImpl {
-    config: Config,
+#[derive(Component)]
+#[shaku(interface = Application)]
+pub(super) struct AppImpl {
+    #[shaku(inject)]
+    config: Arc<Config>,
+    #[shaku(inject)]
     console: Arc<dyn Console>,
+    #[shaku(inject)]
     index_repository: Arc<dyn IndexRepository>,
+    #[shaku(inject)]
     indexer: Arc<dyn Indexer>,
+    #[shaku(inject)]
     search_service: Arc<dyn SearchService>,
+    #[shaku(inject)]
     watcher: Arc<dyn Watcher>,
 }
 
@@ -75,7 +44,7 @@ struct AppImpl {
 impl Application for AppImpl {
     async fn run_serve(&self) -> anyhow::Result<()> {
         let http_server: Box<dyn HttpServer> = create_http_server(
-            self.config.clone(),
+            self.config.as_ref().clone(),
             self.console.clone(),
             self.index_repository.clone(),
             self.search_service.clone(),

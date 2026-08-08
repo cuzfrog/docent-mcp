@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
 
-use docent_mcp::app::{create_application, Application};
+use docent_mcp::app::create_application;
 use docent_mcp::config::Config;
 use docent_mcp::support::{Console, SupportModule, create_support_module};
 

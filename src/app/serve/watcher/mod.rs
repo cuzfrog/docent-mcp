@@ -3,5 +3,5 @@ mod handler;
 mod module;
 mod service;
 
-pub(crate) use module::create_watcher_module;
+pub(crate) use module::{create_watcher_module, WatcherModule};
 pub(crate) use service::Watcher;
