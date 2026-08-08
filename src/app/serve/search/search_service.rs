@@ -3,8 +3,6 @@ use std::sync::Arc;
 use shaku::{Component, Interface};
 
 use crate::config::Config;
-#[cfg(test)]
-use crate::config::SearchConfig;
 use crate::index::{Embedder, IndexRepository};
 use crate::app::serve::search::backend::build_backends;
 use super::path_filter::filter_by_glob;
@@ -114,22 +112,6 @@ impl SearchService for SearchServiceImpl {
 }
 
 #[cfg(test)]
-fn create_search_service(
-    index_repository: Arc<dyn IndexRepository>,
-    embedder: Arc<dyn Embedder>,
-    search_config: &SearchConfig,
-) -> Arc<dyn SearchService> {
-    Arc::new(SearchServiceImpl {
-        index_repository,
-        embedder,
-        config: Arc::new(Config {
-            search: search_config.clone(),
-            ..Config::default()
-        }),
-    })
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use crate::config::{Bm25Config, FusionConfig, FusionStrategy, RankingConfig, SearchConfig};
@@ -196,9 +178,14 @@ mod tests {
             ),
         );
         let embedder: Arc<dyn Embedder> = Arc::new(mock_embedder());
-        let search_config = default_search_config();
-        let search_service =
-            create_search_service(index_repository, embedder, &search_config);
+        let search_service: Arc<dyn SearchService> = Arc::new(SearchServiceImpl {
+            index_repository,
+            embedder,
+            config: Arc::new(Config {
+                search: default_search_config(),
+                ..Config::default()
+            }),
+        });
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let results = rt.block_on(search_service.search("apples", 5, "", "/**")).unwrap();

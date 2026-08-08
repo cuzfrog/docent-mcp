@@ -16,8 +16,6 @@ use std::path::Path;
 
 use crate::app::indexing::Indexer;
 use crate::config::Config;
-#[cfg(test)]
-use crate::config::WatchConfig;
 use crate::index::IndexRepository;
 use crate::support::Console;
 
@@ -40,27 +38,6 @@ pub(super) struct FileWatcher {
     index_repository: Arc<dyn IndexRepository>,
     #[shaku(inject)]
     console: Arc<dyn Console>,
-}
-
-#[cfg(test)]
-pub(crate) fn create_watcher(
-    config: WatchConfig,
-    indexer: Arc<dyn Indexer>,
-    index_repository: Arc<dyn IndexRepository>,
-    console: Arc<dyn Console>,
-) -> Box<dyn Watcher> {
-    Box::new(FileWatcher {
-        config: Arc::new(Config {
-            index: crate::config::IndexConfig {
-                watch: config,
-                ..Default::default()
-            },
-            ..Default::default()
-        }),
-        indexer,
-        index_repository,
-        console,
-    })
 }
 
 #[async_trait]
@@ -284,9 +261,8 @@ fn run_debouncer(
 mod tests {
     use super::*;
     use super::super::event_queue::WatchEventKind;
-    use crate::app::indexing::create_indexer;
+    use crate::app::indexing::MockIndexer;
     use crate::domain::Vector;
-    use crate::index::mock_embedder;
     use crate::index::mock_index_repository;
     use crate::index::InMemoryIndexRepository;
     use crate::support::create_console;
@@ -297,28 +273,36 @@ mod tests {
         Arc::new(repo)
     }
 
+    fn sample_watcher(
+        watch: crate::config::WatchConfig,
+        indexer: Arc<dyn Indexer>,
+        index_repository: Arc<dyn IndexRepository>,
+        console: Arc<dyn Console>,
+    ) -> FileWatcher {
+        FileWatcher {
+            config: Arc::new(Config {
+                index: crate::config::IndexConfig {
+                    watch,
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            indexer,
+            index_repository,
+            console,
+        }
+    }
+
     #[tokio::test]
     async fn test_watcher_runs_and_returns_on_shutdown() {
         let tmp = std::env::temp_dir().join("docent_watcher_shutdown");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
 
-        let cfg = crate::config::Config {
-            index: crate::config::IndexConfig {
-                embedding_model: "BGESmallENV15Q".to_string(),
-                ..crate::config::IndexConfig::default()
-            },
-            ..crate::config::Config::default()
-        };
         let repo = sample_index_repository(&tmp, true);
-        let indexer: Arc<dyn Indexer> = create_indexer(
-            cfg,
-            Arc::new(mock_embedder()),
-            repo.clone(),
-            Arc::new(create_console()),
-        );
+        let indexer: Arc<dyn Indexer> = Arc::new(MockIndexer::new());
         let console: Arc<dyn Console> = Arc::new(create_console());
-        let watcher = create_watcher(
+        let watcher = sample_watcher(
             crate::config::WatchConfig {
                 enabled: true,
                 debounce_ms: 50,
@@ -349,12 +333,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let repo = sample_index_repository(&tmp, true);
-        let indexer: Arc<dyn Indexer> = create_indexer(
-            crate::config::Config::default(),
-            Arc::new(mock_embedder()),
-            repo.clone(),
-            console.clone(),
-        );
+        let indexer: Arc<dyn Indexer> = Arc::new(MockIndexer::new());
         (indexer, repo, console)
     }
 
@@ -425,7 +404,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_watcher_disabled_awaits_shutdown_without_watching() {
         let (indexer, repo, console) = deps();
-        let watcher = create_watcher(
+        let watcher = sample_watcher(
             crate::config::WatchConfig {
                 enabled: false,
                 debounce_ms: 1000,

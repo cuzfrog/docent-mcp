@@ -8,7 +8,7 @@ pub use types::{
     Bm25Config, Config, FusionConfig, FusionStrategy, IndexConfig, RankingConfig, SearchConfig,
     ServerConfig, WatchConfig, GLOB_PATTERNS,
 };
-pub use module::{ConfigModule, create_config_module};
+pub use module::ConfigModule;
 
 #[cfg(test)]
 mod tests;

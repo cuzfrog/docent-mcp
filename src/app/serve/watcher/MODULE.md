@@ -9,8 +9,9 @@ incremental per-file reindexing. The watcher module is the per-file upsert
 side of the index layer: it consumes `notify-debouncer-full` events, debounces
 them, and calls `Indexer::reindex_paths(&[path])` followed by
 `IndexRepository::replace_path` for each event. Exposes a shaku DI module
-(`WatcherModule`, `create_watcher_module`) that resolves the `Watcher`
-component.
+(`WatcherModule`) that resolves the `Watcher` component, built directly via
+`WatcherModule::builder(config_module, index_module, indexing_module,
+support_module).build()`.
 
 ## Files
 

@@ -4,4 +4,4 @@ mod module;
 
 pub use model::EmbeddingModel;
 pub use model_factory::ModelFactory;
-pub use module::{ModelsModule, create_models_module};
+pub use module::ModelsModule;

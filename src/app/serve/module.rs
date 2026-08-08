@@ -5,14 +5,21 @@ use crate::config::{Config, ConfigModule};
 use crate::index::{IndexModule, IndexRepository};
 use crate::support::{Console, SupportModule};
 
-use super::service::FileWatcher;
+use super::mcp_server::RmcpServer;
+use super::http_server::TokioHttpServer;
+use super::search::{SearchModule, SearchService};
+use super::watcher::{Watcher, WatcherModule};
 
 module! {
-    pub WatcherModule {
-        components = [FileWatcher],
+    pub ServeModule {
+        components = [RmcpServer, TokioHttpServer],
         providers = [],
         use ConfigModule {
             components = [Config],
+            providers = []
+        },
+        use SupportModule {
+            components = [dyn Console],
             providers = []
         },
         use IndexModule {
@@ -23,8 +30,12 @@ module! {
             components = [dyn Indexer],
             providers = []
         },
-        use SupportModule {
-            components = [dyn Console],
+        use SearchModule {
+            components = [dyn SearchService],
+            providers = []
+        },
+        use WatcherModule {
+            components = [dyn Watcher],
             providers = []
         }
     }

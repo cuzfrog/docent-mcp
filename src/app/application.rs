@@ -6,9 +6,8 @@ use async_trait::async_trait;
 use shaku::{Component, Interface};
 use tokio_util::sync::CancellationToken;
 
-use super::serve::{create_http_server, HttpServer, SearchService, Watcher};
+use super::serve::HttpServer;
 use super::indexing::Indexer;
-use crate::config::Config;
 use crate::domain::IndexedRoot;
 use crate::index::IndexRepository;
 use crate::support::{path_to_string, Console};
@@ -27,31 +26,19 @@ pub trait Application: Interface + Send + Sync {
 #[shaku(interface = Application)]
 pub(super) struct AppImpl {
     #[shaku(inject)]
-    config: Arc<Config>,
-    #[shaku(inject)]
     console: Arc<dyn Console>,
     #[shaku(inject)]
     index_repository: Arc<dyn IndexRepository>,
     #[shaku(inject)]
     indexer: Arc<dyn Indexer>,
     #[shaku(inject)]
-    search_service: Arc<dyn SearchService>,
-    #[shaku(inject)]
-    watcher: Arc<dyn Watcher>,
+    http_server: Arc<dyn HttpServer>,
 }
 
 #[async_trait]
 impl Application for AppImpl {
     async fn run_serve(&self) -> anyhow::Result<()> {
-        let http_server: Box<dyn HttpServer> = create_http_server(
-            self.config.as_ref().clone(),
-            self.console.clone(),
-            self.index_repository.clone(),
-            self.search_service.clone(),
-            self.indexer.clone(),
-            self.watcher.clone(),
-        )?;
-        http_server.serve().await
+        self.http_server.serve().await
     }
 
     async fn add_indexed_directory(&self, dir: &Path) -> anyhow::Result<()> {

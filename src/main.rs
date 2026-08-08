@@ -3,9 +3,11 @@ use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
 
+use shaku::HasComponent;
+
 use docent_mcp::app::create_application;
 use docent_mcp::config::Config;
-use docent_mcp::support::{Console, SupportModule, create_support_module};
+use docent_mcp::support::{Console, SupportModule};
 
 #[derive(Parser)]
 #[command(name = "docent", about = "MCP server for Document & Code indexing and querying.")]
@@ -50,7 +52,7 @@ struct IndexArgs {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let support_module: Arc<dyn SupportModule> = create_support_module();
+    let support_module = Arc::new(SupportModule::builder().build());
     let console: Arc<dyn Console> = support_module.resolve();
     match cli.command {
         Commands::Serve => {

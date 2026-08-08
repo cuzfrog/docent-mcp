@@ -1,24 +1,16 @@
-use std::sync::Arc;
-
-use shaku::{module, HasComponent, Interface};
+use shaku::module;
 
 use crate::config::{Config, ConfigModule};
 
-use super::model_factory::{ModelFactory, ModelFactoryImpl};
-
-pub trait ModelsModule: Interface + HasComponent<dyn ModelFactory> {}
+use super::model_factory::ModelFactoryImpl;
 
 module! {
-    ModelsModuleImpl: ModelsModule {
+    pub ModelsModule {
         components = [ModelFactoryImpl],
         providers = [],
-        use dyn ConfigModule {
+        use ConfigModule {
             components = [Config],
             providers = []
         }
     }
-}
-
-pub fn create_models_module(config_module: Arc<dyn ConfigModule>) -> Arc<dyn ModelsModule> {
-    Arc::new(ModelsModuleImpl::builder(config_module).build())
 }

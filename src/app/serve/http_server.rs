@@ -2,48 +2,35 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use async_trait::async_trait;
-use axum::Router;
+use shaku::{Component, Interface};
 use tokio_util::sync::CancellationToken;
 
 use crate::app::indexing::Indexer;
-use crate::app::serve::mcp_server::{create_mcp_server, MCPServer};
-use crate::app::serve::search::SearchService;
+use crate::app::serve::mcp_server::MCPServer;
 use crate::app::serve::watcher::Watcher;
 use crate::config::Config;
 use crate::index::IndexRepository;
 use crate::support::Console;
 
 #[async_trait]
-pub trait HttpServer: Send + Sync {
+pub trait HttpServer: Interface + Send + Sync {
     async fn serve(&self) -> anyhow::Result<()>;
 }
 
-pub fn create_http_server(
-    config: Config,
+#[derive(Component)]
+#[shaku(interface = HttpServer)]
+pub(super) struct TokioHttpServer {
+    #[shaku(inject)]
+    mcp_server: Arc<dyn MCPServer>,
+    #[shaku(inject)]
+    config: Arc<Config>,
+    #[shaku(inject)]
     console: Arc<dyn Console>,
-    index_repository: Arc<dyn IndexRepository>,
-    search_service: Arc<dyn SearchService>,
+    #[shaku(inject)]
     indexer: Arc<dyn Indexer>,
-    watcher: Arc<dyn Watcher>,
-) -> anyhow::Result<Box<dyn HttpServer>> {
-    let mcp = create_mcp_server(search_service);
-    let router = mcp.router();
-    Ok(Box::new(TokioHttpServer {
-        router,
-        config,
-        console,
-        indexer,
-        index_repository,
-        watcher,
-    }))
-}
-
-struct TokioHttpServer {
-    router: Router,
-    config: Config,
-    console: Arc<dyn Console>,
-    indexer: Arc<dyn Indexer>,
+    #[shaku(inject)]
     index_repository: Arc<dyn IndexRepository>,
+    #[shaku(inject)]
     watcher: Arc<dyn Watcher>,
 }
 
@@ -96,7 +83,7 @@ impl HttpServer for TokioHttpServer {
 
         let console = self.console.clone();
         let shutdown_for_axum = shutdown.clone();
-        axum::serve(listener, self.router.clone())
+        axum::serve(listener, self.mcp_server.router())
             .with_graceful_shutdown(async move {
                 let _ = console;
                 shutdown_for_axum.cancelled().await;

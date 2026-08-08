@@ -1,10 +1,6 @@
-use std::sync::Arc;
-
-use shaku::{module, Component, HasComponent, Interface, Module, ModuleBuildContext};
+use shaku::{module, Component, Module, ModuleBuildContext};
 
 use super::types::Config;
-
-pub trait ConfigModule: Interface + HasComponent<Config> {}
 
 impl<M: Module> Component<M> for Config {
     type Interface = Config;
@@ -19,16 +15,8 @@ impl<M: Module> Component<M> for Config {
 }
 
 module! {
-    ConfigModuleImpl: ConfigModule {
+    pub ConfigModule {
         components = [Config],
         providers = []
     }
-}
-
-pub fn create_config_module(config: Config) -> Arc<dyn ConfigModule> {
-    Arc::new(
-        ConfigModuleImpl::builder()
-            .with_component_parameters::<Config>(config)
-            .build(),
-    )
 }

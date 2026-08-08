@@ -1,8 +1,10 @@
 mod http_server;
 mod mcp_server;
+mod module;
 mod search;
 mod watcher;
 
-pub(super) use http_server::{create_http_server, HttpServer};
-pub(super) use search::{create_search_module, SearchModule, SearchService};
-pub(super) use watcher::{create_watcher_module, Watcher, WatcherModule};
+pub(super) use http_server::HttpServer;
+pub(super) use module::ServeModule;
+pub(super) use search::SearchModule;
+pub(super) use watcher::WatcherModule;
