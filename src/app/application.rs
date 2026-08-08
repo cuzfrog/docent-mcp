@@ -5,11 +5,11 @@ use anyhow::Context;
 use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
 
-use super::serve::{create_http_server, HttpServer};
+use super::serve::{create_http_server, create_search_module, HttpServer, SearchService};
 use super::indexing::{create_indexing_module, Indexer};
 use crate::config::{create_config_module, Config};
 use crate::domain::IndexedRoot;
-use crate::index::{create_index_module, Embedder, IndexRepository};
+use crate::index::{create_index_module, IndexRepository};
 use crate::models::create_models_module;
 use crate::support::{docent_db_path, path_to_string, Console, SupportModule};
 
@@ -33,17 +33,18 @@ pub fn create_application(
     let index_module = create_index_module(models_module, &config, &docent_db_path())
         .with_context(|| "failed to open index repository")?;
     let indexing_module =
-        create_indexing_module(config_module, index_module.clone(), support_module);
+        create_indexing_module(config_module.clone(), index_module.clone(), support_module);
+    let search_module = create_search_module(config_module, index_module.clone());
     let index_repository: Arc<dyn IndexRepository> = index_module.resolve();
-    let embedder: Arc<dyn Embedder> = index_module.resolve();
     let indexer: Arc<dyn Indexer> = indexing_module.resolve();
+    let search_service: Arc<dyn SearchService> = search_module.resolve();
 
     Ok(AppImpl {
         config,
         console,
         index_repository,
-        embedder,
         indexer,
+        search_service,
     })
 }
 
@@ -51,8 +52,8 @@ struct AppImpl {
     config: Config,
     console: Arc<dyn Console>,
     index_repository: Arc<dyn IndexRepository>,
-    embedder: Arc<dyn Embedder>,
     indexer: Arc<dyn Indexer>,
+    search_service: Arc<dyn SearchService>,
 }
 
 #[async_trait]
@@ -62,7 +63,7 @@ impl Application for AppImpl {
             self.config.clone(),
             self.console.clone(),
             self.index_repository.clone(),
-            self.embedder.clone(),
+            self.search_service.clone(),
             self.indexer.clone(),
         )?;
         http_server.serve().await

@@ -1,5 +1,9 @@
 use std::sync::Arc;
 
+use shaku::{Component, Interface};
+
+use crate::config::Config;
+#[cfg(test)]
 use crate::config::SearchConfig;
 use crate::index::{Embedder, IndexRepository};
 use crate::app::serve::search::backend::build_backends;
@@ -9,7 +13,7 @@ use super::ranking::create_decay_ranker;
 use super::types::SearchResult;
 
 #[async_trait::async_trait]
-pub trait SearchService: Send + Sync {
+pub trait SearchService: Interface + Send + Sync {
     async fn search(
         &self,
         query: &str,
@@ -19,22 +23,15 @@ pub trait SearchService: Send + Sync {
     ) -> anyhow::Result<Vec<SearchResult>>;
 }
 
-struct SearchServiceImpl {
+#[derive(Component)]
+#[shaku(interface = SearchService)]
+pub(super) struct SearchServiceImpl {
+    #[shaku(inject)]
     index_repository: Arc<dyn IndexRepository>,
+    #[shaku(inject)]
     embedder: Arc<dyn Embedder>,
-    search_config: Arc<SearchConfig>,
-}
-
-pub fn create_search_service(
-    index_repository: Arc<dyn IndexRepository>,
-    embedder: Arc<dyn Embedder>,
-    search_config: &SearchConfig,
-) -> Arc<dyn SearchService> {
-    Arc::new(SearchServiceImpl {
-        index_repository,
-        embedder,
-        search_config: Arc::new(search_config.clone()),
-    })
+    #[shaku(inject)]
+    config: Arc<Config>,
 }
 
 #[async_trait::async_trait]
@@ -47,7 +44,7 @@ impl SearchService for SearchServiceImpl {
         search_path: &str,
     ) -> anyhow::Result<Vec<SearchResult>> {
         let merged_index = self.index_repository.snapshot()?;
-        let search_config = Arc::clone(&self.search_config);
+        let search_config = Arc::new(self.config.search.clone());
         let embedder = Arc::clone(&self.embedder);
         let query = query.to_string();
         let file_hint = file_hint.to_string();
@@ -114,6 +111,22 @@ impl SearchService for SearchServiceImpl {
             .collect();
         Ok(results)
     }
+}
+
+#[cfg(test)]
+fn create_search_service(
+    index_repository: Arc<dyn IndexRepository>,
+    embedder: Arc<dyn Embedder>,
+    search_config: &SearchConfig,
+) -> Arc<dyn SearchService> {
+    Arc::new(SearchServiceImpl {
+        index_repository,
+        embedder,
+        config: Arc::new(Config {
+            search: search_config.clone(),
+            ..Config::default()
+        }),
+    })
 }
 
 #[cfg(test)]

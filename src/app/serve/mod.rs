@@ -4,3 +4,4 @@ mod search;
 mod watcher;
 
 pub(super) use http_server::{create_http_server, HttpServer};
+pub(super) use search::{create_search_module, SearchService};

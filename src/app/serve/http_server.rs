@@ -7,10 +7,10 @@ use tokio_util::sync::CancellationToken;
 
 use crate::app::indexing::Indexer;
 use crate::app::serve::mcp_server::{create_mcp_server, MCPServer};
-use crate::app::serve::search::{create_search_service, SearchService};
+use crate::app::serve::search::SearchService;
 use crate::app::serve::watcher::{create_watcher, Watcher};
 use crate::config::Config;
-use crate::index::{Embedder, IndexRepository};
+use crate::index::IndexRepository;
 use crate::support::Console;
 
 #[async_trait]
@@ -22,12 +22,9 @@ pub fn create_http_server(
     config: Config,
     console: Arc<dyn Console>,
     index_repository: Arc<dyn IndexRepository>,
-    embedder: Arc<dyn Embedder>,
+    search_service: Arc<dyn SearchService>,
     indexer: Arc<dyn Indexer>,
 ) -> anyhow::Result<Box<dyn HttpServer>> {
-    let search_service: Arc<dyn SearchService> =
-        create_search_service(index_repository.clone(), embedder, &config.search);
-
     let watcher: Arc<dyn Watcher> = Arc::from(create_watcher(
         config.index.watch.clone(),
         indexer.clone(),

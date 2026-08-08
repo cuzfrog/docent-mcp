@@ -1,3 +1,3 @@
 ---
-no-new-exports: [mod.rs]
+# no-new-exports: [mod.rs]
 ---
