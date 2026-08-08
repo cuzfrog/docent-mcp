@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use shaku::{Component, Interface};
 
-use crate::config::{Config, IndexConfig};
+use crate::config::Config;
 
 use super::model::{create_embedding_model, EmbeddingModel};
 
@@ -19,26 +19,6 @@ pub trait ModelFactory: Interface + Send + Sync {
 pub(super) struct ModelFactoryImpl {
     #[shaku(inject)]
     config: Arc<Config>,
-}
-
-pub(crate) fn create_model_factory(
-    model_name: &str,
-    cache_base: &Path,
-) -> Box<dyn ModelFactory> {
-    let index_config = IndexConfig {
-        embedding_model: model_name.to_string(),
-        cache_dir: cache_base.to_string_lossy().to_string(),
-        ..Default::default()
-    };
-
-    let config = Config {
-        index: index_config,
-        ..Default::default()
-    };
-
-    Box::new(ModelFactoryImpl {
-        config: Arc::new(config),
-    })
 }
 
 impl ModelFactory for ModelFactoryImpl {

@@ -7,10 +7,10 @@ use tokio_util::sync::CancellationToken;
 
 use super::serve::{create_http_server, HttpServer};
 use super::indexing::{create_indexer, Indexer};
-use crate::config::Config;
+use crate::config::{create_config_module, Config};
 use crate::domain::IndexedRoot;
-use crate::index::{create_embedder, create_index_repository, IndexRepository};
-use crate::models::create_model_factory;
+use crate::index::{create_index_module, Embedder, IndexRepository};
+use crate::models::create_models_module;
 use crate::support::{docent_db_path, path_to_string, Console};
 
 #[async_trait]
@@ -27,13 +27,12 @@ pub fn create_application(
     config: Config,
     console: Arc<dyn Console>,
 ) -> anyhow::Result<impl Application> {
-    let index_repository = create_index_repository(&config, &docent_db_path())
+    let config_module = create_config_module(config.clone());
+    let models_module = create_models_module(config_module);
+    let index_module = create_index_module(models_module, &config, &docent_db_path())
         .with_context(|| "failed to open index repository")?;
-    let model_factory = create_model_factory(
-        &config.index.embedding_model,
-        Path::new(&config.index.cache_dir),
-    );
-    let embedder = create_embedder(Arc::from(model_factory));
+    let index_repository: Arc<dyn IndexRepository> = index_module.resolve();
+    let embedder: Arc<dyn Embedder> = index_module.resolve();
 
     Ok(AppImpl {
         config,
@@ -47,7 +46,7 @@ struct AppImpl {
     config: Config,
     console: Arc<dyn Console>,
     index_repository: Arc<dyn IndexRepository>,
-    embedder: Arc<dyn crate::index::Embedder>,
+    embedder: Arc<dyn Embedder>,
 }
 
 #[async_trait]
@@ -125,7 +124,7 @@ impl Application for AppImpl {
 }
 
 impl AppImpl {
-    fn embedder(&self) -> anyhow::Result<Arc<dyn crate::index::Embedder>> {
+    fn embedder(&self) -> anyhow::Result<Arc<dyn Embedder>> {
         Ok(Arc::clone(&self.embedder))
     }
 

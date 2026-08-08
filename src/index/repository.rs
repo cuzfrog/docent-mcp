@@ -34,7 +34,7 @@ pub(crate) trait IndexRepository: Interface + Send + Sync {
 pub(crate) fn create_index_repository(
     config: &Config,
     db_path: &Path,
-) -> anyhow::Result<Arc<dyn IndexRepository>> {
+) -> anyhow::Result<Box<dyn IndexRepository>> {
     let connection = create_connection(db_path)
         .with_context(|| format!("failed to open index database {}", db_path.display()))?;
     let meta_store: Arc<dyn IndexMetaStore> = Arc::new(create_index_meta_store(connection.clone()));
@@ -66,7 +66,7 @@ pub(crate) fn create_index_repository(
     };
     repository.inner.store(merged)?;
 
-    Ok(Arc::new(repository))
+    Ok(Box::new(repository))
 }
 
 fn make_absolute_root(root: &str) -> PathBuf {
@@ -108,6 +108,15 @@ impl InMemoryIndexRepository {
 impl Default for InMemoryIndexRepository {
     fn default() -> Self {
         Self::new(1.2, 0.75)
+    }
+}
+
+impl<M: shaku::Module> shaku::Component<M> for InMemoryIndexRepository {
+    type Interface = dyn IndexRepository;
+    type Parameters = ();
+
+    fn build(_: &mut shaku::ModuleBuildContext<M>, _: Self::Parameters) -> Box<Self::Interface> {
+        Box::new(InMemoryIndexRepository::default())
     }
 }
 

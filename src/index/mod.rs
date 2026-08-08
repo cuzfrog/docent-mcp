@@ -1,14 +1,14 @@
 mod bm25_builder;
 mod embedder;
 mod merged_index;
+mod module;
 mod repository;
 mod storage;
 
 pub(crate) use embedder::Embedder;
-pub(crate) use embedder::create_embedder;
 pub(crate) use merged_index::MergedIndex;
+pub(crate) use module::create_index_module;
 pub(crate) use repository::IndexRepository;
-pub(crate) use repository::create_index_repository;
 
 #[cfg(test)]
 pub(crate) use repository::InMemoryIndexRepository;

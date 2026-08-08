@@ -46,13 +46,6 @@ impl Embedder for FastembedEmbedder {
     }
 }
 
-pub(crate) fn create_embedder(model_factory: Arc<dyn ModelFactory>) -> Arc<dyn Embedder> {
-    Arc::new(FastembedEmbedder {
-        model_factory,
-        model: Mutex::new(None),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
