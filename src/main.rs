@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand};
 
 use docent_mcp::app::{create_application, Application};
 use docent_mcp::config::Config;
-use docent_mcp::support::{create_console, Console};
+use docent_mcp::support::{Console, create_support_module};
 
 #[derive(Parser)]
 #[command(name = "docent", about = "MCP server for Document & Code indexing and querying.")]
@@ -50,7 +50,7 @@ struct IndexArgs {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let console: Arc<dyn Console> = Arc::new(create_console());
+    let console: Arc<dyn Console> = create_support_module().resolve();
     match cli.command {
         Commands::Serve => {
             let config = Config::load_or_create_global()?;

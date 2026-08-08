@@ -141,8 +141,7 @@ impl AppImpl {
         let factory = create_model_factory(
             &self.config.index.embedding_model,
             Path::new(&self.config.index.cache_dir),
-        )
-        .with_context(|| "failed to create model factory")?;
+        );
         let model = factory
             .build_model()
             .with_context(|| "failed to build embedding model")?;
