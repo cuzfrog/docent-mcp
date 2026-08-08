@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use notify_debouncer_full::notify::{Error as NotifyError, RecursiveMode};
 use notify_debouncer_full::{new_debouncer, DebouncedEvent};
+use shaku::{Component, Interface};
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -14,6 +15,8 @@ use tokio_util::sync::CancellationToken;
 use std::path::Path;
 
 use crate::app::indexing::Indexer;
+use crate::config::Config;
+#[cfg(test)]
 use crate::config::WatchConfig;
 use crate::index::IndexRepository;
 use crate::support::Console;
@@ -22,10 +25,24 @@ use super::event_queue::{run_debounce_loop, WatchEvent};
 use super::handler::{classify_notify_kind, detect_network_mount, index_key_for};
 
 #[async_trait]
-pub trait Watcher: Send + Sync {
+pub trait Watcher: Interface + Send + Sync {
     async fn run(&self, shutdown: CancellationToken) -> anyhow::Result<()>;
 }
 
+#[derive(Component)]
+#[shaku(interface = Watcher)]
+pub(super) struct FileWatcher {
+    #[shaku(inject)]
+    config: Arc<Config>,
+    #[shaku(inject)]
+    indexer: Arc<dyn Indexer>,
+    #[shaku(inject)]
+    index_repository: Arc<dyn IndexRepository>,
+    #[shaku(inject)]
+    console: Arc<dyn Console>,
+}
+
+#[cfg(test)]
 pub(crate) fn create_watcher(
     config: WatchConfig,
     indexer: Arc<dyn Indexer>,
@@ -33,24 +50,24 @@ pub(crate) fn create_watcher(
     console: Arc<dyn Console>,
 ) -> Box<dyn Watcher> {
     Box::new(FileWatcher {
-        config,
+        config: Arc::new(Config {
+            index: crate::config::IndexConfig {
+                watch: config,
+                ..Default::default()
+            },
+            ..Default::default()
+        }),
         indexer,
         index_repository,
         console,
     })
 }
 
-struct FileWatcher {
-    config: WatchConfig,
-    indexer: Arc<dyn Indexer>,
-    index_repository: Arc<dyn IndexRepository>,
-    console: Arc<dyn Console>,
-}
-
 #[async_trait]
 impl Watcher for FileWatcher {
     async fn run(&self, shutdown: CancellationToken) -> anyhow::Result<()> {
-        if !self.config.enabled {
+        let watch_config = &self.config.index.watch;
+        if !watch_config.enabled {
             shutdown.cancelled().await;
             return Ok(());
         }
@@ -72,7 +89,7 @@ impl Watcher for FileWatcher {
 
         let inflight: Arc<DashMap<String, (CancellationToken, JoinHandle<()>)>> =
             Arc::new(DashMap::new());
-        let semaphore = Arc::new(Semaphore::new(self.config.max_batch_size.max(1)));
+        let semaphore = Arc::new(Semaphore::new(watch_config.max_batch_size.max(1)));
 
         let (event_tx, event_rx) = tokio::sync::mpsc::channel::<WatchEvent>(256);
 
@@ -83,7 +100,7 @@ impl Watcher for FileWatcher {
             .into_iter()
             .map(|r| (r.path, r.recursive))
             .collect();
-        let debouncer_window = Duration::from_millis(self.config.debounce_ms);
+        let debouncer_window = Duration::from_millis(watch_config.debounce_ms);
         let debouncer_handle = tokio::task::spawn_blocking(move || {
             run_debouncer(
                 watched_roots_for_debouncer,
