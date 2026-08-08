@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -37,7 +37,7 @@ pub trait Indexer: Send + Sync {
 
 pub fn create_indexer(
     config: Config,
-    embedder: Arc<Mutex<dyn Embedder>>,
+    embedder: Arc<dyn Embedder>,
     index_repository: Arc<dyn IndexRepository>,
     console: Arc<dyn Console>,
 ) -> Arc<dyn Indexer> {
@@ -51,7 +51,7 @@ pub fn create_indexer(
 
 struct FileIndexer {
     config: Config,
-    embedder: Arc<Mutex<dyn Embedder>>,
+    embedder: Arc<dyn Embedder>,
     index_repository: Arc<dyn IndexRepository>,
     console: Arc<dyn Console>,
 }
@@ -212,12 +212,7 @@ impl FileIndexer {
             let batch_texts: Vec<String> = batch.iter().map(|t| t.to_string()).collect();
             let batch_vectors = tokio::task::spawn_blocking({
                 let embedder = embedder.clone();
-                move || -> anyhow::Result<Vec<Vec<f32>>> {
-                    let mut emb = embedder
-                        .lock()
-                        .map_err(|e| anyhow!("embedder mutex poisoned: {}", e))?;
-                    emb.embed(&batch_texts)
-                }
+                move || -> anyhow::Result<Vec<Vec<f32>>> { embedder.embed(&batch_texts) }
             })
             .await
             .map_err(|e| anyhow!("embed task panicked: {}", e))??;
@@ -418,8 +413,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let cfg = sample_indexer_config(&tmp);
-        let embedder: Arc<std::sync::Mutex<dyn crate::index::Embedder>> =
-            Arc::new(std::sync::Mutex::new(mock_embedder()));
+        let embedder: Arc<dyn crate::index::Embedder> = Arc::new(mock_embedder());
         let console: Arc<dyn Console> = Arc::new(crate::support::create_console());
         let index_repository = sample_index_repository(&tmp);
         let indexer = create_indexer(cfg.clone(), embedder, index_repository, console);
@@ -437,8 +431,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let cfg = sample_indexer_config(&tmp);
-        let embedder: Arc<std::sync::Mutex<dyn crate::index::Embedder>> =
-            Arc::new(std::sync::Mutex::new(mock_embedder()));
+        let embedder: Arc<dyn crate::index::Embedder> = Arc::new(mock_embedder());
         let console: Arc<dyn Console> = Arc::new(crate::support::create_console());
         let index_repository = sample_index_repository(&tmp);
         let indexer = create_indexer(cfg.clone(), embedder, index_repository, console);
@@ -461,8 +454,7 @@ mod tests {
         std::fs::create_dir_all(&tmp).unwrap();
         std::fs::write(tmp.join("a.md"), "# Title\n\nbody alpha").unwrap();
         let cfg = sample_indexer_config(&tmp);
-        let embedder: Arc<std::sync::Mutex<dyn crate::index::Embedder>> =
-            Arc::new(std::sync::Mutex::new(mock_embedder()));
+        let embedder: Arc<dyn crate::index::Embedder> = Arc::new(mock_embedder());
         let console: Arc<dyn Console> = Arc::new(crate::support::create_console());
         let index_repository = sample_index_repository(&tmp);
         let indexer = create_indexer(cfg.clone(), embedder, index_repository, console);
@@ -488,8 +480,7 @@ mod tests {
         let body = "alpha bravo charlie delta ".repeat(30);
         std::fs::write(tmp.join("a.md"), format!("# Title\n\n{}", body)).unwrap();
         let cfg = sample_indexer_config(&tmp);
-        let embedder: Arc<std::sync::Mutex<dyn crate::index::Embedder>> =
-            Arc::new(std::sync::Mutex::new(mock_embedder()));
+        let embedder: Arc<dyn crate::index::Embedder> = Arc::new(mock_embedder());
         let console: Arc<dyn Console> = Arc::new(crate::support::create_console());
         let index_repository = sample_index_repository(&tmp);
         let indexer = create_indexer(cfg.clone(), embedder, index_repository, console);
@@ -516,8 +507,7 @@ mod tests {
         std::fs::create_dir_all(&tmp).unwrap();
         std::fs::write(tmp.join("a.md"), "# T\n\nbody").unwrap();
         let cfg = sample_indexer_config(&tmp);
-        let embedder: Arc<std::sync::Mutex<dyn crate::index::Embedder>> =
-            Arc::new(std::sync::Mutex::new(mock_embedder()));
+        let embedder: Arc<dyn crate::index::Embedder> = Arc::new(mock_embedder());
         let console: Arc<dyn Console> = Arc::new(crate::support::create_console());
         let index_repository = sample_index_repository(&tmp);
         let indexer = create_indexer(cfg.clone(), embedder, index_repository, console);

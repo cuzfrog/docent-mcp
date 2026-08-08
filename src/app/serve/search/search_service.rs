@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::config::SearchConfig;
 use crate::index::{Embedder, IndexRepository};
@@ -21,13 +21,13 @@ pub trait SearchService: Send + Sync {
 
 struct SearchServiceImpl {
     index_repository: Arc<dyn IndexRepository>,
-    embedder: Arc<Mutex<dyn Embedder>>,
+    embedder: Arc<dyn Embedder>,
     search_config: Arc<SearchConfig>,
 }
 
 pub fn create_search_service(
     index_repository: Arc<dyn IndexRepository>,
-    embedder: Arc<Mutex<dyn Embedder>>,
+    embedder: Arc<dyn Embedder>,
     search_config: &SearchConfig,
 ) -> Arc<dyn SearchService> {
     Arc::new(SearchServiceImpl {
@@ -182,8 +182,7 @@ mod tests {
                 vec![],
             ),
         );
-        let embedder: Arc<std::sync::Mutex<dyn Embedder>> =
-            Arc::new(std::sync::Mutex::new(mock_embedder()));
+        let embedder: Arc<dyn Embedder> = Arc::new(mock_embedder());
         let search_config = default_search_config();
         let search_service =
             create_search_service(index_repository, embedder, &search_config);

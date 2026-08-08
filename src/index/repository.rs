@@ -6,13 +6,14 @@ use std::time::Instant;
 use anyhow::Context;
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
+use shaku::Interface;
 
 use super::merged_index::MergedIndex;
 use super::storage::{create_connection, create_index_chunk_store, create_index_meta_store, IndexChunkStore, IndexMetaStore};
 use crate::config::Config;
 use crate::domain::{ChunkMetadata, IndexedRoot, Vector};
 
-pub(crate) trait IndexRepository: Send + Sync {
+pub(crate) trait IndexRepository: Interface + Send + Sync {
     fn store(&self, merged: MergedIndex) -> anyhow::Result<()>;
     fn snapshot(&self) -> anyhow::Result<Arc<MergedIndex>>;
     fn replace_path(

@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -22,7 +22,7 @@ pub fn create_http_server(
     config: Config,
     console: Arc<dyn Console>,
     index_repository: Arc<dyn IndexRepository>,
-    embedder: Arc<Mutex<dyn Embedder>>,
+    embedder: Arc<dyn Embedder>,
     indexer: Arc<dyn Indexer>,
 ) -> anyhow::Result<Box<dyn HttpServer>> {
     let search_service: Arc<dyn SearchService> =

@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -9,7 +9,7 @@ use super::serve::{create_http_server, HttpServer};
 use super::indexing::{create_indexer, Indexer};
 use crate::config::Config;
 use crate::domain::IndexedRoot;
-use crate::index::{create_embedder, create_index_repository, Embedder, IndexRepository};
+use crate::index::{create_embedder, create_index_repository, IndexRepository};
 use crate::models::create_model_factory;
 use crate::support::{docent_db_path, path_to_string, Console};
 
@@ -23,21 +23,23 @@ pub trait Application: Send + Sync {
     fn list_indexed_directories(&self) -> anyhow::Result<()>;
 }
 
-type EmbedderHandle = Arc<Mutex<dyn Embedder>>;
-type EmbedderInitResult = std::result::Result<EmbedderHandle, String>;
-
 pub fn create_application(
     config: Config,
     console: Arc<dyn Console>,
 ) -> anyhow::Result<impl Application> {
     let index_repository = create_index_repository(&config, &docent_db_path())
         .with_context(|| "failed to open index repository")?;
+    let model_factory = create_model_factory(
+        &config.index.embedding_model,
+        Path::new(&config.index.cache_dir),
+    );
+    let embedder = create_embedder(Arc::from(model_factory));
 
     Ok(AppImpl {
         config,
         console,
         index_repository,
-        embedder: Mutex::new(None),
+        embedder,
     })
 }
 
@@ -45,7 +47,7 @@ struct AppImpl {
     config: Config,
     console: Arc<dyn Console>,
     index_repository: Arc<dyn IndexRepository>,
-    embedder: Mutex<Option<EmbedderInitResult>>,
+    embedder: Arc<dyn crate::index::Embedder>,
 }
 
 #[async_trait]
@@ -123,29 +125,8 @@ impl Application for AppImpl {
 }
 
 impl AppImpl {
-    fn embedder(&self) -> anyhow::Result<EmbedderHandle> {
-        let mut guard = self
-            .embedder
-            .lock()
-            .map_err(|e| anyhow::anyhow!("embedder mutex poisoned: {}", e))?;
-        if guard.is_none() {
-            *guard = Some(self.build_embedder().map_err(|e| e.to_string()));
-        }
-        match guard.as_ref().unwrap() {
-            Ok(embedder) => Ok(Arc::clone(embedder)),
-            Err(e) => anyhow::bail!("failed to initialize embedder: {}", e),
-        }
-    }
-
-    fn build_embedder(&self) -> anyhow::Result<EmbedderHandle> {
-        let factory = create_model_factory(
-            &self.config.index.embedding_model,
-            Path::new(&self.config.index.cache_dir),
-        );
-        let model = factory
-            .build_model()
-            .with_context(|| "failed to build embedding model")?;
-        Ok(Arc::new(Mutex::new(create_embedder(model))))
+    fn embedder(&self) -> anyhow::Result<Arc<dyn crate::index::Embedder>> {
+        Ok(Arc::clone(&self.embedder))
     }
 
     fn indexer(&self) -> anyhow::Result<Arc<dyn Indexer>> {

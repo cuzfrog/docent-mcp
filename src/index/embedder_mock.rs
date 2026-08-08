@@ -1,4 +1,6 @@
-use super::embedder::MockEmbedder;
+use std::sync::Mutex;
+
+use super::embedder::{Embedder, MockEmbedder};
 
 /// Create a deterministic mock embedder for tests.
 ///
@@ -9,7 +11,7 @@ use super::embedder::MockEmbedder;
 /// - a constant bias of 1.0
 ///
 /// Every call with the same input produces the same vector.
-pub fn mock_embedder() -> MockEmbedder {
+pub fn mock_embedder() -> impl Embedder {
     let mut mock = MockEmbedder::new();
     mock.expect_embed()
         .returning(|texts: &[String]| {
@@ -23,5 +25,18 @@ pub fn mock_embedder() -> MockEmbedder {
                 })
                 .collect())
         });
-    mock
+    SyncMockEmbedder { inner: Mutex::new(mock) }
+}
+
+struct SyncMockEmbedder {
+    inner: Mutex<MockEmbedder>,
+}
+
+impl Embedder for SyncMockEmbedder {
+    fn embed(&self, texts: &[String]) -> anyhow::Result<Vec<Vec<f32>>> {
+        self.inner
+            .lock()
+            .map_err(|e| anyhow::anyhow!("mock embedder mutex poisoned: {}", e))?
+            .embed(texts)
+    }
 }

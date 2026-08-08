@@ -305,7 +305,7 @@ mod tests {
         let repo = sample_index_repository(&tmp, true);
         let indexer: Arc<dyn Indexer> = create_indexer(
             cfg,
-            Arc::new(std::sync::Mutex::new(mock_embedder())),
+            Arc::new(mock_embedder()),
             repo.clone(),
             Arc::new(create_console()),
         );
@@ -343,7 +343,7 @@ mod tests {
         let repo = sample_index_repository(&tmp, true);
         let indexer: Arc<dyn Indexer> = create_indexer(
             crate::config::Config::default(),
-            Arc::new(std::sync::Mutex::new(mock_embedder())),
+            Arc::new(mock_embedder()),
             repo.clone(),
             console.clone(),
         );
