@@ -7,7 +7,7 @@ mod storage;
 
 pub(crate) use embedder::Embedder;
 pub(crate) use merged_index::MergedIndex;
-pub(crate) use module::create_index_module;
+pub(crate) use module::{create_index_module, IndexModule};
 pub(crate) use repository::IndexRepository;
 
 #[cfg(test)]

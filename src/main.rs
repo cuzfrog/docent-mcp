@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand};
 
 use docent_mcp::app::{create_application, Application};
 use docent_mcp::config::Config;
-use docent_mcp::support::{Console, create_support_module};
+use docent_mcp::support::{Console, SupportModule, create_support_module};
 
 #[derive(Parser)]
 #[command(name = "docent", about = "MCP server for Document & Code indexing and querying.")]
@@ -50,11 +50,12 @@ struct IndexArgs {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let console: Arc<dyn Console> = create_support_module().resolve();
+    let support_module: Arc<dyn SupportModule> = create_support_module();
+    let console: Arc<dyn Console> = support_module.resolve();
     match cli.command {
         Commands::Serve => {
             let config = Config::load_or_create_global()?;
-            create_application(config, console.clone())?.run_serve().await?;
+            create_application(config, support_module)?.run_serve().await?;
         }
         Commands::ListModels => {
             for model in fastembed::TextEmbedding::list_supported_models() {
@@ -69,27 +70,27 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Watch(args) => {
             let config = Config::load_or_create_global()?;
-            let application = create_application(config, console.clone())?;
+            let application = create_application(config, support_module)?;
             application.watch_indexed_directory(&args.dir).await?;
         }
         Commands::Unwatch(args) => {
             let config = Config::load_or_create_global()?;
-            let application = create_application(config, console.clone())?;
+            let application = create_application(config, support_module)?;
             application.unwatch_indexed_directory(&args.dir).await?;
         }
         Commands::Index(IndexSubcommand::Add(args)) => {
             let config = Config::load_or_create_global()?;
-            let application = create_application(config, console.clone())?;
+            let application = create_application(config, support_module)?;
             application.add_indexed_directory(&args.dir).await?;
         }
         Commands::Index(IndexSubcommand::Remove(args)) => {
             let config = Config::load_or_create_global()?;
-            let application = create_application(config, console.clone())?;
+            let application = create_application(config, support_module)?;
             application.remove_indexed_directory(&args.dir).await?;
         }
         Commands::Index(IndexSubcommand::List) => {
             let config = Config::load_or_create_global()?;
-            let application = create_application(config, console.clone())?;
+            let application = create_application(config, support_module)?;
             application.list_indexed_directories()?;
         }
     }

@@ -6,12 +6,12 @@ use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
 
 use super::serve::{create_http_server, HttpServer};
-use super::indexing::{create_indexer, Indexer};
+use super::indexing::{create_indexing_module, Indexer};
 use crate::config::{create_config_module, Config};
 use crate::domain::IndexedRoot;
 use crate::index::{create_index_module, Embedder, IndexRepository};
 use crate::models::create_models_module;
-use crate::support::{docent_db_path, path_to_string, Console};
+use crate::support::{docent_db_path, path_to_string, Console, SupportModule};
 
 #[async_trait]
 pub trait Application: Send + Sync {
@@ -25,20 +25,25 @@ pub trait Application: Send + Sync {
 
 pub fn create_application(
     config: Config,
-    console: Arc<dyn Console>,
+    support_module: Arc<dyn SupportModule>,
 ) -> anyhow::Result<impl Application> {
+    let console: Arc<dyn Console> = support_module.resolve();
     let config_module = create_config_module(config.clone());
-    let models_module = create_models_module(config_module);
+    let models_module = create_models_module(config_module.clone());
     let index_module = create_index_module(models_module, &config, &docent_db_path())
         .with_context(|| "failed to open index repository")?;
+    let indexing_module =
+        create_indexing_module(config_module, index_module.clone(), support_module);
     let index_repository: Arc<dyn IndexRepository> = index_module.resolve();
     let embedder: Arc<dyn Embedder> = index_module.resolve();
+    let indexer: Arc<dyn Indexer> = indexing_module.resolve();
 
     Ok(AppImpl {
         config,
         console,
         index_repository,
         embedder,
+        indexer,
     })
 }
 
@@ -47,19 +52,18 @@ struct AppImpl {
     console: Arc<dyn Console>,
     index_repository: Arc<dyn IndexRepository>,
     embedder: Arc<dyn Embedder>,
+    indexer: Arc<dyn Indexer>,
 }
 
 #[async_trait]
 impl Application for AppImpl {
     async fn run_serve(&self) -> anyhow::Result<()> {
-        let embedder = self.embedder()?;
-        let indexer = self.indexer()?;
         let http_server: Box<dyn HttpServer> = create_http_server(
             self.config.clone(),
             self.console.clone(),
             self.index_repository.clone(),
-            embedder,
-            indexer,
+            self.embedder.clone(),
+            self.indexer.clone(),
         )?;
         http_server.serve().await
     }
@@ -124,20 +128,6 @@ impl Application for AppImpl {
 }
 
 impl AppImpl {
-    fn embedder(&self) -> anyhow::Result<Arc<dyn Embedder>> {
-        Ok(Arc::clone(&self.embedder))
-    }
-
-    fn indexer(&self) -> anyhow::Result<Arc<dyn Indexer>> {
-        let embedder = self.embedder()?;
-        Ok(create_indexer(
-            self.config.clone(),
-            embedder,
-            self.index_repository.clone(),
-            self.console.clone(),
-        ))
-    }
-
     fn add_root(&self, dir: &Path) -> anyhow::Result<IndexedRoot> {
         let canonical = canonicalize_dir(dir)?;
         self.index_repository.add_root(&canonical, true, true)
@@ -147,8 +137,8 @@ impl AppImpl {
         self.console
             .info(&format!("Indexing under: {}", path_to_string(root)));
 
-        let indexer = self.indexer()?;
-        let replacements = indexer
+        let replacements = self
+            .indexer
             .reindex_root(root, recursive, CancellationToken::new())
             .await?;
 

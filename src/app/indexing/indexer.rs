@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use shaku::{Component, Interface};
 use tokio_util::sync::CancellationToken;
 
 use crate::config::Config;
@@ -15,7 +16,7 @@ use super::chunker;
 use super::discover::{default_patterns, discover_all_paths, discover_files};
 
 #[async_trait]
-pub trait Indexer: Send + Sync {
+pub trait Indexer: Interface + Send + Sync {
     async fn reindex_paths(
         &self,
         paths: &[String],
@@ -35,25 +36,32 @@ pub trait Indexer: Send + Sync {
     ) -> anyhow::Result<Vec<Replacement>>;
 }
 
-pub fn create_indexer(
+#[derive(Component)]
+#[shaku(interface = Indexer)]
+pub(super) struct FileIndexer {
+    #[shaku(inject)]
+    config: Arc<Config>,
+    #[shaku(inject)]
+    embedder: Arc<dyn Embedder>,
+    #[shaku(inject)]
+    index_repository: Arc<dyn IndexRepository>,
+    #[shaku(inject)]
+    console: Arc<dyn Console>,
+}
+
+#[cfg(test)]
+pub(crate) fn create_indexer(
     config: Config,
     embedder: Arc<dyn Embedder>,
     index_repository: Arc<dyn IndexRepository>,
     console: Arc<dyn Console>,
 ) -> Arc<dyn Indexer> {
     Arc::new(FileIndexer {
-        config,
+        config: Arc::new(config),
         embedder,
         index_repository,
         console,
     })
-}
-
-struct FileIndexer {
-    config: Config,
-    embedder: Arc<dyn Embedder>,
-    index_repository: Arc<dyn IndexRepository>,
-    console: Arc<dyn Console>,
 }
 
 #[async_trait]
