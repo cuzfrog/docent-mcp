@@ -33,6 +33,7 @@ const HTML = `<!DOCTYPE html>
     </div>
     <div class="result-meta">
       <span class="result-section"></span>
+      <span class="result-stale" style="display: none;"></span>
     </div>
     <div class="result-content-wrapper">
       <div class="result-content"></div>
@@ -102,6 +103,7 @@ describe('View', () => {
         sectionHeading: 'Intro',
         modifiedAt: '2024-01-15T10:00:00Z',
         sourceRevision: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
+        stale: false,
       },
     ];
     view.renderResults(results);
@@ -118,9 +120,39 @@ describe('View', () => {
     assert.equal(badge.textContent, 'File');
     assert.ok(badge.classList.contains('badge-file'));
     assert.ok(!card.querySelector('.result-freshness'));
+    const staleEl = card.querySelector('.result-stale');
+    assert.ok(staleEl);
+    assert.equal(staleEl.style.display, 'none');
     const footer = card.querySelector('.result-footer-text');
     assert.match(footer.textContent, /^Modified:/);
     assert.match(footer.textContent, /SHA: a1b2c3d4e5f6/);
+  });
+
+  it('should render stale badge for stale results', () => {
+    const view = new View(dom.window.document);
+    const results = [
+      {
+        title: 'Stale Doc',
+        sourcePath: '/path/to/stale.md',
+        matchedContent: 'outdated content',
+        total_score: 0.5,
+        semantic_score: 0.7,
+        bm25_score: 0.3,
+        lineStart: 1,
+        lineEnd: 1,
+        sectionHeading: null,
+        modifiedAt: null,
+        sourceRevision: 'deadbeef',
+        stale: true,
+      },
+    ];
+    view.renderResults(results);
+    const card = view.elements.results.querySelector('.result-card');
+    assert.ok(card);
+    const staleEl = card.querySelector('.result-stale');
+    assert.ok(staleEl);
+    assert.equal(staleEl.textContent, 'stale');
+    assert.equal(staleEl.style.display, 'inline-block');
   });
 
   it('should render error card with message', () => {

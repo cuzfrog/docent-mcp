@@ -122,6 +122,16 @@ export class View {
         scoreEl.textContent = display;
         scoreEl.title = tooltip;
       }
+      const staleEl = clone.querySelector('.result-stale');
+      if (staleEl) {
+        if (result.stale) {
+          staleEl.textContent = 'stale';
+          staleEl.style.display = 'inline-block';
+        } else {
+          staleEl.style.display = 'none';
+        }
+      }
+
       if (result.sectionHeading) {
         setText('.result-section', result.sectionHeading);
       }
