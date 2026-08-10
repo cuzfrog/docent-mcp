@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
-use anyhow::Context;
 use shaku::{module, HasComponent};
 
 use crate::config::{Config, ConfigModule};
-use crate::index::{create_index_repository, Embedder, IndexModule, IndexRepository};
+use crate::index::{Embedder, IndexModule, IndexRepository};
 use crate::models::ModelsModule;
-use crate::support::{docent_db_path, Console, SupportModule};
+use crate::support::{Console, SupportModule};
 
 use super::application::{AppImpl, Application};
 use super::indexing::{Indexer, IndexingModule};
@@ -42,20 +41,14 @@ module! {
 pub fn create_application(
     config: Config,
     support_module: Arc<SupportModule>,
-) -> anyhow::Result<Arc<dyn Application>> {
+) -> Arc<dyn Application> {
     let config_module = Arc::new(
         ConfigModule::builder()
             .with_component_parameters::<Config>(config.clone())
             .build(),
     );
     let models_module = Arc::new(ModelsModule::builder(config_module.clone()).build());
-    let repository = create_index_repository(&config, &docent_db_path())
-        .with_context(|| "failed to open index repository")?;
-    let index_module = Arc::new(
-        IndexModule::builder(models_module)
-            .with_component_override::<dyn IndexRepository>(repository)
-            .build(),
-    );
+    let index_module = Arc::new(IndexModule::builder(config_module.clone(), models_module).build());
     let indexing_module = Arc::new(
         IndexingModule::builder(config_module.clone(), index_module.clone(), support_module.clone())
             .build(),
@@ -92,5 +85,5 @@ pub fn create_application(
         serve_module,
     )
     .build();
-    Ok(app_module.resolve())
+    app_module.resolve()
 }

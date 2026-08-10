@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Commands::Serve => {
             let config = Config::load_or_create_global()?;
-            create_application(config, support_module)?.run_serve().await?;
+            create_application(config, support_module).run_serve().await?;
         }
         Commands::ListModels => {
             for model in fastembed::TextEmbedding::list_supported_models() {
@@ -72,27 +72,27 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Watch(args) => {
             let config = Config::load_or_create_global()?;
-            let application = create_application(config, support_module)?;
+            let application = create_application(config, support_module);
             application.watch_indexed_directory(&args.dir).await?;
         }
         Commands::Unwatch(args) => {
             let config = Config::load_or_create_global()?;
-            let application = create_application(config, support_module)?;
+            let application = create_application(config, support_module);
             application.unwatch_indexed_directory(&args.dir).await?;
         }
         Commands::Index(IndexSubcommand::Add(args)) => {
             let config = Config::load_or_create_global()?;
-            let application = create_application(config, support_module)?;
+            let application = create_application(config, support_module);
             application.add_indexed_directory(&args.dir).await?;
         }
         Commands::Index(IndexSubcommand::Remove(args)) => {
             let config = Config::load_or_create_global()?;
-            let application = create_application(config, support_module)?;
+            let application = create_application(config, support_module);
             application.remove_indexed_directory(&args.dir).await?;
         }
         Commands::Index(IndexSubcommand::List) => {
             let config = Config::load_or_create_global()?;
-            let application = create_application(config, support_module)?;
+            let application = create_application(config, support_module);
             application.list_indexed_directories()?;
         }
     }
