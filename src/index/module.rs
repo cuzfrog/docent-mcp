@@ -5,6 +5,7 @@ use crate::models::{ModelFactory, ModelsModule};
 
 use super::embedder::FastembedEmbedder;
 use super::repository::SqliteIndexRepository;
+use super::storage::{IndexChunkStore, IndexMetaStore, StorageModule};
 
 module! {
     pub IndexModule {
@@ -16,6 +17,10 @@ module! {
         },
         use ModelsModule {
             components = [dyn ModelFactory],
+            providers = []
+        },
+        use StorageModule {
+            components = [dyn IndexMetaStore, dyn IndexChunkStore],
             providers = []
         }
     }

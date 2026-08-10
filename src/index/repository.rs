@@ -9,10 +9,9 @@ use dashmap::DashMap;
 use shaku::{Component, Interface};
 
 use super::merged_index::MergedIndex;
-use super::storage::{create_connection, create_index_chunk_store, create_index_meta_store, IndexChunkStore, IndexMetaStore};
+use super::storage::{IndexChunkStore, IndexMetaStore};
 use crate::config::Config;
 use crate::domain::{ChunkMetadata, IndexedRoot, Vector};
-use crate::support::docent_db_path;
 
 pub(crate) trait IndexRepository: Interface + Send + Sync {
     fn store(&self, merged: MergedIndex) -> anyhow::Result<()>;
@@ -296,20 +295,20 @@ struct SqliteIndexRepositoryState {
 pub(super) struct SqliteIndexRepository {
     #[shaku(inject)]
     config: Arc<Config>,
+    #[shaku(inject)]
+    meta_store: Arc<dyn IndexMetaStore>,
+    #[shaku(inject)]
+    chunk_store: Arc<dyn IndexChunkStore>,
     #[shaku(force_default)]
     initialized: OnceLock<Result<SqliteIndexRepositoryState, String>>,
 }
 
 impl SqliteIndexRepository {
-    fn initialize(config: Arc<Config>) -> anyhow::Result<SqliteIndexRepositoryState> {
-        let db_path = docent_db_path();
-        let connection = create_connection(&db_path)
-            .with_context(|| format!("failed to open index database {}", db_path.display()))?;
-        let meta_store: Arc<dyn IndexMetaStore> =
-            Arc::new(create_index_meta_store(connection.clone()));
-        let chunk_store: Arc<dyn IndexChunkStore> =
-            Arc::new(create_index_chunk_store(connection.clone()));
-
+    fn initialize(
+        config: Arc<Config>,
+        meta_store: Arc<dyn IndexMetaStore>,
+        chunk_store: Arc<dyn IndexChunkStore>,
+    ) -> anyhow::Result<SqliteIndexRepositoryState> {
         let k1 = config.search.bm25.k1;
         let b = config.search.bm25.b;
         let inner = InMemoryIndexRepository::new(k1, b);
@@ -348,8 +347,10 @@ impl SqliteIndexRepository {
 
     fn state(&self) -> anyhow::Result<&SqliteIndexRepositoryState> {
         let config = Arc::clone(&self.config);
+        let meta_store = Arc::clone(&self.meta_store);
+        let chunk_store = Arc::clone(&self.chunk_store);
         let result = self.initialized.get_or_init(|| {
-            match Self::initialize(config) {
+            match Self::initialize(config, meta_store, chunk_store) {
                 Ok(state) => Ok(state),
                 Err(error) => Err(format!("{:?}", error)),
             }
@@ -463,6 +464,18 @@ mod tests {
 
     fn make_vector(rows: &[Vec<f32>]) -> Vector {
         Vector::from_vec_vec(rows.to_vec()).unwrap()
+    }
+
+    fn sqlite_repository_with_mocks(
+        meta_store: Arc<dyn IndexMetaStore>,
+        chunk_store: Arc<dyn IndexChunkStore>,
+    ) -> SqliteIndexRepository {
+        SqliteIndexRepository {
+            config: Arc::new(Config::default()),
+            meta_store,
+            chunk_store,
+            initialized: OnceLock::new(),
+        }
     }
 
     #[test]
@@ -707,5 +720,113 @@ mod tests {
         repo.add_root(Path::new("/tmp/docs"), true, true).unwrap();
         let found = repo.find_root_for_path(Path::new("/tmp/docs/file.md")).unwrap();
         assert_eq!(found.unwrap().path, PathBuf::from("/tmp/docs"));
+    }
+
+    use super::super::storage::{MockIndexChunkStore, MockIndexMetaStore};
+
+    #[test]
+    fn test_sqlite_repository_loads_chunks_on_init_and_delegates_snapshot() {
+        let chunk = make_chunk("a.md", "alpha");
+        let replacement = Replacement {
+            source_path: "a.md".to_string(),
+            metadata: vec![chunk.clone()],
+            vectors: make_vector(&[vec![1.0, 0.0]]),
+        };
+
+        let mut chunk_store = MockIndexChunkStore::new();
+        chunk_store
+            .expect_load_all()
+            .times(1)
+            .returning(move || Ok(vec![replacement.clone()]));
+
+        let mut meta_store = MockIndexMetaStore::new();
+        meta_store.expect_upsert_root().never();
+
+        let repo = sqlite_repository_with_mocks(Arc::new(meta_store), Arc::new(chunk_store));
+
+        let snap = repo.snapshot().unwrap();
+        assert_eq!(snap.metadata.len(), 1);
+        assert_eq!(snap.vectors.len(), 1);
+        assert_eq!(snap.metadata[0].doc_ctx.source_path.as_ref(), "a.md");
+    }
+
+    #[test]
+    fn test_sqlite_repository_replace_path_persists_and_updates_in_memory() {
+        let chunk = make_chunk("a.md", "alpha");
+        let vector = make_vector(&[vec![1.0, 0.0]]);
+
+        let mut chunk_store = MockIndexChunkStore::new();
+        chunk_store.expect_load_all().times(1).returning(|| Ok(vec![]));
+        chunk_store
+            .expect_replace_path()
+            .withf(|path, metadata, vector| {
+                path == "a.md" && metadata.len() == 1 && vector.len() == 1
+            })
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+
+        let mut meta_store = MockIndexMetaStore::new();
+        meta_store.expect_upsert_root().never();
+
+        let repo = sqlite_repository_with_mocks(Arc::new(meta_store), Arc::new(chunk_store));
+
+        repo.replace_path("a.md", vec![chunk.clone()], vector.clone())
+            .unwrap();
+
+        let snap = repo.snapshot().unwrap();
+        assert_eq!(snap.metadata.len(), 1);
+        assert_eq!(snap.vectors.len(), 1);
+    }
+
+    #[test]
+    fn test_sqlite_repository_add_root_delegates_to_meta_store() {
+        let expected = IndexedRoot {
+            id: 1,
+            path: PathBuf::from("/docs"),
+            watched: true,
+            recursive: false,
+        };
+
+        let mut chunk_store = MockIndexChunkStore::new();
+        chunk_store.expect_load_all().times(1).returning(|| Ok(vec![]));
+
+        let mut meta_store = MockIndexMetaStore::new();
+        meta_store
+            .expect_upsert_root()
+            .withf(|path, watched, recursive| {
+                path == Path::new("/docs") && *watched && !recursive
+            })
+            .times(1)
+            .returning(move |_, _, _| Ok(expected.clone()));
+
+        let repo = sqlite_repository_with_mocks(Arc::new(meta_store), Arc::new(chunk_store));
+
+        let root = repo.add_root(Path::new("/docs"), true, false).unwrap();
+        assert_eq!(root.path, PathBuf::from("/docs"));
+    }
+
+    #[test]
+    fn test_sqlite_repository_list_roots_delegates_to_meta_store() {
+        let root = IndexedRoot {
+            id: 1,
+            path: PathBuf::from("/docs"),
+            watched: true,
+            recursive: true,
+        };
+
+        let mut chunk_store = MockIndexChunkStore::new();
+        chunk_store.expect_load_all().times(1).returning(|| Ok(vec![]));
+
+        let mut meta_store = MockIndexMetaStore::new();
+        meta_store
+            .expect_list_roots()
+            .times(1)
+            .returning(move || Ok(vec![root.clone()]));
+
+        let repo = sqlite_repository_with_mocks(Arc::new(meta_store), Arc::new(chunk_store));
+
+        let roots = repo.list_roots().unwrap();
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].path, PathBuf::from("/docs"));
     }
 }

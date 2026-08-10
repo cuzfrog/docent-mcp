@@ -1,15 +1,18 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use chrono::{SecondsFormat, Utc};
 use rusqlite::params;
+use shaku::{Component, Interface};
 
 use crate::domain::IndexedRoot;
 use crate::support::path_to_string;
 
-use super::connection::SharedConnection;
+use super::connection::StorageConnection;
 
-pub(crate) trait IndexMetaStore: Send + Sync {
+#[cfg_attr(test, mockall::automock)]
+pub(crate) trait IndexMetaStore: Interface + Send + Sync {
     fn list_roots(&self) -> anyhow::Result<Vec<IndexedRoot>>;
     fn upsert_root(&self, path: &Path, watched: bool, recursive: bool) -> anyhow::Result<IndexedRoot>;
     fn set_watched(&self, id: i64, watched: bool) -> anyhow::Result<()>;
@@ -18,18 +21,17 @@ pub(crate) trait IndexMetaStore: Send + Sync {
     fn find_root_by_path(&self, path: &Path) -> anyhow::Result<Option<IndexedRoot>>;
 }
 
-pub(crate) fn create_index_meta_store(connection: SharedConnection) -> impl IndexMetaStore {
-    SqliteIndexMetaStore { connection }
-}
-
-struct SqliteIndexMetaStore {
-    connection: SharedConnection,
+#[derive(Component)]
+#[shaku(interface = IndexMetaStore)]
+pub(super) struct SqliteIndexMetaStore {
+    #[shaku(inject)]
+    pub(super) storage_connection: Arc<dyn StorageConnection>,
 }
 
 impl IndexMetaStore for SqliteIndexMetaStore {
     fn list_roots(&self) -> anyhow::Result<Vec<IndexedRoot>> {
-        let conn = self
-            .connection
+        let connection = self.storage_connection.connection()?;
+        let conn = connection
             .lock()
             .map_err(|e| anyhow!("connection mutex poisoned: {}", e))?;
 
@@ -48,8 +50,8 @@ impl IndexMetaStore for SqliteIndexMetaStore {
         let recursive_int = if recursive { 1 } else { 0 };
         let created_at = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
 
-        let conn = self
-            .connection
+        let connection = self.storage_connection.connection()?;
+        let conn = connection
             .lock()
             .map_err(|e| anyhow!("connection mutex poisoned: {}", e))?;
 
@@ -73,8 +75,8 @@ impl IndexMetaStore for SqliteIndexMetaStore {
     fn set_watched(&self, id: i64, watched: bool) -> anyhow::Result<()> {
         let watched_int = if watched { 1 } else { 0 };
 
-        let conn = self
-            .connection
+        let connection = self.storage_connection.connection()?;
+        let conn = connection
             .lock()
             .map_err(|e| anyhow!("connection mutex poisoned: {}", e))?;
 
@@ -88,8 +90,8 @@ impl IndexMetaStore for SqliteIndexMetaStore {
     }
 
     fn delete_root(&self, id: i64) -> anyhow::Result<()> {
-        let conn = self
-            .connection
+        let connection = self.storage_connection.connection()?;
+        let conn = connection
             .lock()
             .map_err(|e| anyhow!("connection mutex poisoned: {}", e))?;
 
@@ -114,8 +116,8 @@ impl IndexMetaStore for SqliteIndexMetaStore {
     fn find_root_by_path(&self, path: &Path) -> anyhow::Result<Option<IndexedRoot>> {
         let path_str = path_to_string(path);
 
-        let conn = self
-            .connection
+        let connection = self.storage_connection.connection()?;
+        let conn = connection
             .lock()
             .map_err(|e| anyhow!("connection mutex poisoned: {}", e))?;
 
@@ -161,6 +163,7 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     use super::*;
+    use super::super::connection::{create_connection, SharedConnection, TestStorageConnection};
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -170,8 +173,13 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let db_path = tmp.join("docent.db");
-        let conn = super::super::create_connection(&db_path).unwrap();
+        let conn = create_connection(&db_path).unwrap();
         (conn, tmp)
+    }
+
+    fn create_index_meta_store(connection: SharedConnection) -> SqliteIndexMetaStore {
+        let storage_connection: Arc<dyn StorageConnection> = Arc::new(TestStorageConnection::new(connection));
+        SqliteIndexMetaStore { storage_connection }
     }
 
     #[test]

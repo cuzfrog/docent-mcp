@@ -9,6 +9,7 @@ pub(crate) use embedder::Embedder;
 pub(crate) use merged_index::MergedIndex;
 pub(crate) use module::IndexModule;
 pub(crate) use repository::IndexRepository;
+pub(crate) use storage::StorageModule;
 
 #[cfg(test)]
 pub(crate) use repository::InMemoryIndexRepository;

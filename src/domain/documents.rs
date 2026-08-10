@@ -62,6 +62,7 @@ pub struct IndexedBatch {
     pub metadata: Vec<ChunkMetadata>,
 }
 
+#[derive(Clone)]
 pub(crate) struct Replacement {
     pub source_path: String,
     pub metadata: Vec<ChunkMetadata>,

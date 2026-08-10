@@ -3,7 +3,7 @@ use std::sync::Arc;
 use shaku::{module, HasComponent};
 
 use crate::config::{Config, ConfigModule};
-use crate::index::{Embedder, IndexModule, IndexRepository};
+use crate::index::{Embedder, IndexModule, IndexRepository, StorageModule};
 use crate::models::ModelsModule;
 use crate::support::{Console, SupportModule};
 
@@ -48,7 +48,10 @@ pub fn create_application(
             .build(),
     );
     let models_module = Arc::new(ModelsModule::builder(config_module.clone()).build());
-    let index_module = Arc::new(IndexModule::builder(config_module.clone(), models_module).build());
+    let storage_module = Arc::new(StorageModule::builder().build());
+    let index_module = Arc::new(
+        IndexModule::builder(config_module.clone(), models_module, storage_module).build(),
+    );
     let indexing_module = Arc::new(
         IndexingModule::builder(config_module.clone(), index_module.clone(), support_module.clone())
             .build(),
