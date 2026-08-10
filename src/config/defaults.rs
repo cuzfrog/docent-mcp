@@ -7,9 +7,7 @@ pub(crate) fn default_doc_dirs() -> Vec<String> {
 }
 
 pub(crate) fn default_cache_dir() -> String {
-    let home = dirs_next::home_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
-    home.join(".cache").join("docent").to_string_lossy().to_string()
+    crate::support::docent_cache_dir().to_string_lossy().to_string()
 }
 
 pub(crate) const fn default_chunk_size() -> usize {

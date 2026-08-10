@@ -6,7 +6,7 @@ mod ui;
 
 pub(crate) use fs::{path_to_string, sha256_hex};
 pub(crate) use glob::matches_any_pattern;
-pub(crate) use paths::{docent_db_path, settings_path};
+pub(crate) use paths::{docent_cache_dir, docent_db_path, settings_path};
 pub use ui::Console;
 pub use module::SupportModule;
 
