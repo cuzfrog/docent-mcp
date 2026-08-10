@@ -28,15 +28,22 @@ jobs:
   #     - run: npm test
   #       working-directory: src/ui
 
-  # TODO: Add e2e tests (pytest -v in e2e-tests/)
-  # e2e-tests:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions-rust-lang/setup-rust-toolchain@v1
-  #     - uses: actions/setup-python@v5
-  #     - run: pip install -r e2e-tests/requirements.txt
-  #     - run: cargo build
-  #     - run: cargo run -- serve &
-  #     - run: pytest -v
-  #       working-directory: e2e-tests
+  e2e-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.docent/cache
+          key: ${{ runner.os }}-docent-e2e-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-docent-e2e-
+      - run: pip install -r e2e-tests/requirements.txt
+      - run: cargo build
+      - run: pytest -v e2e-tests/
