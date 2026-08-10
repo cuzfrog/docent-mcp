@@ -5,13 +5,15 @@ use anyhow::Context;
 use anyhow::anyhow;
 use bytemuck::cast_slice;
 use rusqlite::params;
+use shaku::{Component, Interface};
 
 use crate::domain::{ChunkMetadata, DocumentContext, IndexedRoot, Replacement, Vector};
 
-use super::connection::SharedConnection;
+use super::connection::StorageConnection;
 use super::index_meta_store::find_root_for_path_in_tx;
 
-pub(crate) trait IndexChunkStore: Send + Sync {
+#[cfg_attr(test, mockall::automock)]
+pub(crate) trait IndexChunkStore: Interface + Send + Sync {
     fn replace_path(
         &self,
         source_path: &str,
@@ -21,12 +23,11 @@ pub(crate) trait IndexChunkStore: Send + Sync {
     fn load_all(&self) -> anyhow::Result<Vec<Replacement>>;
 }
 
-pub(crate) fn create_index_chunk_store(connection: SharedConnection) -> impl IndexChunkStore {
-    SqliteIndexChunkStore { connection }
-}
-
-struct SqliteIndexChunkStore {
-    connection: SharedConnection,
+#[derive(Component)]
+#[shaku(interface = IndexChunkStore)]
+pub(super) struct SqliteIndexChunkStore {
+    #[shaku(inject)]
+    pub(super) storage_connection: Arc<dyn StorageConnection>,
 }
 
 impl IndexChunkStore for SqliteIndexChunkStore {
@@ -43,8 +44,8 @@ impl IndexChunkStore for SqliteIndexChunkStore {
             vector.len()
         );
 
-        let mut conn = self
-            .connection
+        let connection = self.storage_connection.connection()?;
+        let mut conn = connection
             .lock()
             .map_err(|e| anyhow!("connection mutex poisoned: {}", e))?;
 
@@ -73,8 +74,8 @@ impl IndexChunkStore for SqliteIndexChunkStore {
     }
 
     fn load_all(&self) -> anyhow::Result<Vec<Replacement>> {
-        let conn = self
-            .connection
+        let connection = self.storage_connection.connection()?;
+        let conn = connection
             .lock()
             .map_err(|e| anyhow!("connection mutex poisoned: {}", e))?;
 
@@ -230,7 +231,8 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     use super::*;
-    use super::super::IndexMetaStore;
+    use super::super::connection::{create_connection, SharedConnection, TestStorageConnection};
+    use super::super::index_meta_store::{IndexMetaStore, SqliteIndexMetaStore};
     use crate::domain::DocumentContext;
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -241,9 +243,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let db_path = tmp.join("docent.db");
-        let conn = super::super::create_connection(&db_path).unwrap();
+        let conn = create_connection(&db_path).unwrap();
 
-        let root_store = super::super::create_index_meta_store(Arc::clone(&conn));
+        let storage_connection: Arc<dyn StorageConnection> = Arc::new(TestStorageConnection::new(Arc::clone(&conn)));
+        let root_store = SqliteIndexMetaStore { storage_connection };
         let root = root_store
             .upsert_root(Path::new("/tmp/docs"), true, true)
             .unwrap();
@@ -269,6 +272,11 @@ mod tests {
 
     fn make_vector(rows: &[Vec<f32>]) -> Vector {
         Vector::from_vec_vec(rows.to_vec()).unwrap()
+    }
+
+    fn create_index_chunk_store(connection: SharedConnection) -> SqliteIndexChunkStore {
+        let storage_connection: Arc<dyn StorageConnection> = Arc::new(TestStorageConnection::new(connection));
+        SqliteIndexChunkStore { storage_connection }
     }
 
     #[test]

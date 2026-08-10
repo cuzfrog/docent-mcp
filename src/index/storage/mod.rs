@@ -1,7 +1,14 @@
 mod connection;
 mod index_chunk_store;
 mod index_meta_store;
+mod module;
 
-pub(super) use connection::create_connection;
-pub(super) use index_chunk_store::{create_index_chunk_store, IndexChunkStore};
-pub(super) use index_meta_store::{create_index_meta_store, IndexMetaStore};
+pub use module::StorageModule;
+pub(super) use index_chunk_store::IndexChunkStore;
+pub(super) use index_meta_store::IndexMetaStore;
+
+#[cfg(test)]
+pub(super) use index_chunk_store::MockIndexChunkStore;
+
+#[cfg(test)]
+pub(super) use index_meta_store::MockIndexMetaStore;

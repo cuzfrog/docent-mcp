@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use notify_debouncer_full::notify::{Error as NotifyError, RecursiveMode};
 use notify_debouncer_full::{new_debouncer, DebouncedEvent};
+use shaku::{Component, Interface};
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -14,7 +15,7 @@ use tokio_util::sync::CancellationToken;
 use std::path::Path;
 
 use crate::app::indexing::Indexer;
-use crate::config::WatchConfig;
+use crate::config::Config;
 use crate::index::IndexRepository;
 use crate::support::Console;
 
@@ -22,48 +23,32 @@ use super::event_queue::{run_debounce_loop, WatchEvent};
 use super::handler::{classify_notify_kind, detect_network_mount, index_key_for};
 
 #[async_trait]
-pub trait Watcher: Send + Sync {
+pub trait Watcher: Interface + Send + Sync {
     async fn run(&self, shutdown: CancellationToken) -> anyhow::Result<()>;
 }
 
-pub(crate) fn create_watcher(
-    config: WatchConfig,
+#[derive(Component)]
+#[shaku(interface = Watcher)]
+pub(super) struct FileWatcher {
+    #[shaku(inject)]
+    config: Arc<Config>,
+    #[shaku(inject)]
     indexer: Arc<dyn Indexer>,
+    #[shaku(inject)]
     index_repository: Arc<dyn IndexRepository>,
-    console: Arc<dyn Console>,
-) -> Box<dyn Watcher> {
-    if config.enabled {
-        Box::new(FileWatcher {
-            config,
-            indexer,
-            index_repository,
-            console,
-        })
-    } else {
-        Box::new(NoopWatcher)
-    }
-}
-
-struct NoopWatcher;
-
-#[async_trait]
-impl Watcher for NoopWatcher {
-    async fn run(&self, shutdown: CancellationToken) -> anyhow::Result<()> {
-        shutdown.cancelled().await;
-        Ok(())
-    }
-}
-
-struct FileWatcher {
-    config: WatchConfig,
-    indexer: Arc<dyn Indexer>,
-    index_repository: Arc<dyn IndexRepository>,
+    #[shaku(inject)]
     console: Arc<dyn Console>,
 }
 
 #[async_trait]
 impl Watcher for FileWatcher {
     async fn run(&self, shutdown: CancellationToken) -> anyhow::Result<()> {
+        let watch_config = &self.config.index.watch;
+        if !watch_config.enabled {
+            shutdown.cancelled().await;
+            return Ok(());
+        }
+
         let watched_roots = self.index_repository.list_roots()?;
         let watched_roots: Vec<_> = watched_roots
             .into_iter()
@@ -81,7 +66,7 @@ impl Watcher for FileWatcher {
 
         let inflight: Arc<DashMap<String, (CancellationToken, JoinHandle<()>)>> =
             Arc::new(DashMap::new());
-        let semaphore = Arc::new(Semaphore::new(self.config.max_batch_size.max(1)));
+        let semaphore = Arc::new(Semaphore::new(watch_config.max_batch_size.max(1)));
 
         let (event_tx, event_rx) = tokio::sync::mpsc::channel::<WatchEvent>(256);
 
@@ -92,7 +77,7 @@ impl Watcher for FileWatcher {
             .into_iter()
             .map(|r| (r.path, r.recursive))
             .collect();
-        let debouncer_window = Duration::from_millis(self.config.debounce_ms);
+        let debouncer_window = Duration::from_millis(watch_config.debounce_ms);
         let debouncer_handle = tokio::task::spawn_blocking(move || {
             run_debouncer(
                 watched_roots_for_debouncer,
@@ -276,9 +261,8 @@ fn run_debouncer(
 mod tests {
     use super::*;
     use super::super::event_queue::WatchEventKind;
-    use crate::app::indexing::create_indexer;
+    use crate::app::indexing::MockIndexer;
     use crate::domain::Vector;
-    use crate::index::mock_embedder;
     use crate::index::mock_index_repository;
     use crate::index::InMemoryIndexRepository;
     use crate::support::create_console;
@@ -289,28 +273,36 @@ mod tests {
         Arc::new(repo)
     }
 
+    fn sample_watcher(
+        watch: crate::config::WatchConfig,
+        indexer: Arc<dyn Indexer>,
+        index_repository: Arc<dyn IndexRepository>,
+        console: Arc<dyn Console>,
+    ) -> FileWatcher {
+        FileWatcher {
+            config: Arc::new(Config {
+                index: crate::config::IndexConfig {
+                    watch,
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            indexer,
+            index_repository,
+            console,
+        }
+    }
+
     #[tokio::test]
     async fn test_watcher_runs_and_returns_on_shutdown() {
         let tmp = std::env::temp_dir().join("docent_watcher_shutdown");
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
 
-        let cfg = crate::config::Config {
-            index: crate::config::IndexConfig {
-                embedding_model: "BGESmallENV15Q".to_string(),
-                ..crate::config::IndexConfig::default()
-            },
-            ..crate::config::Config::default()
-        };
         let repo = sample_index_repository(&tmp, true);
-        let indexer: Arc<dyn Indexer> = create_indexer(
-            cfg,
-            Arc::new(std::sync::Mutex::new(mock_embedder())),
-            repo.clone(),
-            Arc::new(create_console()),
-        );
+        let indexer: Arc<dyn Indexer> = Arc::new(MockIndexer::new());
         let console: Arc<dyn Console> = Arc::new(create_console());
-        let watcher = create_watcher(
+        let watcher = sample_watcher(
             crate::config::WatchConfig {
                 enabled: true,
                 debounce_ms: 50,
@@ -341,12 +333,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         let repo = sample_index_repository(&tmp, true);
-        let indexer: Arc<dyn Indexer> = create_indexer(
-            crate::config::Config::default(),
-            Arc::new(std::sync::Mutex::new(mock_embedder())),
-            repo.clone(),
-            console.clone(),
-        );
+        let indexer: Arc<dyn Indexer> = Arc::new(MockIndexer::new());
         (indexer, repo, console)
     }
 
@@ -415,9 +402,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_watcher_disabled_returns_noop_that_awaits_shutdown() {
+    async fn test_create_watcher_disabled_awaits_shutdown_without_watching() {
         let (indexer, repo, console) = deps();
-        let watcher = create_watcher(
+        let watcher = sample_watcher(
             crate::config::WatchConfig {
                 enabled: false,
                 debounce_ms: 1000,
@@ -434,7 +421,7 @@ mod tests {
         shutdown.cancel();
         tokio::time::timeout(Duration::from_secs(1), handle)
             .await
-            .expect("noop watcher did not exit on shutdown")
+            .expect("disabled watcher did not exit on shutdown")
             .expect("task panicked")
             .expect("watcher.run returned Err");
     }

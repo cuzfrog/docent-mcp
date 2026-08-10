@@ -1,9 +1,12 @@
 use std::fs;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use anyhow::Context;
 use rusqlite::Connection;
+use shaku::{Component, Interface};
+
+use crate::support::docent_db_path;
 
 pub(crate) type SharedConnection = Arc<Mutex<Connection>>;
 
@@ -71,6 +74,53 @@ pub(crate) fn create_connection(db_path: &Path) -> anyhow::Result<SharedConnecti
     }
 
     Ok(Arc::new(Mutex::new(conn)))
+}
+
+#[cfg_attr(test, mockall::automock)]
+pub(crate) trait StorageConnection: Interface + Send + Sync {
+    fn connection(&self) -> anyhow::Result<SharedConnection>;
+}
+
+#[derive(Component)]
+#[shaku(interface = StorageConnection)]
+pub(super) struct SqliteStorageConnection {
+    #[shaku(force_default)]
+    initialized: OnceLock<Result<SharedConnection, String>>,
+}
+
+impl StorageConnection for SqliteStorageConnection {
+    fn connection(&self) -> anyhow::Result<SharedConnection> {
+        let result = self.initialized.get_or_init(|| {
+            let db_path = docent_db_path();
+            match create_connection(&db_path) {
+                Ok(connection) => Ok(connection),
+                Err(error) => Err(format!("{:?}", error)),
+            }
+        });
+        match result {
+            Ok(connection) => Ok(Arc::clone(connection)),
+            Err(error) => anyhow::bail!("storage connection initialization failed: {}", error),
+        }
+    }
+}
+
+#[cfg(test)]
+pub(super) struct TestStorageConnection {
+    connection: SharedConnection,
+}
+
+#[cfg(test)]
+impl TestStorageConnection {
+    pub(super) fn new(connection: SharedConnection) -> Self {
+        Self { connection }
+    }
+}
+
+#[cfg(test)]
+impl StorageConnection for TestStorageConnection {
+    fn connection(&self) -> anyhow::Result<SharedConnection> {
+        Ok(Arc::clone(&self.connection))
+    }
 }
 
 #[cfg(test)]

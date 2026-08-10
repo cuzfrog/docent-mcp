@@ -1,5 +1,7 @@
 mod event_queue;
 mod handler;
+mod module;
 mod service;
 
-pub(super) use service::{create_watcher, Watcher};
+pub(crate) use module::WatcherModule;
+pub(crate) use service::Watcher;

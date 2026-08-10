@@ -25,6 +25,7 @@ notify-debouncer-full = "=0.7.0"
 rmcp = { version = "=1.8.0", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
 rusqlite = { version = "=0.40.1", features = ["bundled"] }
 schemars = { version = "=1.2.2", default-features = false, features = ["derive", "std"] }
+shaku = { version = "=0.6.3", default-features = false, features = ["derive", "thread_safe"] }
 serde = { version = "=1.0.229", default-features = false, features = ["derive", "std"] }
 serde_json = { version = "=1.0.151", default-features = false, features = ["std"] }
 sha2 = { version = "=0.10.8", default-features = false, features = ["std"] }

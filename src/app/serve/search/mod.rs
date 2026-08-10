@@ -4,5 +4,8 @@ mod fusion;
 mod backend;
 mod path_filter;
 
+mod module;
 mod search_service;
-pub use search_service::{create_search_service, SearchService};
+
+pub use module::SearchModule;
+pub use search_service::SearchService;

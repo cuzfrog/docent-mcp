@@ -8,7 +8,7 @@ use crate::domain::ChunkMetadata;
 use crate::index::Embedder;
 
 #[cfg(test)]
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub(super) struct RawChunk {
     pub(super) doc_index: usize,
@@ -134,16 +134,13 @@ fn simple_chunk(body: &str, chunk_size: usize, chunk_overlap: usize) -> Vec<Simp
 #[cfg(test)]
 fn embed_chunks(
     chunks: &[RawChunk],
-    embedder: &Arc<Mutex<dyn Embedder>>,
+    embedder: &Arc<dyn Embedder>,
 ) -> anyhow::Result<Vec<Vec<f32>>> {
     const BATCH: usize = 64;
     let mut all = Vec::with_capacity(chunks.len());
     for batch in chunks.chunks(BATCH) {
         let batch_texts: Vec<String> = batch.iter().map(|c| c.text.clone()).collect();
-        let mut emb = embedder
-            .lock()
-            .map_err(|e| anyhow::anyhow!("embedder mutex poisoned: {}", e))?;
-        let chunk_vectors = emb.embed(&batch_texts)?;
+        let chunk_vectors = embedder.embed(&batch_texts)?;
         all.extend(chunk_vectors);
     }
     Ok(all)
@@ -244,8 +241,7 @@ mod tests {
     fn embed_chunks_returns_one_vector_per_chunk() {
         let docs = vec![sample_doc("a.md", "A", "alpha bravo charlie delta")];
         let chunks = chunk_documents(&docs, &sample_config());
-        let mock = mock_embedder();
-        let embedder: Arc<Mutex<dyn Embedder>> = Arc::new(Mutex::new(mock));
+        let embedder: Arc<dyn Embedder> = Arc::new(mock_embedder());
         let vectors = embed_chunks(&chunks, &embedder).unwrap();
         assert_eq!(vectors.len(), chunks.len());
         assert!(vectors.iter().all(|v| v.len() == 4));

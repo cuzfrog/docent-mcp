@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::index::Embedder;
 use crate::index::MergedIndex;
@@ -9,12 +9,12 @@ pub trait ScoreBackend: Send + Sync {
 }
 
 struct VectorScoreBackend {
-    embedder: Arc<Mutex<dyn Embedder>>,
+    embedder: Arc<dyn Embedder>,
     vectors: Arc<Vector>,
 }
 
 pub(crate) fn create_vector_score_backend(
-    embedder: Arc<Mutex<dyn Embedder>>,
+    embedder: Arc<dyn Embedder>,
     vectors: Arc<Vector>,
 ) -> Arc<dyn ScoreBackend> {
     Arc::new(VectorScoreBackend { embedder, vectors })
@@ -22,12 +22,8 @@ pub(crate) fn create_vector_score_backend(
 
 impl ScoreBackend for VectorScoreBackend {
     fn score(&self, query: &str) -> anyhow::Result<Vec<f32>> {
-        let mut emb = self
+        let query_vector = self
             .embedder
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Embedder lock poisoned: {}", e))?;
-
-        let query_vector = emb
             .embed(&[query.to_string()])?
             .into_iter()
             .next()
@@ -98,7 +94,7 @@ impl ScoreBackend for ZeroScoreBackend {
 
 pub(super) fn build_backends(
     merged_index: &MergedIndex,
-    embedder: Arc<Mutex<dyn Embedder>>,
+    embedder: Arc<dyn Embedder>,
     k1: f32,
     b: f32,
 ) -> (Arc<dyn ScoreBackend>, Arc<dyn ScoreBackend>) {
@@ -139,8 +135,7 @@ mod tests {
 
     #[test]
     fn test_vector_backend_scores_descending() {
-        let embedder: Arc<Mutex<dyn Embedder>> =
-            Arc::new(Mutex::new(mock_embedder()));
+        let embedder: Arc<dyn Embedder> = Arc::new(mock_embedder());
         let chunk_vectors = Arc::new(
             Vector::from_vec_vec(vec![
                 vec![9.0, 2.0, 0.0, 1.0],
@@ -159,8 +154,7 @@ mod tests {
 
     #[test]
     fn test_vector_backend_empty_vectors() {
-        let embedder: Arc<Mutex<dyn Embedder>> =
-            Arc::new(Mutex::new(mock_embedder()));
+        let embedder: Arc<dyn Embedder> = Arc::new(mock_embedder());
         let chunk_vectors = Arc::new(Vector::from_vec_vec(vec![]).unwrap());
         let score_backend = create_vector_score_backend(embedder, chunk_vectors);
         let scores = score_backend.score("anything").unwrap();
