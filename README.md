@@ -69,7 +69,39 @@ Configuration is stored in `~/.docent/settings.json` and created automatically o
 
 ## Install
 
-TBC
+Pre-built Linux x86_64 binaries are available on the [releases page](https://github.com/cuzfrog/docent-mcp/releases).
+
+### One-line install
+
+```sh
+curl -sSL https://github.com/cuzfrog/docent-mcp/releases/latest/download/install.sh | bash
+```
+
+This installs `docent` to `~/.local/bin` and, if needed, updates your shell profile to include it in `PATH`.
+
+### Install a specific version
+
+```sh
+curl -sSL https://github.com/cuzfrog/docent-mcp/releases/download/v0.9.0/install.sh | DOCENT_VERSION=v0.9.0 bash
+```
+
+### Manual install
+
+Download the asset for your platform from the latest release, make it executable, and place it in a directory on your `PATH`:
+
+```sh
+curl -sSL -o docent https://github.com/cuzfrog/docent-mcp/releases/latest/download/docent-x86_64-unknown-linux-gnu
+chmod +x docent
+mv docent ~/.local/bin/
+```
+
+### Build from source
+
+```sh
+cargo build --release
+```
+
+The binary is then available at `target/release/docent`.
 
 ## Documentation
 

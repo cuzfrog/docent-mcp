@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-release:
+    name: Build and release binary
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - run: cargo build --release
+      - name: Stage release assets
+        run: |
+          mkdir -p dist
+          cp target/release/docent "dist/docent-x86_64-unknown-linux-gnu"
+          cp install.sh "dist/install.sh"
+      - name: Create release
+        uses: softprops/action-gh-release@v3.0.2
+        with:
+          files: |
+            dist/docent-x86_64-unknown-linux-gnu
+            dist/install.sh
+          make_latest: true
