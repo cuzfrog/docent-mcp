@@ -5,4 +5,7 @@ mod indexing;
 mod module;
 
 pub use application::Application;
-pub use module::create_application;
+pub(crate) use module::build_app;
+
+#[cfg(test)]
+pub(crate) use module::build_test_app;

@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand};
 
 use shaku::HasComponent;
 
-use docent_mcp::app::create_application;
+use docent_mcp::module::create_application;
 use docent_mcp::config::Config;
 use docent_mcp::support::{Console, SupportModule};
 
