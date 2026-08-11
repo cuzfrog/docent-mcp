@@ -10,7 +10,7 @@ use docent_mcp::config::Config;
 use docent_mcp::support::{Console, SupportModule};
 
 #[derive(Parser)]
-#[command(name = "docent", about = "MCP server for Document & Code indexing and querying.")]
+#[command(name = "docent", about = "MCP server for Document & Code indexing and querying.", version)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -103,6 +103,7 @@ async fn main() -> anyhow::Result<()> {
 mod tests {
     use super::*;
     use clap::Parser;
+    use clap::error::ErrorKind;
 
     #[test]
     fn test_serve_command() {
@@ -194,5 +195,15 @@ mod tests {
             }
             _ => panic!("expected Unwatch command"),
         }
+    }
+
+    #[test]
+    fn test_version_flag_triggers_display_version() {
+        let result = Cli::try_parse_from(["docent", "--version"]);
+        let err = match result {
+            Err(err) => err,
+            Ok(_) => panic!("expected --version to trigger version display"),
+        };
+        assert!(matches!(err.kind(), ErrorKind::DisplayVersion));
     }
 }
