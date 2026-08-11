@@ -331,6 +331,19 @@ header .subtitle {
   font-style: italic;
 }
 
+.result-card .result-stale {
+  display: none;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  color: #92400e;
+  background: #fef3c7;
+}
+
 .result-card .result-footer {
   display: flex;
   justify-content: flex-end;

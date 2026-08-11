@@ -153,6 +153,9 @@ impl Supervisor {
                     .await
                 {
                     Ok(repls) => {
+                        if child_for_task.is_cancelled() {
+                            return;
+                        }
                         if let Some(replacement) = repls.into_iter().next() {
                             let source_path = replacement.source_path.clone();
                             let source_path_for_error = source_path.clone();

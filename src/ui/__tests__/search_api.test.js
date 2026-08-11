@@ -54,6 +54,7 @@ describe('parseSearchResponse', () => {
             section_heading: 'Introduction',
             modified_at: '2024-01-15T10:00:00Z',
             source_revision: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
+            stale: false,
           }]),
         }],
       },
@@ -73,6 +74,7 @@ describe('parseSearchResponse', () => {
     assert.equal(res.sectionHeading, 'Introduction');
     assert.equal(res.modifiedAt, '2024-01-15T10:00:00Z');
     assert.equal(res.sourceRevision, 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2');
+    assert.equal(res.stale, false);
   });
 
   it('normalizes results with null fields', () => {
@@ -117,6 +119,33 @@ describe('parseSearchResponse', () => {
     const r = parseSearchResponse(raw);
     assert.equal(r.results.length, 1);
     assert.equal(r.results[0].title, 'Valid');
+  });
+
+  it('normalizes stale results', () => {
+    const raw = {
+      result: {
+        content: [{
+          type: 'text',
+          text: JSON.stringify([{
+            title: 'Outdated DDR',
+            source_path: '/path/doc.md',
+            matched_content: 'content',
+            total_score: 0.5,
+            semantic_score: 0.7,
+            bm25_score: 0.3,
+            line_start: 1,
+            line_end: 1,
+            section_heading: null,
+            modified_at: null,
+            source_revision: '',
+            stale: true,
+          }]),
+        }],
+      },
+    };
+    const r = parseSearchResponse(raw);
+    assert.equal(r.results.length, 1);
+    assert.equal(r.results[0].stale, true);
   });
 
   it('handles unexpected errors gracefully', () => {

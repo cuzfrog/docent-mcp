@@ -1,118 +1,26 @@
-"""E2E tests for the docent MCP server.
-
-Requires the server to be running already (does NOT start/stop it).
-Start with::
-
-    docent serve --config <config>
-
-Usage::
-
-    DOCENT_ADDR=127.0.0.1:7878 pytest e2e-tests/
-"""
+"""E2E tests for the docent MCP server."""
 
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 
 import pytest
 import requests
 
-SERVER_ADDR = os.environ.get("DOCENT_ADDR", "127.0.0.1:7878")
-BASE_URL = f"http://{SERVER_ADDR}"
+from conftest import ServerContext
+from mcp_client import initialize, search, send_mcp_request
 
 
-def send_mcp_request(
-    client: requests.Session,
-    method: str,
-    params: dict[str, Any] | None = None,
-    session_id: str | None = None,
-) -> dict[str, Any]:
-    body: dict[str, Any] = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": method,
-    }
-    if params is not None:
-        body["params"] = params
-
-    headers: dict[str, str] = {
-        "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream",
-    }
-    if session_id is not None:
-        headers["mcp-session-id"] = session_id
-
-    resp = client.post(
-        BASE_URL,
-        json=body,
-        headers=headers,
-        timeout=10,
-    )
-    resp.raise_for_status()
-    text = resp.text
-
-    if "data:" in text:
-        data_lines = [
-            line.removeprefix("data:").strip()
-            for line in text.splitlines()
-            if line.startswith("data:")
-        ]
-        if not data_lines:
-            raise RuntimeError(f"No data: lines in SSE response: {text}")
-        return json.loads(data_lines[-1])
-
-    return resp.json()
-
-
-def initialize(client: requests.Session) -> tuple[dict[str, Any], str]:
-    resp = client.post(
-        BASE_URL,
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2025-11-25",
-                "capabilities": {},
-                "clientInfo": {"name": "test-client", "version": "0.1.0"},
-            },
-        },
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-        },
-        timeout=10,
-    )
-    resp.raise_for_status()
-
-    session_id = resp.headers.get("mcp-session-id")
-    assert session_id is not None, "initialize response missing mcp-session-id"
-
-    text = resp.text
-    if "data:" in text:
-        data_lines = [
-            line.removeprefix("data:").strip()
-            for line in text.splitlines()
-            if line.startswith("data:")
-        ]
-        body = json.loads(data_lines[-1])
-    else:
-        body = resp.json()
-
-    return body, session_id
-
-
-# ---------------------------------------------------------------------------
-# MCP initialize handshake
-# ---------------------------------------------------------------------------
+def _content_text(response: dict[str, Any]) -> list[dict[str, Any]]:
+    text = response["result"]["content"][0]["text"]
+    return json.loads(text)
 
 
 class TestInitialize:
-    def test_handshake(self):
+    def test_handshake(self, docent_server: ServerContext) -> None:
         client = requests.Session()
-        response, _session_id = initialize(client)
+        response, _session_id = initialize(docent_server.base_url, client)
 
         result = response["result"]
         assert result["protocolVersion"] == "2025-11-25"
@@ -124,17 +32,17 @@ class TestInitialize:
         assert "tools" in capabilities
 
 
-# ---------------------------------------------------------------------------
-# tools/list returns search_doc
-# ---------------------------------------------------------------------------
-
-
 class TestToolsList:
-    def test_returns_search_doc_tool(self):
+    def test_returns_search_doc_tool(self, docent_server: ServerContext) -> None:
         client = requests.Session()
-        _, session_id = initialize(client)
+        _response, session_id = initialize(docent_server.base_url, client)
 
-        response = send_mcp_request(client, "tools/list", session_id=session_id)
+        response = send_mcp_request(
+            docent_server.base_url,
+            client,
+            "tools/list",
+            session_id=session_id,
+        )
 
         result = response["result"]
         tools = result["tools"]
@@ -149,23 +57,26 @@ class TestToolsList:
         assert "query" in schema["properties"]
         assert "limit" in schema["properties"]
         assert "file_hint" in schema["properties"]
-
-
-# ---------------------------------------------------------------------------
-# tools/call — search_doc
-# ---------------------------------------------------------------------------
+        assert "search_path" in schema["properties"]
 
 
 class TestSearchDoc:
-    def test_valid_query_structure(self):
-        """Verify response structure only (not content)."""
+    def test_valid_query_structure(self, docent_server: ServerContext) -> None:
         client = requests.Session()
-        _, session_id = initialize(client)
+        _response, session_id = initialize(docent_server.base_url, client)
 
         response = send_mcp_request(
+            docent_server.base_url,
             client,
             "tools/call",
-            {"name": "search_doc", "arguments": {"query": "authentication design", "limit": 3}},
+            {
+                "name": "search_doc",
+                "arguments": {
+                    "query": "authentication",
+                    "limit": 3,
+                    "search_path": "/**",
+                },
+            },
             session_id=session_id,
         )
 
@@ -180,76 +91,103 @@ class TestSearchDoc:
         text_str = first["text"]
         results = json.loads(text_str)
         assert isinstance(results, list)
+        assert len(results) > 0
 
-        for r in results:
-            assert "title" in r
-            assert "source_path" in r
-            assert "matched_content" in r
-            assert "total_score" in r
-            assert "semantic_score" in r
-            assert "bm25_score" in r
-            assert "score" not in r  # verify old field is gone
+        for result in results:
+            assert "title" in result
+            assert "source_path" in result
+            assert "matched_content" in result
+            assert "total_score" in result
+            assert "semantic_score" in result
+            assert "bm25_score" in result
+            assert "score" not in result
 
-    def test_invalid_limit_returns_error(self):
+    def test_invalid_limit_returns_error(self, docent_server: ServerContext) -> None:
         client = requests.Session()
-        _, session_id = initialize(client)
+        _response, session_id = initialize(docent_server.base_url, client)
 
         response = send_mcp_request(
+            docent_server.base_url,
             client,
             "tools/call",
-            {"name": "search_doc", "arguments": {"query": "test", "limit": 0}},
+            {
+                "name": "search_doc",
+                "arguments": {
+                    "query": "test",
+                    "limit": 0,
+                    "search_path": "/**",
+                },
+            },
             session_id=session_id,
         )
 
         assert "error" in response, f"Expected error key, got: {response}"
         assert response["error"]["code"] == -32602
 
-    def test_empty_query_returns_error(self):
+    def test_empty_query_returns_error(self, docent_server: ServerContext) -> None:
         client = requests.Session()
-        _, session_id = initialize(client)
+        _response, session_id = initialize(docent_server.base_url, client)
 
         response = send_mcp_request(
+            docent_server.base_url,
             client,
             "tools/call",
-            {"name": "search_doc", "arguments": {"query": "", "limit": 3}},
+            {
+                "name": "search_doc",
+                "arguments": {
+                    "query": "",
+                    "limit": 3,
+                    "search_path": "/**",
+                },
+            },
             session_id=session_id,
         )
 
         assert "error" in response, f"Expected error key, got: {response}"
         assert "code" in response["error"]
 
-    def test_file_hint_changes_ranking(self):
-        """Verify file_hint boosts the hinted document."""
+    def test_file_hint_changes_ranking(self, docent_server: ServerContext) -> None:
         client = requests.Session()
-        _, session_id = initialize(client)
+        _response, session_id = initialize(docent_server.base_url, client)
 
-        # Query without hint
         resp_no_hint = send_mcp_request(
+            docent_server.base_url,
             client,
             "tools/call",
-            {"name": "search_doc", "arguments": {"query": "authentication", "limit": 5}},
-            session_id=session_id,
-        )
-        results_no_hint = json.loads(resp_no_hint["result"]["content"][0]["text"])
-
-        # Query with hint targeting the first result's source_path
-        if results_no_hint:
-            target_path = results_no_hint[0]["source_path"]
-            resp_hint = send_mcp_request(
-                client,
-                "tools/call",
-                {"name": "search_doc", "arguments": {
+            {
+                "name": "search_doc",
+                "arguments": {
                     "query": "authentication",
                     "limit": 5,
-                    "file_hint": target_path,
-                }},
-                session_id=session_id,
-            )
-            results_hint = json.loads(resp_hint["result"]["content"][0]["text"])
+                    "search_path": "/**",
+                },
+            },
+            session_id=session_id,
+        )
+        results_no_hint = _content_text(resp_no_hint)
 
-            # The hinted file should be at least as high as without hint
-            hinted_scores = [r["total_score"] for r in results_hint if r["source_path"] == target_path]
-            no_hint_scores = [r["total_score"] for r in results_no_hint if r["source_path"] == target_path]
-            if hinted_scores and no_hint_scores:
-                assert hinted_scores[0] >= no_hint_scores[0], \
-                    f"file_hint should not decrease score for hinted file"
+        assert results_no_hint, "expected at least one search result"
+        target_path = results_no_hint[0]["source_path"]
+
+        resp_hint = send_mcp_request(
+            docent_server.base_url,
+            client,
+            "tools/call",
+            {
+                "name": "search_doc",
+                "arguments": {
+                    "query": "authentication",
+                    "limit": 5,
+                    "search_path": "/**",
+                    "file_hint": target_path,
+                },
+            },
+            session_id=session_id,
+        )
+        results_hint = _content_text(resp_hint)
+
+        hinted_scores = [r["total_score"] for r in results_hint if r["source_path"] == target_path]
+        no_hint_scores = [r["total_score"] for r in results_no_hint if r["source_path"] == target_path]
+        if hinted_scores and no_hint_scores:
+            assert hinted_scores[0] >= no_hint_scores[0], \
+                "file_hint should not decrease score for hinted file"

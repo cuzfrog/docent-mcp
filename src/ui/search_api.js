@@ -10,16 +10,14 @@
  * @property {number} bm25_score
  * @property {number} lineStart
  * @property {number} lineEnd
+ * @property {boolean} stale
  * @property {string|null} sectionHeading
  * @property {string|null} modifiedAt
  * @property {string} sourceRevision - SHA-256 of file content
  */
 
 export const PROTOCOL = {
-  VERSION: '2025-11-25',
   TOOL_NAME: 'search_doc',
-  SESSION_HEADER: 'Mcp-Session-Id',
-  PROTOCOL_VERSION_HEADER: 'MCP-Protocol-Version',
 };
 
 /**
@@ -82,6 +80,7 @@ export function parseSearchResponse(raw) {
       sectionHeading: item.section_heading ?? null,
       modifiedAt: item.modified_at ?? null,
       sourceRevision: item.source_revision || '',
+      stale: item.stale ?? false,
     });
   }
 

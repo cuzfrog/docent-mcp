@@ -34,13 +34,17 @@ cd src/ui && npm test
 E2E test:
 
 ```sh
-cargo run -- serve # will pick up ./docent.toml
-pytest -v          # e2e tests in the tests/ directory
+cargo build
+pytest -v e2e-tests/
 ```
+
+The `docent_server` session fixture starts the server once and tears it down
+after the test run. It uses a temporary `$HOME` with a JSON settings file under
+`~/.docent/settings.json`.
 
 - Run a single test: `cargo test test_name`
 - Coverage: `cargo llvm-cov --json --output-path target/llvm-cov/report.json`
-- Clippy: `cargo clippy -- -D warnings`
+- Clippy: `cargo clippy --all-targets`
 - Format: `cargo fmt --check`
 
 ## Run

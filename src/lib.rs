@@ -8,5 +8,9 @@ pub mod config;
 pub mod domain;
 pub mod index;
 pub mod models;
+pub mod module;
 pub mod support;
 pub(crate) mod ui;
+
+#[cfg(test)]
+mod tests;
